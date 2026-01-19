@@ -136,14 +136,15 @@ export function TerminalsPage() {
   const handleCloseTerminal = useCallback(
     async (id: string) => {
       try {
-        await closeTerminalMutation.mutate(id);
-
-        // If the closed terminal was expanded, reset expanded state
+        // If the closed terminal was expanded, reset expanded state immediately
         if (expandedTerminalId === id) {
           setExpandedTerminalId(null);
         }
 
-        // Refetch terminal list
+        // Close the terminal via IPC
+        await closeTerminalMutation.mutate(id);
+
+        // Refetch terminal list to update UI
         await refetch();
       } catch (err) {
         console.error('Failed to close terminal:', err);

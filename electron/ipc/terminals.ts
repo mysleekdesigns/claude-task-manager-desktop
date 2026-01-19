@@ -93,15 +93,17 @@ async function handleCreateTerminal(
         // Notify renderer of terminal exit
         mainWindow.webContents.send(`terminal:exit:${terminal.id}`, code);
 
-        // Update database status to closed
+        // Delete terminal from database when process exits
+        // This handles both manual close (where terminal:close already deleted it)
+        // and natural exit (where the process terminated on its own)
         prisma.terminal
-          .update({
+          .deleteMany({
             where: { id: terminal.id },
-            data: { status: 'idle', pid: null },
           })
           .catch((error) => {
+            // Log any unexpected errors (deleteMany doesn't throw P2025)
             console.error(
-              `[Terminal IPC] Failed to update terminal status on exit:`,
+              `[Terminal IPC] Failed to delete terminal on exit:`,
               error
             );
           });
@@ -121,7 +123,7 @@ async function handleCreateTerminal(
     };
   } catch (error) {
     // Clean up database record if terminal spawn failed
-    await prisma.terminal.delete({
+    await prisma.terminal.deleteMany({
       where: { id: terminal.id },
     }).catch((deleteError) => {
       console.error(
@@ -183,7 +185,11 @@ async function handleResizeTerminal(
   });
 
   if (!terminal) {
-    throw new Error('Terminal not found');
+    // Gracefully handle the case where terminal was already deleted
+    // This can happen during component unmount when resize events fire
+    // after the terminal has been closed
+    console.debug(`[Terminal IPC] Resize event for non-existent terminal ${data.id} - ignoring`);
+    return;
   }
 
   // Resize the terminal process
@@ -216,17 +222,14 @@ async function handleCloseTerminal(
   try {
     terminalManager.kill(id);
   } catch (error) {
-    // Log error but continue to update database
+    // Log error but continue to delete from database
     console.error(`[Terminal IPC] Failed to kill terminal process:`, error);
   }
 
-  // Update database status to closed
-  await prisma.terminal.update({
+  // Delete terminal from database (instead of just updating status)
+  // Use deleteMany to avoid P2025 error if terminal was already deleted
+  await prisma.terminal.deleteMany({
     where: { id },
-    data: {
-      status: 'idle',
-      pid: null,
-    },
   });
 }
 

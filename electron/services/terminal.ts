@@ -189,13 +189,15 @@ class TerminalManager {
    * @param id - Terminal ID
    * @param cols - Number of columns
    * @param rows - Number of rows
-   * @throws Error if terminal not found
+   * @returns True if resize was successful, false if terminal not found
    */
-  resize(id: string, cols: number, rows: number): void {
+  resize(id: string, cols: number, rows: number): boolean {
     const terminal = this.terminals.get(id);
 
     if (!terminal) {
-      throw new Error(`Terminal ${id} not found`);
+      // Terminal may have already been cleaned up - this is not an error
+      console.debug(`[TerminalManager] Terminal ${id} not found for resize - may have been closed`);
+      return false;
     }
 
     try {
@@ -203,6 +205,7 @@ class TerminalManager {
       console.log(
         `[TerminalManager] Resized terminal ${id} to ${cols}x${rows}`
       );
+      return true;
     } catch (error) {
       console.error(`[TerminalManager] Failed to resize terminal ${id}:`, error);
       throw new Error(

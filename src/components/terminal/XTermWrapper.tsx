@@ -66,6 +66,7 @@ const TERMINAL_OPTIONS = {
   allowTransparency: false,
   scrollback: 10000,
   tabStopWidth: 4,
+  allowProposedApi: true, // Required for Unicode11Addon
 };
 
 // ============================================================================

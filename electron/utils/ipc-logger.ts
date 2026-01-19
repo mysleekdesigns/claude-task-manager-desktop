@@ -57,6 +57,14 @@ function getDurationColor(ms: number): string {
  * Truncate long values for display
  */
 function truncateValue(value: unknown, maxLength = 100): string {
+  // Handle undefined and null explicitly since JSON.stringify returns undefined for undefined
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+
   const str = JSON.stringify(value);
   if (str.length <= maxLength) {
     return str;
