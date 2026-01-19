@@ -47,8 +47,18 @@ export default defineConfig(({ command }) => {
               sourcemap: isServe ? 'inline' : undefined,
               minify: isBuild,
               outDir: 'dist-electron',
+              // Force CommonJS output for preload script (required for Electron's sandboxed environment)
+              lib: {
+                entry: 'electron/preload.ts',
+                formats: ['cjs'],
+              },
               rollupOptions: {
                 external: ['electron'],
+                output: {
+                  // Ensure CommonJS format and proper file extension
+                  format: 'cjs',
+                  entryFileNames: 'preload.js',
+                },
               },
             },
           },
