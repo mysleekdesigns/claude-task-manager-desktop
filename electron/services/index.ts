@@ -4,3 +4,4 @@
 
 export { databaseService, getPrismaClient } from './database';
 export { initializeDatabase, cleanupDatabase } from './init-database';
+export { terminalManager } from './terminal';

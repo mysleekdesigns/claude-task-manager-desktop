@@ -9,6 +9,8 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+  - node_modules/node-pty/**/*
+  - node_modules/better-sqlite3/**/*
   - "!**/*.map"
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
   - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
@@ -23,6 +25,9 @@ extraResources:
       - "**/*"
 
 asar: true
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+  - "**/node_modules/better-sqlite3/**"
 compression: maximum
 
 mac:

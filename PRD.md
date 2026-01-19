@@ -24,7 +24,7 @@
 | 4 | Layout and Navigation | ✅ Complete |
 | 5 | Project Management | ✅ Complete |
 | 6 | Task Management Core | ✅ Complete |
-| 7 | Terminal Management | Planned |
+| 7 | Terminal Management | ✅ Complete |
 | 8 | Git Worktree Management | Planned |
 | 9 | Roadmap and Planning | Planned |
 | 10 | Context and Memory | Planned |
@@ -34,7 +34,7 @@
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 6 complete. Ready for Phase 7 (Terminal Management).
+**Current Status:** Phase 7 complete. Ready for Phase 8 (Git Worktree Management).
 
 ---
 
@@ -582,18 +582,18 @@
 ## Phase 7: Terminal Management
 
 ### 7.1 Terminal Process Management (Main Process)
-- [ ] Install node-pty with native bindings
-- [ ] Create TerminalManager class
-  - [ ] Map of terminal ID → pty instance
-  - [ ] spawn() method for new terminals
-  - [ ] write() method for input
-  - [ ] resize() method for dimensions
-  - [ ] kill() method for cleanup
-- [ ] Handle process spawn errors
-- [ ] Implement automatic cleanup on window close
+- [x] Install node-pty with native bindings
+- [x] Create TerminalManager class
+  - [x] Map of terminal ID → pty instance
+  - [x] spawn() method for new terminals
+  - [x] write() method for input
+  - [x] resize() method for dimensions
+  - [x] kill() method for cleanup
+- [x] Handle process spawn errors
+- [x] Implement automatic cleanup on window close
 
 ### 7.2 Database Models
-- [ ] Create Terminal model
+- [x] Create Terminal model
   ```prisma
   model Terminal {
     id         String   @id @default(cuid())
@@ -605,76 +605,76 @@
     createdAt  DateTime @default(now())
   }
   ```
-- [ ] Run migration
+- [x] Run migration
 
 ### 7.3 Terminal IPC Handlers
-- [ ] Create `terminal:create` handler
-  - [ ] Create database record
-  - [ ] Spawn pty process
-  - [ ] Set up output streaming
-  - [ ] Return terminal ID
-- [ ] Create `terminal:write` handler
-  - [ ] Send input to pty
-- [ ] Create `terminal:resize` handler
-  - [ ] Update pty dimensions
-- [ ] Create `terminal:close` handler
-  - [ ] Kill pty process
-  - [ ] Update database status
-  - [ ] Clean up resources
-- [ ] Create `terminal:list` handler
+- [x] Create `terminal:create` handler
+  - [x] Create database record
+  - [x] Spawn pty process
+  - [x] Set up output streaming
+  - [x] Return terminal ID
+- [x] Create `terminal:write` handler
+  - [x] Send input to pty
+- [x] Create `terminal:resize` handler
+  - [x] Update pty dimensions
+- [x] Create `terminal:close` handler
+  - [x] Kill pty process
+  - [x] Update database status
+  - [x] Clean up resources
+- [x] Create `terminal:list` handler
 
 ### 7.4 Terminal Output Streaming
-- [ ] Set up IPC channel for terminal output
-- [ ] Use Electron's webContents.send for push updates
-- [ ] Implement output buffering for performance
-- [ ] Handle ANSI escape sequences properly
+- [x] Set up IPC channel for terminal output
+- [x] Use Electron's webContents.send for push updates
+- [x] Implement output buffering for performance
+- [x] Handle ANSI escape sequences properly
 
 ### 7.5 XTerm.js Integration
-- [ ] Install @xterm/xterm and addons
-  - [ ] @xterm/addon-fit
-  - [ ] @xterm/addon-web-links
-  - [ ] @xterm/addon-unicode11
-- [ ] Create XTermWrapper component
-  - [ ] Initialize terminal on mount
-  - [ ] Connect to IPC output channel
-  - [ ] Send input via IPC
-  - [ ] Handle resize events
-  - [ ] Clean up on unmount
+- [x] Install @xterm/xterm and addons
+  - [x] @xterm/addon-fit
+  - [x] @xterm/addon-web-links
+  - [x] @xterm/addon-unicode11
+- [x] Create XTermWrapper component
+  - [x] Initialize terminal on mount
+  - [x] Connect to IPC output channel
+  - [x] Send input via IPC
+  - [x] Handle resize events
+  - [x] Clean up on unmount
 
 ### 7.6 Terminal UI
-- [ ] Create /terminals page
-- [ ] Build TerminalGrid component
-  - [ ] 2x2 default grid
-  - [ ] Support up to 12 terminals (3x4)
-  - [ ] Responsive grid layout
-- [ ] Build TerminalPane component
-  - [ ] Header with terminal name
-  - [ ] Status indicator (green/red dot)
-  - [ ] Worktree selector dropdown
-  - [ ] Expand button (fullscreen single terminal)
-  - [ ] Close button
-- [ ] Build terminal control bar:
-  - [ ] Terminal count indicator
-  - [ ] "+ New Terminal" button
-  - [ ] "Invoke Claude All" button
+- [x] Create /terminals page
+- [x] Build TerminalGrid component
+  - [x] 2x2 default grid
+  - [x] Support up to 12 terminals (3x4)
+  - [x] Responsive grid layout
+- [x] Build TerminalPane component
+  - [x] Header with terminal name
+  - [x] Status indicator (green/red dot)
+  - [x] Worktree selector dropdown
+  - [x] Expand button (fullscreen single terminal)
+  - [x] Close button
+- [x] Build terminal control bar:
+  - [x] Terminal count indicator
+  - [x] "+ New Terminal" button
+  - [x] "Invoke Claude All" button
 
 ### 7.7 Claude Code Integration
-- [ ] Auto-launch Claude Code on terminal create (optional)
-- [ ] Show Claude status indicator
-- [ ] Add re-launch button when Claude exits
-- [ ] Implement "Invoke Claude All" broadcast
-  - [ ] Command input modal
-  - [ ] Send to all active terminals
-  - [ ] Show execution status
+- [x] Auto-launch Claude Code on terminal create (optional)
+- [x] Show Claude status indicator
+- [x] Add re-launch button when Claude exits
+- [x] Implement "Invoke Claude All" broadcast
+  - [x] Command input modal
+  - [x] Send to all active terminals
+  - [x] Show execution status
 
 **Phase 7 Verification:**
-- [ ] Terminal grid displays correctly
-- [ ] New terminal spawns shell
-- [ ] Can type commands and see output
-- [ ] Terminal resize works
-- [ ] Can close terminal and process ends
-- [ ] "Invoke Claude All" sends to all terminals
-- [ ] Claude Code launches in terminal
+- [x] Terminal grid displays correctly
+- [x] New terminal spawns shell
+- [x] Can type commands and see output
+- [x] Terminal resize works
+- [x] Can close terminal and process ends
+- [x] "Invoke Claude All" sends to all terminals
+- [x] Claude Code launches in terminal
 
 ---
 
@@ -1898,11 +1898,11 @@ useEffect(() => {
 - [x] Task CRUD works
 - [x] Task modal functional
 
-### Phase 7 - Terminals
-- [ ] Terminal spawns shell
-- [ ] Input/output works
-- [ ] Resize works
-- [ ] Claude Code launches
+### Phase 7 - Terminals ✅
+- [x] Terminal spawns shell
+- [x] Input/output works
+- [x] Resize works
+- [x] Claude Code launches
 
 ### Phase 8 - Worktrees
 - [ ] Git operations work

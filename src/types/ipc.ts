@@ -273,6 +273,64 @@ export interface AddFileInput {
   action: string;
 }
 
+// ============================================================================
+// Terminal Types
+// ============================================================================
+
+/**
+ * Terminal status enum
+ */
+export type TerminalStatus = 'idle' | 'running' | 'exited';
+
+/**
+ * Terminal entity
+ */
+export interface Terminal {
+  id: string;
+  name: string;
+  status: TerminalStatus;
+  pid: number | null;
+  projectId: string;
+  worktreeId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create terminal input data
+ */
+export interface CreateTerminalInput {
+  projectId: string;
+  name?: string;
+  cwd?: string;
+}
+
+/**
+ * Write terminal input data
+ */
+export interface WriteTerminalInput {
+  id: string;
+  data: string;
+}
+
+/**
+ * Resize terminal input data
+ */
+export interface ResizeTerminalInput {
+  id: string;
+  cols: number;
+  rows: number;
+}
+
+/**
+ * Create terminal response
+ */
+export interface CreateTerminalResponse {
+  id: string;
+  name: string;
+  pid: number;
+}
+
 /**
  * Project member information
  */
@@ -402,6 +460,13 @@ export interface IpcChannels {
   'tasks:addLog': (data: AddLogInput) => Promise<TaskLog>;
   'tasks:addFile': (data: AddFileInput) => Promise<TaskFile>;
   'tasks:getSubtasks': (parentId: string) => Promise<Task[]>;
+
+  // Terminal channels
+  'terminal:create': (data: CreateTerminalInput) => Promise<CreateTerminalResponse>;
+  'terminal:write': (data: WriteTerminalInput) => Promise<void>;
+  'terminal:resize': (data: ResizeTerminalInput) => Promise<void>;
+  'terminal:close': (id: string) => Promise<void>;
+  'terminal:list': (projectId: string) => Promise<Terminal[]>;
 }
 
 /**
@@ -457,6 +522,19 @@ export interface IpcEventChannels {
   'app:update-downloaded': (info: UpdateInfo) => void;
   'app:update-progress': (progress: UpdateProgress) => void;
 }
+
+/**
+ * Dynamic terminal event channels
+ * These use template literal types to support terminal-specific events
+ */
+export type DynamicTerminalEventChannel =
+  | `terminal:output:${string}`
+  | `terminal:exit:${string}`;
+
+/**
+ * Combined event channels (static + dynamic)
+ */
+export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel;
 
 /**
  * Update information for auto-updater events
@@ -540,6 +618,11 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'tasks:addLog',
   'tasks:addFile',
   'tasks:getSubtasks',
+  'terminal:create',
+  'terminal:write',
+  'terminal:resize',
+  'terminal:close',
+  'terminal:list',
 ] as const;
 
 /**

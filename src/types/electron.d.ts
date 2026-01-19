@@ -8,7 +8,7 @@
  * or the useIPC hooks from @/hooks/useIPC.
  */
 
-import type { IpcChannelName, IpcEventChannelName } from './ipc';
+import type { IpcChannelName, IpcEventChannelName, AllEventChannels } from './ipc';
 
 /**
  * Electron API exposed to renderer process via contextBridge
@@ -26,17 +26,23 @@ export interface ElectronAPI {
    *
    * For type-safe event subscriptions, use onEvent from @/lib/ipc
    * or useIPCEvent from @/hooks/useIPC instead.
+   *
+   * Supports both static event channels and dynamic terminal channels
+   * (e.g., terminal:output:{id}, terminal:exit:{id})
    */
   on: (
-    channel: IpcEventChannelName,
+    channel: AllEventChannels,
     callback: (...args: unknown[]) => void
   ) => void;
 
   /**
    * Remove an event listener.
+   *
+   * Supports both static event channels and dynamic terminal channels
+   * (e.g., terminal:output:{id}, terminal:exit:{id})
    */
   removeListener: (
-    channel: IpcEventChannelName,
+    channel: AllEventChannels,
     callback: (...args: unknown[]) => void
   ) => void;
 

@@ -56,6 +56,12 @@ const VALID_INVOKE_CHANNELS = [
   'users:getByEmail',
   'users:update',
   'users:delete',
+  // Terminals
+  'terminal:create',
+  'terminal:write',
+  'terminal:resize',
+  'terminal:close',
+  'terminal:list',
 ] as const;
 
 /**
@@ -76,6 +82,16 @@ type ValidInvokeChannel = (typeof VALID_INVOKE_CHANNELS)[number];
 type ValidEventChannel = (typeof VALID_EVENT_CHANNELS)[number];
 
 /**
+ * Dynamic event channels (supports template literals)
+ */
+type DynamicEventChannel = `terminal:output:${string}` | `terminal:exit:${string}`;
+
+/**
+ * All valid event channels (static + dynamic)
+ */
+type AllValidEventChannels = ValidEventChannel | DynamicEventChannel;
+
+/**
  * Type-safe invoke function signature
  */
 type InvokeFunction = <T>(
@@ -87,7 +103,7 @@ type InvokeFunction = <T>(
  * Type-safe event listener function signature
  */
 type OnFunction = (
-  channel: ValidEventChannel,
+  channel: AllValidEventChannels,
   callback: (...args: unknown[]) => void
 ) => void;
 
@@ -95,7 +111,7 @@ type OnFunction = (
  * Type-safe event remover function signature
  */
 type RemoveListenerFunction = (
-  channel: ValidEventChannel,
+  channel: AllValidEventChannels,
   callback: (...args: unknown[]) => void
 ) => void;
 
@@ -137,9 +153,20 @@ function isValidInvokeChannel(channel: string): channel is ValidInvokeChannel {
 
 /**
  * Check if a channel is in the event whitelist
+ * Also supports dynamic channels like terminal:output:{id} and terminal:exit:{id}
  */
-function isValidEventChannel(channel: string): channel is ValidEventChannel {
-  return (VALID_EVENT_CHANNELS as readonly string[]).includes(channel);
+function isValidEventChannel(channel: string): channel is AllValidEventChannels {
+  // Check static channels first
+  if ((VALID_EVENT_CHANNELS as readonly string[]).includes(channel)) {
+    return true;
+  }
+
+  // Check dynamic terminal channels
+  if (channel.startsWith('terminal:output:') || channel.startsWith('terminal:exit:')) {
+    return true;
+  }
+
+  return false;
 }
 
 // ============================================================================
@@ -188,7 +215,7 @@ const electronAPI: ElectronAPI = {
    * @param callback - Callback to handle the event
    */
   on: (
-    channel: ValidEventChannel,
+    channel: AllValidEventChannels,
     callback: (...args: unknown[]) => void
   ): void => {
     if (!isValidEventChannel(channel)) {
@@ -219,7 +246,7 @@ const electronAPI: ElectronAPI = {
    * @param callback - The callback to remove
    */
   removeListener: (
-    channel: ValidEventChannel,
+    channel: AllValidEventChannels,
     callback: (...args: unknown[]) => void
   ): void => {
     if (!isValidEventChannel(channel)) {

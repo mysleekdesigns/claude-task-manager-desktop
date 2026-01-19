@@ -1,0 +1,330 @@
+/**
+ * Terminal IPC Handlers
+ *
+ * Handlers for terminal-related IPC channels (create, write, resize, close, list).
+ * Integrates with TerminalManager for node-pty process management and streams output
+ * via webContents to the renderer process.
+ */
+
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { databaseService } from '../services/database.js';
+import { terminalManager } from '../services/terminal.js';
+import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
+import {
+  logIPCRequest,
+  logIPCResponse,
+  logIPCError,
+} from '../utils/ipc-logger.js';
+import type { Terminal } from '@prisma/client';
+
+/**
+ * Terminal data types for IPC
+ */
+export interface CreateTerminalInput {
+  projectId: string;
+  name?: string;
+  cwd?: string;
+}
+
+export interface WriteTerminalInput {
+  id: string;
+  data: string;
+}
+
+export interface ResizeTerminalInput {
+  id: string;
+  cols: number;
+  rows: number;
+}
+
+export interface CreateTerminalResponse {
+  id: string;
+  name: string;
+  pid: number;
+}
+
+/**
+ * Create a new terminal
+ */
+async function handleCreateTerminal(
+  _event: IpcMainInvokeEvent,
+  mainWindow: BrowserWindow,
+  data: CreateTerminalInput
+): Promise<CreateTerminalResponse> {
+  if (!data.projectId) {
+    throw IPCErrors.invalidArguments('Project ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify project exists
+  const project = await prisma.project.findUnique({
+    where: { id: data.projectId },
+  });
+
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  // Generate terminal name if not provided
+  const terminalName = data.name || `Terminal ${Date.now()}`;
+
+  // Create database record first
+  const terminal = await prisma.terminal.create({
+    data: {
+      name: terminalName,
+      projectId: data.projectId,
+      status: 'running',
+    },
+  });
+
+  try {
+    // Determine working directory
+    const cwd = data.cwd || project.targetPath;
+
+    // Spawn the terminal process
+    const { id, pid } = terminalManager.spawn(terminal.id, terminalName, {
+      ...(cwd && { cwd }),
+      onData: (outputData: string) => {
+        // Stream output to renderer process
+        mainWindow.webContents.send(`terminal:output:${terminal.id}`, outputData);
+      },
+      onExit: (code: number) => {
+        // Notify renderer of terminal exit
+        mainWindow.webContents.send(`terminal:exit:${terminal.id}`, code);
+
+        // Update database status to closed
+        prisma.terminal
+          .update({
+            where: { id: terminal.id },
+            data: { status: 'idle', pid: null },
+          })
+          .catch((error) => {
+            console.error(
+              `[Terminal IPC] Failed to update terminal status on exit:`,
+              error
+            );
+          });
+      },
+    });
+
+    // Update database with PID
+    await prisma.terminal.update({
+      where: { id: terminal.id },
+      data: { pid },
+    });
+
+    return {
+      id,
+      name: terminalName,
+      pid,
+    };
+  } catch (error) {
+    // Clean up database record if terminal spawn failed
+    await prisma.terminal.delete({
+      where: { id: terminal.id },
+    }).catch((deleteError) => {
+      console.error(
+        `[Terminal IPC] Failed to clean up terminal record:`,
+        deleteError
+      );
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Write data to a terminal
+ */
+async function handleWriteTerminal(
+  _event: IpcMainInvokeEvent,
+  data: WriteTerminalInput
+): Promise<void> {
+  if (!data.id || data.data === undefined) {
+    throw IPCErrors.invalidArguments('Terminal ID and data are required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists in database
+  const terminal = await prisma.terminal.findUnique({
+    where: { id: data.id },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  if (terminal.status !== 'running') {
+    throw new Error(`Terminal is not running (status: ${terminal.status})`);
+  }
+
+  // Write to the terminal process
+  terminalManager.write(data.id, data.data);
+}
+
+/**
+ * Resize a terminal
+ */
+async function handleResizeTerminal(
+  _event: IpcMainInvokeEvent,
+  data: ResizeTerminalInput
+): Promise<void> {
+  if (!data.id || !data.cols || !data.rows) {
+    throw IPCErrors.invalidArguments('Terminal ID, cols, and rows are required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists in database
+  const terminal = await prisma.terminal.findUnique({
+    where: { id: data.id },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  // Resize the terminal process
+  terminalManager.resize(data.id, data.cols, data.rows);
+}
+
+/**
+ * Close a terminal
+ */
+async function handleCloseTerminal(
+  _event: IpcMainInvokeEvent,
+  id: string
+): Promise<void> {
+  if (!id) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists in database
+  const terminal = await prisma.terminal.findUnique({
+    where: { id },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  // Kill the terminal process
+  try {
+    terminalManager.kill(id);
+  } catch (error) {
+    // Log error but continue to update database
+    console.error(`[Terminal IPC] Failed to kill terminal process:`, error);
+  }
+
+  // Update database status to closed
+  await prisma.terminal.update({
+    where: { id },
+    data: {
+      status: 'idle',
+      pid: null,
+    },
+  });
+}
+
+/**
+ * List all terminals for a project
+ */
+async function handleListTerminals(
+  _event: IpcMainInvokeEvent,
+  projectId: string
+): Promise<Terminal[]> {
+  if (!projectId) {
+    throw IPCErrors.invalidArguments('Project ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  const terminals = await prisma.terminal.findMany({
+    where: { projectId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return terminals;
+}
+
+/**
+ * Register all terminal-related IPC handlers.
+ * Requires mainWindow reference for output streaming.
+ *
+ * @param mainWindow - The main BrowserWindow instance for output streaming
+ */
+export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
+  // terminal:create - Create a new terminal
+  ipcMain.handle(
+    'terminal:create',
+    wrapWithLogging('terminal:create', wrapHandler(async (event, data: CreateTerminalInput) => {
+      return handleCreateTerminal(event, mainWindow, data);
+    }))
+  );
+
+  // terminal:write - Write input to a terminal
+  ipcMain.handle(
+    'terminal:write',
+    wrapWithLogging('terminal:write', wrapHandler(handleWriteTerminal))
+  );
+
+  // terminal:resize - Resize a terminal
+  ipcMain.handle(
+    'terminal:resize',
+    wrapWithLogging('terminal:resize', wrapHandler(handleResizeTerminal))
+  );
+
+  // terminal:close - Close a terminal
+  ipcMain.handle(
+    'terminal:close',
+    wrapWithLogging('terminal:close', wrapHandler(handleCloseTerminal))
+  );
+
+  // terminal:list - List all terminals for a project
+  ipcMain.handle(
+    'terminal:list',
+    wrapWithLogging('terminal:list', wrapHandler(handleListTerminals))
+  );
+}
+
+/**
+ * Unregister all terminal-related IPC handlers
+ */
+export function unregisterTerminalHandlers(): void {
+  ipcMain.removeHandler('terminal:create');
+  ipcMain.removeHandler('terminal:write');
+  ipcMain.removeHandler('terminal:resize');
+  ipcMain.removeHandler('terminal:close');
+  ipcMain.removeHandler('terminal:list');
+}
+
+/**
+ * Wrap a handler with logging
+ */
+function wrapWithLogging<TArgs extends unknown[], TReturn>(
+  channel: string,
+  handler: (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TReturn>
+): (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TReturn> {
+  return async (
+    event: IpcMainInvokeEvent,
+    ...args: TArgs
+  ): Promise<TReturn> => {
+    const startTime = performance.now();
+    logIPCRequest(channel, args);
+
+    try {
+      const result = await handler(event, ...args);
+      const duration = performance.now() - startTime;
+      logIPCResponse(channel, result, duration, true);
+      return result;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      logIPCError(channel, error, duration);
+      throw error;
+    }
+  };
+}

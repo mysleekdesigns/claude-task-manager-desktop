@@ -11,7 +11,9 @@ import { registerUserHandlers, unregisterUserHandlers } from './users.js';
 import { registerProjectHandlers, unregisterProjectHandlers } from './projects.js';
 import { registerAuthHandlers, unregisterAuthHandlers } from './auth.js';
 import { registerTaskHandlers, unregisterTaskHandlers } from './tasks.js';
+import { registerTerminalHandlers, unregisterTerminalHandlers } from './terminals.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
+import type { BrowserWindow } from 'electron';
 
 const logger = createIPCLogger('IPC');
 
@@ -26,9 +28,10 @@ let isRegistered = false;
  * This function should be called once during app initialization.
  * It registers handlers for all domains (app, dialog, tasks, etc.)
  *
+ * @param mainWindow - The main BrowserWindow instance for terminal output streaming
  * @throws Error if handlers are already registered
  */
-export function registerIPCHandlers(): void {
+export function registerIPCHandlers(mainWindow: BrowserWindow): void {
   if (isRegistered) {
     logger.warn(
       'IPC handlers are already registered. Skipping re-registration.'
@@ -46,9 +49,9 @@ export function registerIPCHandlers(): void {
     registerProjectHandlers();
     registerAuthHandlers();
     registerTaskHandlers();
+    registerTerminalHandlers(mainWindow);
 
     // Future handler registrations:
-    // registerTerminalHandlers();
     // registerGitHandlers();
     // registerMemoryHandlers();
 
@@ -80,6 +83,7 @@ export function unregisterIPCHandlers(): void {
     unregisterProjectHandlers();
     unregisterAuthHandlers();
     unregisterTaskHandlers();
+    unregisterTerminalHandlers();
 
     // Future handler unregistrations would go here
 

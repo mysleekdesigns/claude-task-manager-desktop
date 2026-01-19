@@ -1,0 +1,137 @@
+/**
+ * Terminal Grid Component
+ *
+ * Grid layout for displaying multiple terminal panes.
+ * Supports 1-12 terminals with automatic grid adjustment.
+ * Handles expand/collapse states for individual terminals.
+ */
+
+import { TerminalPane } from './TerminalPane';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface TerminalGridProps {
+  terminals: Array<{
+    id: string;
+    name: string;
+    status: 'idle' | 'running' | 'exited';
+  }>;
+  expandedTerminalId?: string | null;
+  onTerminalClose: (id: string) => void;
+  onTerminalExpand: (id: string) => void;
+  onCollapseExpanded: () => void;
+  children?: React.ReactNode; // Optional custom content per terminal
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Calculate grid columns based on terminal count
+ * 1 terminal: 1 column
+ * 2 terminals: 2 columns
+ * 3-4 terminals: 2 columns
+ * 5-6 terminals: 3 columns
+ * 7-9 terminals: 3 columns
+ * 10-12 terminals: 4 columns
+ */
+function getGridColumns(count: number): string {
+  if (count === 0) return 'grid-cols-1';
+  if (count === 1) return 'grid-cols-1';
+  if (count === 2) return 'grid-cols-2';
+  if (count <= 4) return 'grid-cols-2';
+  if (count <= 6) return 'grid-cols-3';
+  if (count <= 9) return 'grid-cols-3';
+  return 'grid-cols-4';
+}
+
+/**
+ * Calculate grid rows based on terminal count
+ */
+function getGridRows(count: number): string {
+  if (count === 0) return 'grid-rows-1';
+  if (count === 1) return 'grid-rows-1';
+  if (count === 2) return 'grid-rows-1';
+  if (count <= 4) return 'grid-rows-2';
+  if (count <= 6) return 'grid-rows-2';
+  if (count <= 9) return 'grid-rows-3';
+  return 'grid-rows-3';
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
+export function TerminalGrid({
+  terminals,
+  expandedTerminalId = null,
+  onTerminalClose,
+  onTerminalExpand,
+  onCollapseExpanded,
+}: TerminalGridProps) {
+  // Empty state
+  if (terminals.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center space-y-4">
+          <div className="text-6xl opacity-20">⌨️</div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold text-muted-foreground">
+              No Terminals Open
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Click "New Terminal" to get started
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If a terminal is expanded, show only that terminal
+  if (expandedTerminalId) {
+    const expandedTerminal = terminals.find((t) => t.id === expandedTerminalId);
+    if (!expandedTerminal) {
+      // If expanded terminal not found, reset expanded state
+      onCollapseExpanded();
+      return null;
+    }
+
+    return (
+      <div className="h-full w-full p-4">
+        <TerminalPane
+          terminal={expandedTerminal}
+          isExpanded={true}
+          onClose={onTerminalClose}
+          onExpand={onTerminalExpand}
+          onCollapse={onCollapseExpanded}
+        />
+      </div>
+    );
+  }
+
+  // Grid layout for multiple terminals
+  const gridCols = getGridColumns(terminals.length);
+  const gridRows = getGridRows(terminals.length);
+
+  return (
+    <div
+      className={`grid ${gridCols} ${gridRows} gap-4 p-4 h-full w-full transition-all duration-300`}
+    >
+      {terminals.map((terminal) => (
+        <div key={terminal.id} className="min-h-0">
+          <TerminalPane
+            terminal={terminal}
+            isExpanded={false}
+            onClose={onTerminalClose}
+            onExpand={onTerminalExpand}
+            onCollapse={onCollapseExpanded}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}

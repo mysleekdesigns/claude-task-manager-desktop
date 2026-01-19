@@ -36,8 +36,9 @@ model Project {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  members ProjectMember[]
-  tasks   Task[]
+  members   ProjectMember[]
+  tasks     Task[]
+  terminals Terminal[]
 
   @@index([createdAt])
 }
@@ -153,5 +154,23 @@ model TaskFile {
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
+  @@index([createdAt])
+}
+
+model Terminal {
+  id         String   @id @default(cuid())
+  name       String
+  status     String   @default("idle") // idle, running, suspended, crashed
+  pid        Int?
+  projectId  String
+  worktreeId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
   @@index([createdAt])
 }

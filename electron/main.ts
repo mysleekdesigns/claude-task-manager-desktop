@@ -13,6 +13,7 @@ import {
 import { trayService } from './services/tray.js';
 import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
 import { databaseService } from './services/database.js';
+import { terminalManager } from './services/terminal.js';
 
 const logger = createIPCLogger('Main');
 
@@ -152,13 +153,14 @@ async function createWindow(): Promise<void> {
 
 /**
  * Initialize IPC handlers
+ * @param window - The main BrowserWindow instance for terminal output streaming
  */
-function initializeIPC(): void {
+function initializeIPC(window: BrowserWindow): void {
   logger.info('Initializing IPC handlers...');
 
   // Register type-safe IPC handlers from the centralized system
-  // This handles: app:getVersion, app:getPlatform, app:getPath, dialog:openDirectory
-  registerIPCHandlers();
+  // This handles: app:getVersion, app:getPlatform, app:getPath, dialog:openDirectory, terminal operations
+  registerIPCHandlers(window);
 
   // Window management IPC handlers (these remain here as they need mainWindow reference)
   ipcMain.handle('window:minimize', () => {
@@ -205,8 +207,8 @@ function initializeIPC(): void {
  * Initialize the application
  * - Initialize database connection
  * - Run database migrations to create/update schema
- * - Register IPC handlers (depend on database being ready)
  * - Create main window
+ * - Register IPC handlers (depend on database and window being ready)
  */
 async function initializeApp(): Promise<void> {
   try {
@@ -220,11 +222,14 @@ async function initializeApp(): Promise<void> {
     await databaseService.runMigrations();
     logger.info('Database migrations completed successfully');
 
-    // Step 3: Register IPC handlers (depend on database being ready)
-    initializeIPC();
-
-    // Step 4: Create main window
+    // Step 3: Create main window (needed for terminal IPC handlers)
     await createWindow();
+
+    // Step 4: Register IPC handlers (depend on database and window being ready)
+    if (!mainWindow) {
+      throw new Error('Main window not created');
+    }
+    initializeIPC(mainWindow);
   } catch (error) {
     logger.error('Failed to initialize application:', error);
 
@@ -248,6 +253,15 @@ app.on('ready', () => {
 // Handle before-quit (set quitting flag to allow window close and cleanup)
 app.on('before-quit', async () => {
   trayService.setQuitting(true);
+
+  // Kill all active terminal processes
+  try {
+    logger.info('Cleaning up terminal processes...');
+    terminalManager.killAll();
+    logger.info('Terminal processes cleaned up successfully');
+  } catch (error) {
+    logger.error('Error cleaning up terminal processes:', error);
+  }
 
   // Disconnect from database
   try {

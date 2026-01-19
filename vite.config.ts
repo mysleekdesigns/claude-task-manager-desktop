@@ -104,6 +104,8 @@ export default defineConfig(({ command }) => {
                   'electron',
                   '@prisma/client',
                   '.prisma/client',
+                  'node-pty',
+                  'better-sqlite3',
                 ],
               },
             },
