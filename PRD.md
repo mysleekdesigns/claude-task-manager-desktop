@@ -25,7 +25,7 @@
 | 5 | Project Management | ✅ Complete |
 | 6 | Task Management Core | ✅ Complete |
 | 7 | Terminal Management | ✅ Complete |
-| 8 | Git Worktree Management | Planned |
+| 8 | Git Worktree Management | Next |
 | 9 | Roadmap and Planning | Planned |
 | 10 | Context and Memory | Planned |
 | 11 | MCP Configuration | Planned |
@@ -34,7 +34,51 @@
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 7 complete. Ready for Phase 8 (Git Worktree Management).
+**Current Status:** Phase 7 complete with recent bug fixes. Terminal management stable. Ready for Phase 8 (Git Worktree Management).
+
+## Recent Changes
+
+Latest 5 commits:
+
+1. **778beb4** - Fix terminal close functionality and race condition errors
+   - Fixed race condition in terminal cleanup during window close
+   - Improved terminal process management to prevent zombie processes
+   - Enhanced error handling in terminal IPC handlers
+
+2. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
+   - Added proper macOS window dragging support
+   - Fixed frameless window interaction issues
+
+3. **3c87642** - Fix task IPC security and redesign Kanban task cards
+   - Improved IPC handler security validation
+   - Redesigned task card UI for better usability
+
+4. **160e41e** - Implement Phase 7: Terminal Management with Claude Code Integration
+   - Complete terminal management system with node-pty
+   - XTerm.js integration with terminal grid UI
+   - Claude Code launch and broadcast functionality
+
+5. **83e0b34** - Implement Phase 6: Task Management Core with Kanban Board
+   - Full Kanban board implementation with @dnd-kit
+   - Task CRUD operations with detailed modal
+   - Task cards with priority, tags, and phase tracking
+
+## Implementation Statistics
+
+**Codebase Size:**
+- Total IPC Handlers: 48 across 8 handler files (2,570 lines)
+- React Components: 30+ components
+- Database Tables: 10 with 16 indexes
+
+**IPC Handler Files:**
+- `electron/ipc/app.ts` - 192 lines (App lifecycle and window management)
+- `electron/ipc/auth.ts` - 461 lines (Authentication and session management)
+- `electron/ipc/dialog.ts` - 126 lines (Native file dialogs)
+- `electron/ipc/users.ts` - 272 lines (User management)
+- `electron/ipc/projects.ts` - 499 lines (Project and team management)
+- `electron/ipc/tasks.ts` - 569 lines (Task CRUD and Kanban operations)
+- `electron/ipc/terminals.ts` - 333 lines (Terminal process management)
+- `electron/ipc/index.ts` - 118 lines (Handler registration and exports)
 
 ---
 
@@ -675,6 +719,11 @@
 - [x] Can close terminal and process ends
 - [x] "Invoke Claude All" sends to all terminals
 - [x] Claude Code launches in terminal
+
+**Post-Implementation Fixes:**
+- Fixed race condition errors during terminal cleanup (commit 778beb4)
+- Improved terminal close functionality to prevent zombie processes
+- Enhanced terminal process lifecycle management for better stability
 
 ---
 
