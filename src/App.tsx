@@ -51,7 +51,7 @@ function App() {
   const error = versionError || platformError;
 
   const handleShowToast = () => {
-    toast.success('Welcome to Claude Tasks Desktop!', {
+    toast.success('Welcome to Claude Task Manager!', {
       description:
         'Styling setup with Tailwind CSS and shadcn/ui is complete.',
     });
@@ -94,8 +94,8 @@ function App() {
       {/* Header with theme toggle */}
       <header className="mx-auto mb-8 flex max-w-4xl items-center justify-between">
         <div>
-          <h1 className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-3xl font-bold text-transparent">
-            Claude Tasks Desktop
+          <h1 className="bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-3xl font-bold text-transparent">
+            Claude Task Manager
           </h1>
           <p className="text-muted-foreground">
             AI-driven development task manager
@@ -315,7 +315,7 @@ function App() {
       </main>
 
       <footer className="mx-auto mt-8 max-w-4xl border-t border-border py-6 text-center text-sm text-muted-foreground">
-        <p>Claude Tasks Desktop - Phase 1.4 IPC Communication Layer Complete</p>
+        <p>Claude Task Manager - Phase 1.4 IPC Communication Layer Complete</p>
       </footer>
     </div>
   );
