@@ -1,0 +1,37 @@
+# Build outputs
+dist/
+dist-electron/
+build/
+
+# Dependencies
+node_modules/
+
+# Cache directories
+.cache/
+cache/
+
+# Coverage
+coverage/
+
+# Generated files
+*.min.js
+*.min.css
+package-lock.json
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Prisma generated
+prisma/migrations/
+
+# Snapshots
+snapshots/
+
+# Other
+*.md
+*.log

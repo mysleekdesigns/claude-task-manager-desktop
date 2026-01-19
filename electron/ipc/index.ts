@@ -1,0 +1,104 @@
+/**
+ * IPC Handler Registration
+ *
+ * Central registration point for all IPC handlers.
+ * Each domain module exports a register function that sets up its handlers.
+ */
+
+import { registerAppHandlers, unregisterAppHandlers } from './app.js';
+import { registerDialogHandlers, unregisterDialogHandlers } from './dialog.js';
+import { createIPCLogger } from '../utils/ipc-logger.js';
+
+const logger = createIPCLogger('IPC');
+
+/**
+ * Registration status tracking
+ */
+let isRegistered = false;
+
+/**
+ * Register all IPC handlers.
+ *
+ * This function should be called once during app initialization.
+ * It registers handlers for all domains (app, dialog, tasks, etc.)
+ *
+ * @throws Error if handlers are already registered
+ */
+export function registerIPCHandlers(): void {
+  if (isRegistered) {
+    logger.warn(
+      'IPC handlers are already registered. Skipping re-registration.'
+    );
+    return;
+  }
+
+  logger.info('Registering IPC handlers...');
+
+  try {
+    // Register handlers by domain
+    registerAppHandlers();
+    registerDialogHandlers();
+
+    // Future handler registrations:
+    // registerTaskHandlers();
+    // registerProjectHandlers();
+    // registerTerminalHandlers();
+    // registerGitHandlers();
+    // registerMemoryHandlers();
+
+    isRegistered = true;
+    logger.info('IPC handlers registered successfully.');
+  } catch (error) {
+    logger.error('Failed to register IPC handlers:', error);
+    throw error;
+  }
+}
+
+/**
+ * Unregister all IPC handlers.
+ *
+ * This is primarily useful for testing or hot reloading scenarios.
+ */
+export function unregisterIPCHandlers(): void {
+  if (!isRegistered) {
+    logger.warn('IPC handlers are not registered. Nothing to unregister.');
+    return;
+  }
+
+  logger.info('Unregistering IPC handlers...');
+
+  try {
+    unregisterAppHandlers();
+    unregisterDialogHandlers();
+
+    // Future handler unregistrations would go here
+
+    isRegistered = false;
+    logger.info('IPC handlers unregistered successfully.');
+  } catch (error) {
+    logger.error('Failed to unregister IPC handlers:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if IPC handlers are registered
+ */
+export function isIPCRegistered(): boolean {
+  return isRegistered;
+}
+
+// Re-export types and utilities that might be needed elsewhere
+export {
+  IPCError,
+  IPCErrors,
+  serializeError,
+  wrapHandler,
+} from '../utils/ipc-error.js';
+export {
+  createIPCLogger,
+  logIPCRequest,
+  logIPCResponse,
+  logIPCError,
+  logIPCEvent,
+} from '../utils/ipc-logger.js';
