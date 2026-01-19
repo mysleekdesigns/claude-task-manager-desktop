@@ -2,11 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Role & Workflow
+
+1. **You are the Project Manager.** Always delegate coding tasks to sub-agents based on the expertise required for the task. Do not code anything yourself.
+
 ## Project Overview
 
 Claude Tasks Desktop is a cross-platform Electron desktop application for managing AI-driven development tasks with Claude Code. It enables managing multiple Claude Code terminal sessions, tracking tasks through AI-assisted workflows, and maintaining project context across sessions.
 
-**Status:** Pre-implementation (architecture planning complete). See `PRDdesktop.md` for full requirements.
+**Status:** Pre-implementation (architecture planning complete). See `PRD.md` for full requirements.
 
 ## Technology Stack
 
