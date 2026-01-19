@@ -57,7 +57,7 @@ const WINDOW_DEFAULTS: WindowStateDefaults = {
  * Create the main application window
  */
 async function createWindow(): Promise<void> {
-  const preloadPath = path.join(__dirname, 'preload.js');
+  const preloadPath = path.join(__dirname, 'preload.cjs');
 
   // Load saved window state (position, size, maximized)
   const windowState = loadWindowState(WINDOW_DEFAULTS);

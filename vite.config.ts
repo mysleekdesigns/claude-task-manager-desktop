@@ -1,9 +1,80 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
+
+// Custom plugin to convert ES module imports/exports to CommonJS for preload script
+function convertToCommonJS(): Plugin {
+  return {
+    name: 'convert-to-commonjs',
+    generateBundle(_, bundle) {
+      for (const fileName of Object.keys(bundle)) {
+        if (fileName.endsWith('.cjs')) {
+          const chunk = bundle[fileName];
+          if (chunk.type === 'chunk') {
+            // Convert import statements to require()
+            chunk.code = chunk.code.replace(
+              /^import\s+{([^}]+)}\s+from\s+["']([^"']+)["'];?$/gm,
+              (match, imports, module) => {
+                const cleaned = imports.split(',').map((s: string) => s.trim());
+                const requires = cleaned.map((imp: string) => {
+                  const [imported, local] = imp.includes(' as ')
+                    ? imp.split(' as ').map((s: string) => s.trim())
+                    : [imp, imp];
+                  return `const ${local} = require("${module}").${imported};`;
+                }).join('\n');
+                return requires;
+              }
+            );
+
+            // Convert export default to module.exports
+            chunk.code = chunk.code.replace(
+              /^export\s+default\s+(.+);?$/gm,
+              'module.exports = $1;'
+            );
+
+            // Convert named exports to module.exports
+            chunk.code = chunk.code.replace(
+              /^export\s+{([^}]+)};?$/gm,
+              (match, exports) => {
+                const cleaned = exports.split(',').map((s: string) => s.trim());
+                return cleaned.map((exp: string) => {
+                  const [local, exported] = exp.includes(' as ')
+                    ? exp.split(' as ').map((s: string) => s.trim())
+                    : [exp, exp];
+                  return `module.exports.${exported} = ${local};`;
+                }).join('\n');
+              }
+            );
+
+            // Convert export const/let/var to module.exports
+            chunk.code = chunk.code.replace(
+              /^export\s+(const|let|var)\s+(\w+)\s*=/gm,
+              '$1 $2 =\nmodule.exports.$2 ='
+            );
+
+            // Convert export function/class to module.exports
+            chunk.code = chunk.code.replace(
+              /^export\s+(function|class)\s+(\w+)/gm,
+              (match, type, name) => {
+                return `${type} ${name}`;
+              }
+            );
+            // Add module.exports assignment after function/class declarations
+            chunk.code = chunk.code.replace(
+              /^(function|class)\s+(\w+)([^{]*{[\s\S]*?^})/gm,
+              (match, type, name, body) => {
+                return `${match}\nmodule.exports.${name} = ${name};`;
+              }
+            );
+          }
+        }
+      }
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -43,21 +114,20 @@ export default defineConfig(({ command }) => {
             }
           },
           vite: {
+            plugins: [convertToCommonJS()],
             build: {
               sourcemap: isServe ? 'inline' : undefined,
               minify: isBuild,
               outDir: 'dist-electron',
-              // Force CommonJS output for preload script (required for Electron's sandboxed environment)
-              lib: {
-                entry: 'electron/preload.ts',
-                formats: ['cjs'],
-              },
               rollupOptions: {
                 external: ['electron'],
                 output: {
-                  // Ensure CommonJS format and proper file extension
+                  // CRITICAL: Force CommonJS format for Electron's sandboxed preload environment
+                  // ES modules (import/export) will cause "Cannot use import statement outside a module" error
                   format: 'cjs',
-                  entryFileNames: 'preload.js',
+                  entryFileNames: 'preload.cjs',
+                  // Disable code splitting to prevent require() issues with nodeIntegration: false
+                  inlineDynamicImports: true,
                 },
               },
             },

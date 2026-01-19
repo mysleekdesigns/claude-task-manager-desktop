@@ -56,6 +56,55 @@ export interface SerializedError {
 }
 
 // ============================================================================
+// Auth Types
+// ============================================================================
+
+/**
+ * User entity returned by auth operations
+ */
+export interface AuthUser {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Session response from login/register
+ */
+export interface AuthSessionResponse {
+  user: AuthUser;
+  token: string;
+}
+
+/**
+ * Login credentials
+ */
+export interface AuthLoginCredentials {
+  email: string;
+  password: string;
+}
+
+/**
+ * Registration data
+ */
+export interface AuthRegisterData {
+  name: string;
+  email: string;
+  password: string;
+}
+
+/**
+ * Profile update data
+ */
+export interface AuthProfileUpdate {
+  name?: string;
+  avatar?: string;
+}
+
+// ============================================================================
 // IPC Channel Definitions
 // ============================================================================
 
@@ -99,6 +148,17 @@ export interface IpcChannels {
   'preferences:setMinimizeToTray': (value: boolean) => Promise<void>;
   'preferences:getCloseToTray': () => Promise<boolean>;
   'preferences:setCloseToTray': (value: boolean) => Promise<void>;
+
+  // Auth channels (session managed by main process via electron-store)
+  'auth:login': (
+    credentials: AuthLoginCredentials
+  ) => Promise<AuthSessionResponse>;
+  'auth:register': (data: AuthRegisterData) => Promise<AuthSessionResponse>;
+  'auth:logout': () => Promise<void>;
+  'auth:getCurrentUser': () => Promise<AuthUser | null>;
+  'auth:updateProfile': (
+    updates: AuthProfileUpdate
+  ) => Promise<AuthUser>;
 }
 
 /**
@@ -213,6 +273,11 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'preferences:setMinimizeToTray',
   'preferences:getCloseToTray',
   'preferences:setCloseToTray',
+  'auth:login',
+  'auth:register',
+  'auth:logout',
+  'auth:getCurrentUser',
+  'auth:updateProfile',
 ] as const;
 
 /**

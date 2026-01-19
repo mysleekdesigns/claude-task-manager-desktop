@@ -97,3 +97,4 @@ The PRD defines 15 phases:
 - Terminal processes spawn in main process, output streamed via IPC
 - Auto-updater configured for GitHub Releases
 - macOS requires code signing and notarization
+- **All documentation `.md` files must be placed in the `docs/` folder**
