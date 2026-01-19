@@ -52,3 +52,6 @@ temp/
 # Prisma
 prisma/*.db
 prisma/*.db-journal
+*.db
+*.db-journal
+dev.db
