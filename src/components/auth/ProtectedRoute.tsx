@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ProtectedRouteProps {
@@ -21,14 +22,14 @@ interface ProtectedRouteProps {
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // TODO: In Phase 4, use React Router's navigate() for redirect
+    // Redirect to login if not authenticated
     if (!isLoading && !isAuthenticated) {
-      console.log('Not authenticated - redirect to /login');
-      // navigate('/login', { replace: true });
+      navigate('/login', { replace: true });
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, navigate]);
 
   // Show loading spinner while checking authentication
   if (isLoading) {
@@ -42,16 +43,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Redirect to login if not authenticated
+  // If not authenticated, return null - the useEffect will handle redirect
   if (!isAuthenticated) {
-    // For now, show a message. In Phase 4, React Router will handle redirect
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <p className="text-muted-foreground">Redirecting to login...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Render protected content if authenticated

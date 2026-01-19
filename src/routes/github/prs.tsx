@@ -1,0 +1,23 @@
+/**
+ * GitHub Pull Requests Page
+ * Browse and manage GitHub pull requests
+ */
+
+export function GitHubPRsPage() {
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">GitHub Pull Requests</h1>
+        <p className="text-muted-foreground mb-6">
+          Browse and manage GitHub pull requests
+        </p>
+
+        <div className="bg-muted/50 rounded-lg p-8 text-center">
+          <p className="text-muted-foreground">
+            Phase 12: GitHub integration coming soon
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

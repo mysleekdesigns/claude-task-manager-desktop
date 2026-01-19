@@ -1,4 +1,5 @@
 import { useState, FormEvent, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ const passwordRequirements: PasswordRequirement[] = [
 
 export function RegisterPage() {
   const { register } = useAuth();
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,10 +74,8 @@ export function RegisterPage() {
 
     try {
       await register(name, email, password);
-
-      // TODO: In Phase 4, redirect to dashboard using React Router
-      // For now, this will be handled by App.tsx checking auth state
-      console.log('Registration successful - redirect to dashboard');
+      // Redirect to dashboard after successful registration
+      navigate('/', { replace: true });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during registration';
       setError(errorMessage);
@@ -191,17 +191,12 @@ export function RegisterPage() {
 
             <p className="text-sm text-center text-muted-foreground">
               Already have an account?{' '}
-              <a
-                href="/login"
+              <Link
+                to="/login"
                 className="text-primary hover:underline font-medium"
-                onClick={(e) => {
-                  e.preventDefault();
-                  // TODO: In Phase 4, use React Router navigation
-                  console.log('Navigate to login page');
-                }}
               >
                 Login
-              </a>
+              </Link>
             </p>
           </CardFooter>
         </form>

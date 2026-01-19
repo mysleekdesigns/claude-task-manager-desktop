@@ -21,8 +21,8 @@
 | 1 | Project Foundation | ✅ Complete |
 | 2 | Database & ORM | ✅ Complete |
 | 3 | Authentication System | ✅ Complete |
-| 4 | Layout and Navigation | Planned |
-| 5 | Project Management | Planned |
+| 4 | Layout and Navigation | ✅ Complete |
+| 5 | Project Management | ✅ Complete |
 | 6 | Task Management Core | Planned |
 | 7 | Terminal Management | Planned |
 | 8 | Git Worktree Management | Planned |
@@ -34,7 +34,7 @@
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 3 complete. Ready for Phase 4 (Layout and Navigation).
+**Current Status:** Phase 5 complete. Ready for Phase 6 (Task Management Core).
 
 ---
 
@@ -323,127 +323,127 @@
 ## Phase 4: Layout and Navigation
 
 ### 4.1 React Router Setup
-- [ ] Install React Router v7
-- [ ] Configure router with routes for all pages
-- [ ] Set up route guards for authentication
-- [ ] Implement navigation history
+- [x] Install React Router v7
+- [x] Configure router with routes for all pages
+- [x] Set up route guards for authentication
+- [x] Implement navigation history
 
 ### 4.2 Sidebar Component
-- [ ] Build collapsible Sidebar component
-- [ ] Add navigation items with icons and keyboard shortcuts:
-  - [ ] Kanban Board (K)
-  - [ ] Agent Terminals (A)
-  - [ ] Insights (N)
-  - [ ] Roadmap (D)
-  - [ ] Ideation (I)
-  - [ ] Changelog (L)
-  - [ ] Context (C)
-  - [ ] MCP Overview (M)
-  - [ ] Worktrees (W)
-  - [ ] GitHub Issues (G)
-  - [ ] GitHub PRs (P)
-- [ ] Add Claude Code link
-- [ ] Add Settings link
-- [ ] Create "+ New Task" button
-- [ ] Implement keyboard navigation
+- [x] Build collapsible Sidebar component
+- [x] Add navigation items with icons and keyboard shortcuts:
+  - [x] Kanban Board (K)
+  - [x] Agent Terminals (A)
+  - [x] Insights (N)
+  - [x] Roadmap (D)
+  - [x] Ideation (I)
+  - [x] Changelog (L)
+  - [x] Context (C)
+  - [x] MCP Overview (M)
+  - [x] Worktrees (W)
+  - [x] GitHub Issues (G)
+  - [x] GitHub PRs (P)
+- [x] Add Claude Code link
+- [x] Add Settings link
+- [x] Create "+ New Task" button
+- [x] Implement keyboard navigation
 
 ### 4.3 Header Component
-- [ ] Build Header with project selector
-- [ ] Create ProjectSelector dropdown
-- [ ] Add search input (global search)
-- [ ] Create UserMenu with avatar and dropdown
-- [ ] Add window controls for frameless mode (optional)
+- [x] Build Header with project selector
+- [x] Create ProjectSelector dropdown
+- [x] Add search input (global search)
+- [x] Create UserMenu with avatar and dropdown
+- [x] Add window controls for frameless mode (optional)
 
 ### 4.4 Main Layout
-- [ ] Create DashboardLayout component
-- [ ] Implement responsive sidebar (collapse on small windows)
-- [ ] Add content area with scroll management
-- [ ] Implement keyboard shortcut overlay (? key)
+- [x] Create DashboardLayout component
+- [x] Implement responsive sidebar (collapse on small windows)
+- [x] Add content area with scroll management
+- [x] Implement keyboard shortcut overlay (? key)
 
 ### 4.5 Placeholder Pages
-- [ ] Create placeholder for /kanban
-- [ ] Create placeholder for /terminals
-- [ ] Create placeholder for /insights
-- [ ] Create placeholder for /roadmap
-- [ ] Create placeholder for /ideation
-- [ ] Create placeholder for /changelog
-- [ ] Create placeholder for /context
-- [ ] Create placeholder for /mcp
-- [ ] Create placeholder for /worktrees
-- [ ] Create placeholder for /settings
-- [ ] Create placeholder for /github/issues
-- [ ] Create placeholder for /github/prs
+- [x] Create placeholder for /kanban
+- [x] Create placeholder for /terminals
+- [x] Create placeholder for /insights
+- [x] Create placeholder for /roadmap
+- [x] Create placeholder for /ideation
+- [x] Create placeholder for /changelog
+- [x] Create placeholder for /context
+- [x] Create placeholder for /mcp
+- [x] Create placeholder for /worktrees
+- [x] Create placeholder for /settings
+- [x] Create placeholder for /github/issues
+- [x] Create placeholder for /github/prs
 
 **Phase 4 Verification:**
-- [ ] Sidebar displays all navigation items
-- [ ] Clicking navigation items changes routes
-- [ ] Keyboard shortcuts work for navigation
-- [ ] Project selector dropdown functions
-- [ ] User menu shows current user
-- [ ] Layout responds to window resize
+- [x] Sidebar displays all navigation items
+- [x] Clicking navigation items changes routes
+- [x] Keyboard shortcuts work for navigation
+- [x] Project selector dropdown functions
+- [x] User menu shows current user
+- [x] Layout responds to window resize
 
 ---
 
 ## Phase 5: Project Management
 
 ### 5.1 Database Models (Complete)
-- [ ] ProjectMember relation to User and Project exists
-- [ ] ProjectRole enum (OWNER, ADMIN, MEMBER, VIEWER) exists
+- [x] ProjectMember relation to User and Project exists
+- [x] ProjectRole enum (OWNER, ADMIN, MEMBER, VIEWER) exists
 
 ### 5.2 Project IPC Handlers
-- [ ] Create `projects:list` handler
-- [ ] Create `projects:create` handler
-- [ ] Create `projects:get` handler (by ID)
-- [ ] Create `projects:update` handler
-- [ ] Create `projects:delete` handler
-- [ ] Create `projects:addMember` handler
-- [ ] Create `projects:removeMember` handler
-- [ ] Create `projects:updateMemberRole` handler
+- [x] Create `projects:list` handler
+- [x] Create `projects:create` handler
+- [x] Create `projects:get` handler (by ID)
+- [x] Create `projects:update` handler
+- [x] Create `projects:delete` handler
+- [x] Create `projects:addMember` handler
+- [x] Create `projects:removeMember` handler
+- [x] Create `projects:updateMemberRole` handler
 
 ### 5.3 Native File Dialogs
-- [ ] Implement directory picker for project path
-  - [ ] Use Electron's dialog.showOpenDialog
-  - [ ] Configure for directory selection
-  - [ ] Return selected path to renderer
-- [ ] Validate selected directory exists and is accessible
-- [ ] Show directory contents preview (optional)
+- [x] Implement directory picker for project path
+  - [x] Use Electron's dialog.showOpenDialog
+  - [x] Configure for directory selection
+  - [x] Return selected path to renderer
+- [x] Validate selected directory exists and is accessible
+- [x] Show directory contents preview (optional)
 
 ### 5.4 Project UI
-- [ ] Build "Create Project" modal
-  - [ ] Project name input
-  - [ ] Description textarea
-  - [ ] Directory picker button with native dialog
-  - [ ] GitHub repo URL input (optional)
-  - [ ] Create button
-- [ ] Build Project Dashboard/Home page
-  - [ ] Project overview stats
-  - [ ] Recent tasks
-  - [ ] Team members
-- [ ] Build Project Settings page
-  - [ ] Edit name/description
-  - [ ] Update directory path
-  - [ ] GitHub integration settings
-  - [ ] Danger zone (delete project)
+- [x] Build "Create Project" modal
+  - [x] Project name input
+  - [x] Description textarea
+  - [x] Directory picker button with native dialog
+  - [x] GitHub repo URL input (optional)
+  - [x] Create button
+- [x] Build Project Dashboard/Home page
+  - [x] Project overview stats
+  - [x] Recent tasks
+  - [x] Team members
+- [x] Build Project Settings page
+  - [x] Edit name/description
+  - [x] Update directory path
+  - [x] GitHub integration settings
+  - [x] Danger zone (delete project)
 
 ### 5.5 Team Management UI
-- [ ] Build Team Members section
-  - [ ] List current members with roles
-  - [ ] Role badge display
-- [ ] Create "Invite Member" modal
-  - [ ] Email input (for existing users)
-  - [ ] Role selector dropdown
-  - [ ] Send invite button
-- [ ] Implement role change dropdown (for admins/owners)
-- [ ] Add remove member button with confirmation
+- [x] Build Team Members section
+  - [x] List current members with roles
+  - [x] Role badge display
+- [x] Create "Invite Member" modal
+  - [x] Email input (for existing users)
+  - [x] Role selector dropdown
+  - [x] Send invite button
+- [x] Implement role change dropdown (for admins/owners)
+- [x] Add remove member button with confirmation
 
 **Phase 5 Verification:**
-- [ ] Can create project with native directory picker
-- [ ] Project list displays in sidebar/selector
-- [ ] Can edit project settings
-- [ ] Can add team members by email
-- [ ] Can change member roles
-- [ ] Can remove members (with confirmation)
-- [ ] Can delete project (owner only)
+- [x] Can create project with native directory picker
+- [x] Project list displays in sidebar/selector
+- [x] Can edit project settings
+- [x] Can add team members by email
+- [x] Can change member roles
+- [x] Can remove members (with confirmation)
+- [x] Can delete project (owner only)
 
 ---
 
@@ -1881,16 +1881,16 @@ useEffect(() => {
 - [x] Session persists across restarts
 - [x] Protected routes redirect properly
 
-### Phase 4 - Layout
-- [ ] Sidebar navigation works
-- [ ] Keyboard shortcuts function
-- [ ] Project selector works
-- [ ] Responsive layout
+### Phase 4 - Layout ✅
+- [x] Sidebar navigation works
+- [x] Keyboard shortcuts function
+- [x] Project selector works
+- [x] Responsive layout
 
-### Phase 5 - Projects
-- [ ] Native file picker works
-- [ ] Projects create/edit/delete
-- [ ] Team management works
+### Phase 5 - Projects ✅
+- [x] Native file picker works
+- [x] Projects create/edit/delete
+- [x] Team management works
 
 ### Phase 6 - Tasks
 - [ ] Kanban board displays

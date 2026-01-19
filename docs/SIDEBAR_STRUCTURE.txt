@@ -1,0 +1,92 @@
+# Sidebar Component Visual Structure
+
+## Expanded State (256px wide)
+
+┌──────────────────────────────────────────────┐
+│  ┏━━┓ Claude Tasks              [<]          │ ← Header
+├──────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────┐  │
+│  │ [+] New Task                           │  │ ← New Task Button
+│  └────────────────────────────────────────┘  │
+├──────────────────────────────────────────────┤
+│  [▣] Kanban Board                    ⌘⇧K    │ ← Navigation Items
+│  [▯] Agent Terminals                 ⌘⇧A    │
+│  [□] Insights                        ⌘⇧N    │
+│  [◈] Roadmap                         ⌘⇧D    │
+│  [◐] Ideation                        ⌘⇧I    │
+│  [▭] Changelog                       ⌘⇧L    │
+│  [●] Context                         ⌘⇧C    │
+│  [◎] MCP Overview                    ⌘⇧M    │
+│  [⋈] Worktrees                       ⌘⇧W    │
+│  [○] GitHub Issues                   ⌘⇧G    │
+│  [↻] GitHub PRs                      ⌘⇧P    │
+│                                              │
+│                                              │ ← Flex spacer
+├──────────────────────────────────────────────┤
+│  [↗] Claude Code                             │ ← Footer
+│  [⚙] Settings                                │
+└──────────────────────────────────────────────┘
+
+
+## Collapsed State (64px wide)
+
+┌────────┐
+│   [<]  │ ← Header (toggle button only)
+├────────┤
+│  [+]   │ ← New Task (icon only)
+├────────┤
+│  [▣]   │ ← Nav items (icons only)
+│  [▯]   │    Tooltips appear on hover →
+│  [□]   │
+│  [◈]   │
+│  [◐]   │
+│  [▭]   │
+│  [●]   │
+│  [◎]   │
+│  [⋈]   │
+│  [○]   │
+│  [↻]   │
+│        │
+│        │ ← Flex spacer
+├────────┤
+│  [↗]   │ ← Footer
+│  [⚙]   │
+└────────┘
+
+
+## Active Route Highlight
+
+When on /kanban route:
+
+┌──────────────────────────────────────────────┐
+│  [▣] Kanban Board                    ⌘⇧K    │ ← Highlighted with accent bg
+├──────────────────────────────────────────────┤
+│  [▯] Agent Terminals                 ⌘⇧A    │
+│  [□] Insights                        ⌘⇧N    │
+└──────────────────────────────────────────────┘
+
+
+## Tooltip (Collapsed State)
+
+    ┌──────────────────────┐
+    │ Kanban Board  ⌘⇧K    │ ← Tooltip appears on right
+    └──────────────────────┘
+┌────────┐
+│  [▣]   │ ← Icon hovered
+└────────┘
+
+
+## Transition Animation
+
+Collapsed → Expanded (300ms ease)
+
+┌────────┐  animate  ┌──────────────────────┐
+│  [▣]   │  ──────>  │  [▣] Kanban Board... │
+└────────┘            └──────────────────────┘
+  64px                      256px
+
+- Width animates smoothly
+- Text fades in/out
+- Icons remain centered/left-aligned
+- Layout remains stable
+

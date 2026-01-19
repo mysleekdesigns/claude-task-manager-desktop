@@ -18,10 +18,12 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
  * These must match the channels defined in src/types/ipc.ts
  */
 const VALID_INVOKE_CHANNELS = [
+  // App info
   'app:getInfo',
   'app:getVersion',
   'app:getPlatform',
   'app:getPath',
+  // Dialogs
   'dialog:openDirectory',
   // Window management
   'window:minimize',
@@ -33,6 +35,27 @@ const VALID_INVOKE_CHANNELS = [
   'preferences:setMinimizeToTray',
   'preferences:getCloseToTray',
   'preferences:setCloseToTray',
+  // Authentication
+  'auth:register',
+  'auth:login',
+  'auth:logout',
+  'auth:getCurrentUser',
+  'auth:updateProfile',
+  // Projects
+  'projects:list',
+  'projects:create',
+  'projects:get',
+  'projects:update',
+  'projects:delete',
+  'projects:addMember',
+  'projects:removeMember',
+  'projects:updateMemberRole',
+  // Users
+  'users:create',
+  'users:getById',
+  'users:getByEmail',
+  'users:update',
+  'users:delete',
 ] as const;
 
 /**

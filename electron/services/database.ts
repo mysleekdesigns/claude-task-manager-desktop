@@ -7,15 +7,6 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 import { getDatabasePath, getBackupsPath, ensureDirectory } from '../utils/paths';
 
-// Dynamic import of PrismaClient to handle cases where it hasn't been generated yet
-let PrismaClient: typeof PrismaClientType | null = null;
-try {
-  const prismaModule = require('@prisma/client');
-  PrismaClient = prismaModule.PrismaClient;
-} catch {
-  // Prisma client not yet generated - will fail with helpful error in initialize()
-}
-
 /**
  * DatabaseService handles all database operations including:
  * - Prisma client initialization
@@ -59,12 +50,8 @@ class DatabaseService {
     }
 
     try {
-      // Check if PrismaClient is available
-      if (!PrismaClient) {
-        throw new Error(
-          'PrismaClient not found. Run "npx prisma generate" to generate the Prisma client.'
-        );
-      }
+      // Dynamically import PrismaClient to work with Vite bundling
+      const { PrismaClient } = await import('@prisma/client');
 
       // Ensure the user data directory exists
       const userDataPath = app.getPath('userData');

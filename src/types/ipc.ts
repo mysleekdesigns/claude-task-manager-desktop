@@ -105,6 +105,62 @@ export interface AuthProfileUpdate {
 }
 
 // ============================================================================
+// Project Types
+// ============================================================================
+
+/**
+ * Project entity with member information
+ */
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  targetPath: string | null;
+  githubRepo: string | null;
+  createdAt: string;
+  updatedAt: string;
+  members?: ProjectMember[];
+}
+
+/**
+ * Project member information
+ */
+export interface ProjectMember {
+  id: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+  userId: string;
+  projectId: string;
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  };
+}
+
+/**
+ * Create project input data
+ */
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  targetPath?: string;
+  githubRepo?: string;
+  ownerId: string;
+}
+
+/**
+ * Update project input data
+ */
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string;
+  targetPath?: string;
+  githubRepo?: string;
+}
+
+// ============================================================================
 // IPC Channel Definitions
 // ============================================================================
 
@@ -159,6 +215,27 @@ export interface IpcChannels {
   'auth:updateProfile': (
     updates: AuthProfileUpdate
   ) => Promise<AuthUser>;
+
+  // Project channels
+  'projects:list': (userId: string) => Promise<Project[]>;
+  'projects:create': (data: CreateProjectInput) => Promise<Project>;
+  'projects:get': (id: string) => Promise<Project | null>;
+  'projects:update': (id: string, data: UpdateProjectInput) => Promise<Project>;
+  'projects:delete': (id: string) => Promise<void>;
+  'projects:addMember': (
+    projectId: string,
+    userId: string,
+    role?: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  ) => Promise<ProjectMember>;
+  'projects:removeMember': (projectId: string, userId: string) => Promise<void>;
+  'projects:updateMemberRole': (
+    projectId: string,
+    userId: string,
+    role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  ) => Promise<ProjectMember>;
+
+  // User channels
+  'users:findByEmail': (email: string) => Promise<AuthUser | null>;
 }
 
 /**
@@ -278,6 +355,15 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'auth:logout',
   'auth:getCurrentUser',
   'auth:updateProfile',
+  'projects:list',
+  'projects:create',
+  'projects:get',
+  'projects:update',
+  'projects:delete',
+  'projects:addMember',
+  'projects:removeMember',
+  'projects:updateMemberRole',
+  'users:findByEmail',
 ] as const;
 
 /**

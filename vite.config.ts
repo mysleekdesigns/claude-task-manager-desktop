@@ -100,7 +100,11 @@ export default defineConfig(({ command }) => {
               minify: isBuild,
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron'],
+                external: [
+                  'electron',
+                  '@prisma/client',
+                  '.prisma/client',
+                ],
               },
             },
           },

@@ -111,6 +111,25 @@ async function handleGetUserByEmail(
 }
 
 /**
+ * Find user by email (alias for searching)
+ */
+async function handleFindUserByEmail(
+  _event: IpcMainInvokeEvent,
+  email: string
+): Promise<User | null> {
+  if (!email) {
+    throw IPCErrors.invalidArguments('Email is required');
+  }
+
+  const prisma = databaseService.getClient();
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  return user;
+}
+
+/**
  * Update user
  */
 async function handleUpdateUser(
@@ -194,6 +213,12 @@ export function registerUserHandlers(): void {
     wrapWithLogging('users:getByEmail', wrapHandler(handleGetUserByEmail))
   );
 
+  // users:findByEmail - Find user by email (for searching)
+  ipcMain.handle(
+    'users:findByEmail',
+    wrapWithLogging('users:findByEmail', wrapHandler(handleFindUserByEmail))
+  );
+
   // users:update - Update user
   ipcMain.handle(
     'users:update',
@@ -214,6 +239,7 @@ export function unregisterUserHandlers(): void {
   ipcMain.removeHandler('users:create');
   ipcMain.removeHandler('users:getById');
   ipcMain.removeHandler('users:getByEmail');
+  ipcMain.removeHandler('users:findByEmail');
   ipcMain.removeHandler('users:update');
   ipcMain.removeHandler('users:delete');
 }
