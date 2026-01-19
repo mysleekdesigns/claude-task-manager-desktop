@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { ProjectSelector } from './ProjectSelector';
 import { useState } from 'react';
 import {
   Dialog,
@@ -36,9 +37,17 @@ export function MainLayout() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar onNewTask={handleNewTask} />
 
-      <main className="flex-1 overflow-y-auto bg-background">
-        <Outlet />
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header with Project Selector */}
+        <header className="h-14 border-b border-border bg-background flex items-center justify-end px-4">
+          <ProjectSelector />
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto bg-background">
+          <Outlet />
+        </main>
+      </div>
 
       {/* New Task Dialog */}
       <Dialog open={newTaskDialogOpen} onOpenChange={setNewTaskDialogOpen}>

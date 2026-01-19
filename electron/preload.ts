@@ -50,6 +50,14 @@ const VALID_INVOKE_CHANNELS = [
   'projects:addMember',
   'projects:removeMember',
   'projects:updateMemberRole',
+  // Tasks
+  'tasks:list',
+  'tasks:create',
+  'tasks:get',
+  'tasks:update',
+  'tasks:delete',
+  'tasks:updateStatus',
+  'tasks:reorder',
   // Users
   'users:create',
   'users:getById',

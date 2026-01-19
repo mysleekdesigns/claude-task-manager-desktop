@@ -78,7 +78,7 @@ model Task {
   title       String
   description String?
   branchName  String?
-  status      String   @default("PENDING") // TaskStatus: PENDING, PLANNING, IN_PROGRESS, AI_REVIEW, HUMAN_REVIEW, COMPLETED, CANCELLED
+  status      String   @default("PLANNING") // TaskStatus: PENDING, PLANNING, IN_PROGRESS, AI_REVIEW, HUMAN_REVIEW, COMPLETED, CANCELLED
   priority    String   @default("MEDIUM") // Priority: LOW, MEDIUM, HIGH, URGENT
   tags        String   @default("[]") // JSON array as string
   projectId   String

@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-// import { invoke } from '@/lib/ipc'; // TODO: Uncomment when IPC handlers are ready
+import { invoke } from '@/lib/ipc';
 
 // ============================================================================
 // Types
@@ -121,14 +121,10 @@ export const useProjectStore = create<ProjectState>()(
       /**
        * Fetch all projects for the current user
        */
-      fetchProjects: async (_userId: string) => {
+      fetchProjects: async (userId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // const projects = await invoke('projects:list', _userId);
-
-          // For now, use mock data or empty array
-          const projects: Project[] = [];
+          const projects = await invoke('projects:list', userId);
 
           set({ projects, isLoading: false });
 
@@ -171,30 +167,31 @@ export const useProjectStore = create<ProjectState>()(
       /**
        * Create a new project
        */
-      createProject: async (data: CreateProjectData, _userId: string) => {
+      createProject: async (data: CreateProjectData, userId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // const newProject = await invoke('projects:create', { ...data, userId: _userId });
-
-          // Mock implementation for now
-          const projectId = `project-${Date.now()}`;
-          const newProject: Project = {
-            id: projectId,
+          const createData: {
+            name: string;
+            ownerId: string;
+            description?: string;
+            targetPath?: string;
+            githubRepo?: string;
+          } = {
             name: data.name,
-            description: data.description || null,
-            targetPath: data.targetPath || null,
-            githubRepo: data.githubRepo || null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            members: [{
-              id: `member-${Date.now()}`,
-              role: 'OWNER',
-              userId: _userId,
-              projectId,
-              createdAt: new Date().toISOString(),
-            }],
+            ownerId: userId,
           };
+
+          if (data.description !== undefined) {
+            createData.description = data.description;
+          }
+          if (data.targetPath !== undefined) {
+            createData.targetPath = data.targetPath;
+          }
+          if (data.githubRepo !== undefined) {
+            createData.githubRepo = data.githubRepo;
+          }
+
+          const newProject = await invoke('projects:create', createData);
 
           set(state => ({
             projects: [...state.projects, newProject],
@@ -217,19 +214,31 @@ export const useProjectStore = create<ProjectState>()(
       updateProject: async (id: string, data: UpdateProjectData) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // const updatedProject = await invoke('projects:update', id, data);
+          const updateData: {
+            name?: string;
+            description?: string;
+            targetPath?: string;
+            githubRepo?: string;
+          } = {};
 
-          // Mock implementation
+          if (data.name !== undefined) {
+            updateData.name = data.name;
+          }
+          if (data.description !== undefined) {
+            updateData.description = data.description;
+          }
+          if (data.targetPath !== undefined) {
+            updateData.targetPath = data.targetPath;
+          }
+          if (data.githubRepo !== undefined) {
+            updateData.githubRepo = data.githubRepo;
+          }
+
+          const updatedProject = await invoke('projects:update', id, updateData);
+
           set(state => ({
-            projects: state.projects.map(p =>
-              p.id === id
-                ? { ...p, ...data, updatedAt: new Date().toISOString() }
-                : p
-            ),
-            currentProject: state.currentProject?.id === id
-              ? { ...state.currentProject, ...data, updatedAt: new Date().toISOString() }
-              : state.currentProject,
+            projects: state.projects.map(p => p.id === id ? updatedProject : p),
+            currentProject: state.currentProject?.id === id ? updatedProject : state.currentProject,
             isLoading: false,
           }));
         } catch (error) {
@@ -246,8 +255,7 @@ export const useProjectStore = create<ProjectState>()(
       deleteProject: async (id: string) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // await invoke('projects:delete', id);
+          await invoke('projects:delete', id);
 
           set(state => ({
             projects: state.projects.filter(p => p.id !== id),
@@ -265,15 +273,22 @@ export const useProjectStore = create<ProjectState>()(
       /**
        * Add a member to a project
        */
-      addMember: async (_projectId: string, _userId: string, _role: ProjectRole) => {
+      addMember: async (projectId: string, userId: string, role: ProjectRole) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // await invoke('projects:addMember', _projectId, _userId, _role);
+          await invoke('projects:addMember', projectId, userId, role);
 
-          // Mock implementation - would need to refetch project to get updated members
-          // For now, just clear loading state
-          set({ isLoading: false });
+          // Refetch the project to get updated members
+          const updatedProject = await invoke('projects:get', projectId);
+          if (updatedProject) {
+            set(state => ({
+              projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+              currentProject: state.currentProject?.id === projectId ? updatedProject : state.currentProject,
+              isLoading: false,
+            }));
+          } else {
+            set({ isLoading: false });
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to add member';
           set({ error: errorMessage, isLoading: false });
@@ -285,13 +300,22 @@ export const useProjectStore = create<ProjectState>()(
       /**
        * Remove a member from a project
        */
-      removeMember: async (_projectId: string, _userId: string) => {
+      removeMember: async (projectId: string, userId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // await invoke('projects:removeMember', _projectId, _userId);
+          await invoke('projects:removeMember', projectId, userId);
 
-          set({ isLoading: false });
+          // Refetch the project to get updated members
+          const updatedProject = await invoke('projects:get', projectId);
+          if (updatedProject) {
+            set(state => ({
+              projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+              currentProject: state.currentProject?.id === projectId ? updatedProject : state.currentProject,
+              isLoading: false,
+            }));
+          } else {
+            set({ isLoading: false });
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to remove member';
           set({ error: errorMessage, isLoading: false });
@@ -303,13 +327,22 @@ export const useProjectStore = create<ProjectState>()(
       /**
        * Update a member's role
        */
-      updateMemberRole: async (_projectId: string, _userId: string, _role: ProjectRole) => {
+      updateMemberRole: async (projectId: string, userId: string, role: ProjectRole) => {
         set({ isLoading: true, error: null });
         try {
-          // TODO: Replace with actual IPC call when handler is ready
-          // await invoke('projects:updateMemberRole', _projectId, _userId, _role);
+          await invoke('projects:updateMemberRole', projectId, userId, role);
 
-          set({ isLoading: false });
+          // Refetch the project to get updated members
+          const updatedProject = await invoke('projects:get', projectId);
+          if (updatedProject) {
+            set(state => ({
+              projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+              currentProject: state.currentProject?.id === projectId ? updatedProject : state.currentProject,
+              isLoading: false,
+            }));
+          } else {
+            set({ isLoading: false });
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to update member role';
           set({ error: errorMessage, isLoading: false });
