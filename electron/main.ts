@@ -12,6 +12,7 @@ import {
 } from './utils/window-state.js';
 import { trayService } from './services/tray.js';
 import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
+import { databaseService } from './services/database.js';
 
 const logger = createIPCLogger('Main');
 
@@ -200,15 +201,64 @@ function initializeIPC(): void {
   logger.info('IPC handlers initialized successfully.');
 }
 
+/**
+ * Initialize the application
+ * - Initialize database connection
+ * - Run database migrations to create/update schema
+ * - Register IPC handlers (depend on database being ready)
+ * - Create main window
+ */
+async function initializeApp(): Promise<void> {
+  try {
+    // Step 1: Initialize database (MUST be first - IPC handlers depend on it)
+    logger.info('Initializing database...');
+    await databaseService.initialize();
+    logger.info('Database initialized successfully');
+
+    // Step 2: Run database migrations to ensure schema is up to date
+    logger.info('Running database migrations...');
+    await databaseService.runMigrations();
+    logger.info('Database migrations completed successfully');
+
+    // Step 3: Register IPC handlers (depend on database being ready)
+    initializeIPC();
+
+    // Step 4: Create main window
+    await createWindow();
+  } catch (error) {
+    logger.error('Failed to initialize application:', error);
+
+    // Show error dialog to user
+    const { dialog } = await import('electron');
+    await dialog.showErrorBox(
+      'Initialization Error',
+      `Failed to start Claude Tasks: ${error instanceof Error ? error.message : 'Unknown error'}\n\nThe application will now exit.`
+    );
+
+    // Exit the application
+    app.quit();
+  }
+}
+
 // App lifecycle events
 app.on('ready', () => {
-  initializeIPC();
-  void createWindow();
+  void initializeApp();
 });
 
-// Handle before-quit (set quitting flag to allow window close)
-app.on('before-quit', () => {
+// Handle before-quit (set quitting flag to allow window close and cleanup)
+app.on('before-quit', async () => {
   trayService.setQuitting(true);
+
+  // Disconnect from database
+  try {
+    if (databaseService.isConnected()) {
+      logger.info('Disconnecting from database...');
+      await databaseService.disconnect();
+      logger.info('Database disconnected successfully');
+    }
+  } catch (error) {
+    logger.error('Error disconnecting from database:', error);
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -224,7 +274,8 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   // On macOS, re-create or show window when dock icon is clicked
   if (mainWindow === null) {
-    void createWindow();
+    // Re-initialize the entire app if window was closed
+    void initializeApp();
   } else {
     trayService.showWindow();
   }
