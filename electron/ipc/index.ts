@@ -10,6 +10,7 @@ import { registerDialogHandlers, unregisterDialogHandlers } from './dialog.js';
 import { registerUserHandlers, unregisterUserHandlers } from './users.js';
 import { registerProjectHandlers, unregisterProjectHandlers } from './projects.js';
 import { registerAuthHandlers, unregisterAuthHandlers } from './auth.js';
+import { registerTaskHandlers, unregisterTaskHandlers } from './tasks.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 
 const logger = createIPCLogger('IPC');
@@ -44,9 +45,9 @@ export function registerIPCHandlers(): void {
     registerUserHandlers();
     registerProjectHandlers();
     registerAuthHandlers();
+    registerTaskHandlers();
 
     // Future handler registrations:
-    // registerTaskHandlers();
     // registerTerminalHandlers();
     // registerGitHandlers();
     // registerMemoryHandlers();
@@ -78,6 +79,7 @@ export function unregisterIPCHandlers(): void {
     unregisterUserHandlers();
     unregisterProjectHandlers();
     unregisterAuthHandlers();
+    unregisterTaskHandlers();
 
     // Future handler unregistrations would go here
 

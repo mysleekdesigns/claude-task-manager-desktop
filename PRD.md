@@ -23,7 +23,7 @@
 | 3 | Authentication System | ✅ Complete |
 | 4 | Layout and Navigation | ✅ Complete |
 | 5 | Project Management | ✅ Complete |
-| 6 | Task Management Core | Planned |
+| 6 | Task Management Core | ✅ Complete |
 | 7 | Terminal Management | Planned |
 | 8 | Git Worktree Management | Planned |
 | 9 | Roadmap and Planning | Planned |
@@ -34,7 +34,7 @@
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 5 complete. Ready for Phase 6 (Task Management Core).
+**Current Status:** Phase 6 complete. Ready for Phase 7 (Terminal Management).
 
 ---
 
@@ -450,7 +450,7 @@
 ## Phase 6: Task Management Core
 
 ### 6.1 Database Models
-- [ ] Create Task model
+- [x] Create Task model
   ```prisma
   model Task {
     id          String     @id @default(cuid())
@@ -484,98 +484,98 @@
     URGENT
   }
   ```
-- [ ] Create TaskPhase model
-- [ ] Create TaskLog model
-- [ ] Create TaskFile model
-- [ ] Run migration
+- [x] Create TaskPhase model
+- [x] Create TaskLog model
+- [x] Create TaskFile model
+- [x] Run migration
 
 ### 6.2 Task IPC Handlers
-- [ ] Create `tasks:list` handler (with filters)
-- [ ] Create `tasks:create` handler
-- [ ] Create `tasks:get` handler
-- [ ] Create `tasks:update` handler
-- [ ] Create `tasks:updateStatus` handler (for drag-drop)
-- [ ] Create `tasks:delete` handler
-- [ ] Create `tasks:addPhase` handler
-- [ ] Create `tasks:addLog` handler
-- [ ] Create `tasks:addFile` handler
-- [ ] Create `tasks:getSubtasks` handler
+- [x] Create `tasks:list` handler (with filters)
+- [x] Create `tasks:create` handler
+- [x] Create `tasks:get` handler
+- [x] Create `tasks:update` handler
+- [x] Create `tasks:updateStatus` handler (for drag-drop)
+- [x] Create `tasks:delete` handler
+- [x] Create `tasks:addPhase` handler
+- [x] Create `tasks:addLog` handler
+- [x] Create `tasks:addFile` handler
+- [x] Create `tasks:getSubtasks` handler
 
 ### 6.3 Kanban Board
-- [ ] Create /kanban page
-- [ ] Build KanbanBoard component
-  - [ ] Configure @dnd-kit DndContext
-  - [ ] Set up sensors (pointer, keyboard)
-  - [ ] Handle drag start/end events
-- [ ] Build KanbanColumn component
-  - [ ] Column header with task count
-  - [ ] Droppable area configuration
-  - [ ] "+ Add Task" button
-- [ ] Configure columns:
-  - [ ] Planning
-  - [ ] In Progress
-  - [ ] AI Review
-  - [ ] Human Review
-  - [ ] Completed (collapsible)
+- [x] Create /kanban page
+- [x] Build KanbanBoard component
+  - [x] Configure @dnd-kit DndContext
+  - [x] Set up sensors (pointer, keyboard)
+  - [x] Handle drag start/end events
+- [x] Build KanbanColumn component
+  - [x] Column header with task count
+  - [x] Droppable area configuration
+  - [x] "+ Add Task" button
+- [x] Configure columns:
+  - [x] Planning
+  - [x] In Progress
+  - [x] AI Review
+  - [x] Human Review
+  - [x] Completed (collapsible)
 
 ### 6.4 Task Card Component
-- [ ] Build TaskCard component
-  - [ ] Title display
-  - [ ] Description preview (truncated)
-  - [ ] Status badge
-  - [ ] Priority indicator
-  - [ ] Tag badges
-  - [ ] Phase progress (Plan → Code → QA)
-  - [ ] Time ago indicator
-  - [ ] Assignee avatar
-  - [ ] Menu button (edit, delete)
-- [ ] Make card draggable with @dnd-kit
-- [ ] Add click to open detail modal
+- [x] Build TaskCard component
+  - [x] Title display
+  - [x] Description preview (truncated)
+  - [x] Status badge
+  - [x] Priority indicator
+  - [x] Tag badges
+  - [x] Phase progress (Plan → Code → QA)
+  - [x] Time ago indicator
+  - [x] Assignee avatar
+  - [x] Menu button (edit, delete)
+- [x] Make card draggable with @dnd-kit
+- [x] Add click to open detail modal
 
 ### 6.5 Task Detail Modal
-- [ ] Build TaskModal component
-- [ ] Create modal header:
-  - [ ] Editable title
-  - [ ] Branch name badge
-  - [ ] Status badge
-  - [ ] Edit button
-  - [ ] Close button
-- [ ] Create tab navigation:
-  - [ ] Overview tab
-  - [ ] Subtasks tab
-  - [ ] Logs tab
-  - [ ] Files tab
-- [ ] Build Overview tab:
-  - [ ] Description editor
-  - [ ] Assignee selector
-  - [ ] Priority selector
-  - [ ] Tags input
-- [ ] Build Subtasks tab
-- [ ] Build Logs tab with collapsible phases
-- [ ] Build Files tab with action indicators
+- [x] Build TaskModal component
+- [x] Create modal header:
+  - [x] Editable title
+  - [x] Branch name badge
+  - [x] Status badge
+  - [x] Edit button
+  - [x] Close button
+- [x] Create tab navigation:
+  - [x] Overview tab
+  - [x] Subtasks tab
+  - [x] Logs tab
+  - [x] Files tab
+- [x] Build Overview tab:
+  - [x] Description editor
+  - [x] Assignee selector
+  - [x] Priority selector
+  - [x] Tags input
+- [x] Build Subtasks tab
+- [x] Build Logs tab with collapsible phases
+- [x] Build Files tab with action indicators
 
 ### 6.6 Task Creation Modal
-- [ ] Build CreateTaskModal component
-  - [ ] Title input
-  - [ ] Description textarea
-  - [ ] Priority selector
-  - [ ] Tags input
-  - [ ] Branch name input
-  - [ ] Create button
-  - [ ] Cancel button
-- [ ] Validate form with Zod
-- [ ] Show loading state during creation
-- [ ] Close and refresh board on success
+- [x] Build CreateTaskModal component
+  - [x] Title input
+  - [x] Description textarea
+  - [x] Priority selector
+  - [x] Tags input
+  - [x] Branch name input
+  - [x] Create button
+  - [x] Cancel button
+- [x] Validate form with Zod
+- [x] Show loading state during creation
+- [x] Close and refresh board on success
 
 **Phase 6 Verification:**
-- [ ] Kanban board displays all columns
-- [ ] Tasks appear in correct columns by status
-- [ ] Can drag task to different column
-- [ ] Status updates in database after drag
-- [ ] Task detail modal opens on click
-- [ ] Can edit task in modal
-- [ ] Can create new task from modal
-- [ ] Subtasks display and can be added
+- [x] Kanban board displays all columns
+- [x] Tasks appear in correct columns by status
+- [x] Can drag task to different column
+- [x] Status updates in database after drag
+- [x] Task detail modal opens on click
+- [x] Can edit task in modal
+- [x] Can create new task from modal
+- [x] Subtasks display and can be added
 
 ---
 
@@ -1892,11 +1892,11 @@ useEffect(() => {
 - [x] Projects create/edit/delete
 - [x] Team management works
 
-### Phase 6 - Tasks
-- [ ] Kanban board displays
-- [ ] Drag-and-drop works
-- [ ] Task CRUD works
-- [ ] Task modal functional
+### Phase 6 - Tasks ✅
+- [x] Kanban board displays
+- [x] Drag-and-drop works
+- [x] Task CRUD works
+- [x] Task modal functional
 
 ### Phase 7 - Terminals
 - [ ] Terminal spawns shell

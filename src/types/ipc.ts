@@ -122,6 +122,157 @@ export interface Project {
   members?: ProjectMember[];
 }
 
+// ============================================================================
+// Task Types
+// ============================================================================
+
+/**
+ * Task status enum
+ */
+export type TaskStatus = 'PENDING' | 'PLANNING' | 'IN_PROGRESS' | 'AI_REVIEW' | 'HUMAN_REVIEW' | 'COMPLETED' | 'CANCELLED';
+
+/**
+ * Task priority enum
+ */
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+/**
+ * Phase status enum
+ */
+export type PhaseStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+/**
+ * Task entity with relations
+ */
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  branchName: string | null;
+  status: TaskStatus;
+  priority: Priority;
+  tags: string[];
+  projectId: string;
+  assigneeId: string | null;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  assignee?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  } | null;
+  phases?: TaskPhase[];
+  logs?: TaskLog[];
+  files?: TaskFile[];
+  subtasks?: Task[];
+  parent?: Task | null;
+}
+
+/**
+ * Task phase entity
+ */
+export interface TaskPhase {
+  id: string;
+  name: string;
+  status: PhaseStatus;
+  model: string | null;
+  taskId: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  logs?: TaskLog[];
+}
+
+/**
+ * Task log entry
+ */
+export interface TaskLog {
+  id: string;
+  type: string;
+  message: string;
+  metadata: string | null;
+  taskId: string;
+  phaseId: string | null;
+  createdAt: string;
+}
+
+/**
+ * Task file record
+ */
+export interface TaskFile {
+  id: string;
+  path: string;
+  action: string;
+  taskId: string;
+  createdAt: string;
+}
+
+/**
+ * Create task input data
+ */
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  priority?: Priority;
+  tags?: string[];
+  branchName?: string;
+  projectId: string;
+  assigneeId?: string;
+  parentId?: string;
+}
+
+/**
+ * Update task input data
+ */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  tags?: string[];
+  branchName?: string;
+  status?: TaskStatus;
+  assigneeId?: string;
+}
+
+/**
+ * Task list filter options
+ */
+export interface TaskListFilters {
+  status?: TaskStatus;
+  priority?: Priority;
+  assigneeId?: string;
+}
+
+/**
+ * Add phase input data
+ */
+export interface AddPhaseInput {
+  taskId: string;
+  name: string;
+  model?: string;
+}
+
+/**
+ * Add log input data
+ */
+export interface AddLogInput {
+  taskId: string;
+  phaseId?: string;
+  type: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Add file input data
+ */
+export interface AddFileInput {
+  taskId: string;
+  path: string;
+  action: string;
+}
+
 /**
  * Project member information
  */
@@ -236,6 +387,21 @@ export interface IpcChannels {
 
   // User channels
   'users:findByEmail': (email: string) => Promise<AuthUser | null>;
+
+  // Task channels
+  'tasks:list': (
+    projectId: string,
+    filters?: TaskListFilters
+  ) => Promise<Task[]>;
+  'tasks:create': (data: CreateTaskInput) => Promise<Task>;
+  'tasks:get': (id: string) => Promise<Task | null>;
+  'tasks:update': (id: string, data: UpdateTaskInput) => Promise<Task>;
+  'tasks:updateStatus': (id: string, status: TaskStatus) => Promise<Task>;
+  'tasks:delete': (id: string) => Promise<void>;
+  'tasks:addPhase': (data: AddPhaseInput) => Promise<TaskPhase>;
+  'tasks:addLog': (data: AddLogInput) => Promise<TaskLog>;
+  'tasks:addFile': (data: AddFileInput) => Promise<TaskFile>;
+  'tasks:getSubtasks': (parentId: string) => Promise<Task[]>;
 }
 
 /**
@@ -364,6 +530,16 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'projects:removeMember',
   'projects:updateMemberRole',
   'users:findByEmail',
+  'tasks:list',
+  'tasks:create',
+  'tasks:get',
+  'tasks:update',
+  'tasks:updateStatus',
+  'tasks:delete',
+  'tasks:addPhase',
+  'tasks:addLog',
+  'tasks:addFile',
+  'tasks:getSubtasks',
 ] as const;
 
 /**
