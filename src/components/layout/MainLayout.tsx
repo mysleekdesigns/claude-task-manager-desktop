@@ -39,7 +39,7 @@ export function MainLayout() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with Project Selector */}
-        <header className="h-14 border-b border-border bg-background flex items-center justify-end px-4">
+        <header className="h-14 border-b border-border bg-background flex items-center justify-end px-4 titlebar-drag-region">
           <ProjectSelector />
         </header>
 
