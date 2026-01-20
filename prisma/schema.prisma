@@ -114,6 +114,7 @@ model Task {
   parentId           String?
   claudeSessionId    String?            // UUID for Claude Code session
   claudeSessionName  String?            // Human-readable session name
+  claudeTerminalId   String?            // Terminal ID for Claude Code process
   claudeStartedAt    DateTime?          // When Claude started working
   claudeCompletedAt  DateTime?          // When Claude finished
   claudeStatus       ClaudeTaskStatus   @default(IDLE)

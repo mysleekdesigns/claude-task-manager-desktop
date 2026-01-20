@@ -1251,6 +1251,8 @@ export interface IpcChannels {
   'terminal:resize': (data: ResizeTerminalInput) => Promise<void>;
   'terminal:close': (id: string) => Promise<void>;
   'terminal:list': (projectId: string) => Promise<Terminal[]>;
+  'terminal:pause': (terminalId: string) => Promise<boolean>;
+  'terminal:resume': (terminalId: string) => Promise<boolean>;
 
   // Worktree channels
   'worktrees:list': (projectId: string) => Promise<WorktreeWithStatus[]>;
@@ -1581,6 +1583,8 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'terminal:resize',
   'terminal:close',
   'terminal:list',
+  'terminal:pause',
+  'terminal:resume',
   'worktrees:list',
   'worktrees:create',
   'worktrees:get',

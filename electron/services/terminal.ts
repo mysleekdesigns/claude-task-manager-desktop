@@ -358,6 +358,56 @@ class TerminalManager {
       terminal.outputBuffer = '';
     }
   }
+
+  /**
+   * Pause a terminal process by sending SIGSTOP signal.
+   * This suspends the process execution without terminating it.
+   *
+   * @param id - Terminal ID
+   * @returns True if pause was successful, false if terminal not found
+   */
+  pauseTerminal(id: string): boolean {
+    const terminal = this.terminals.get(id);
+    if (!terminal?.pty) {
+      console.warn(`[TerminalManager] Terminal ${id} not found for pause`);
+      return false;
+    }
+
+    try {
+      // Send SIGSTOP to pause the process
+      process.kill(terminal.pty.pid, 'SIGSTOP');
+      console.log(`[TerminalManager] Paused terminal ${id} (PID ${terminal.pty.pid})`);
+      return true;
+    } catch (error) {
+      console.error(`[TerminalManager] Failed to pause terminal ${id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Resume a paused terminal process by sending SIGCONT signal.
+   * This continues a previously suspended process.
+   *
+   * @param id - Terminal ID
+   * @returns True if resume was successful, false if terminal not found
+   */
+  resumeTerminal(id: string): boolean {
+    const terminal = this.terminals.get(id);
+    if (!terminal?.pty) {
+      console.warn(`[TerminalManager] Terminal ${id} not found for resume`);
+      return false;
+    }
+
+    try {
+      // Send SIGCONT to resume the process
+      process.kill(terminal.pty.pid, 'SIGCONT');
+      console.log(`[TerminalManager] Resumed terminal ${id} (PID ${terminal.pty.pid})`);
+      return true;
+    } catch (error) {
+      console.error(`[TerminalManager] Failed to resume terminal ${id}:`, error);
+      return false;
+    }
+  }
 }
 
 // Export singleton instance

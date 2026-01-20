@@ -321,6 +321,90 @@ async function handleCaptureSession(
 }
 
 /**
+ * Pause a terminal process
+ */
+async function handlePauseTerminal(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<boolean> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists in database
+  const terminal = await prisma.terminal.findUnique({
+    where: { id: terminalId },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  if (terminal.status !== 'running') {
+    throw new Error(`Terminal is not running (status: ${terminal.status})`);
+  }
+
+  // Pause the terminal process
+  const success = terminalManager.pauseTerminal(terminalId);
+
+  if (!success) {
+    throw new Error('Failed to pause terminal process');
+  }
+
+  // Update terminal status in database
+  await prisma.terminal.update({
+    where: { id: terminalId },
+    data: { status: 'suspended' },
+  });
+
+  return success;
+}
+
+/**
+ * Resume a paused terminal process
+ */
+async function handleResumeTerminal(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<boolean> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists in database
+  const terminal = await prisma.terminal.findUnique({
+    where: { id: terminalId },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  if (terminal.status !== 'suspended') {
+    throw new Error(`Terminal is not paused (status: ${terminal.status})`);
+  }
+
+  // Resume the terminal process
+  const success = terminalManager.resumeTerminal(terminalId);
+
+  if (!success) {
+    throw new Error('Failed to resume terminal process');
+  }
+
+  // Update terminal status in database
+  await prisma.terminal.update({
+    where: { id: terminalId },
+    data: { status: 'running' },
+  });
+
+  return success;
+}
+
+/**
  * Register all terminal-related IPC handlers.
  * Requires mainWindow reference for output streaming.
  *
@@ -364,6 +448,18 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     'terminal:captureSession',
     wrapWithLogging('terminal:captureSession', wrapHandler(handleCaptureSession))
   );
+
+  // terminal:pause - Pause a terminal process
+  ipcMain.handle(
+    'terminal:pause',
+    wrapWithLogging('terminal:pause', wrapHandler(handlePauseTerminal))
+  );
+
+  // terminal:resume - Resume a paused terminal process
+  ipcMain.handle(
+    'terminal:resume',
+    wrapWithLogging('terminal:resume', wrapHandler(handleResumeTerminal))
+  );
 }
 
 /**
@@ -376,6 +472,8 @@ export function unregisterTerminalHandlers(): void {
   ipcMain.removeHandler('terminal:close');
   ipcMain.removeHandler('terminal:list');
   ipcMain.removeHandler('terminal:captureSession');
+  ipcMain.removeHandler('terminal:pause');
+  ipcMain.removeHandler('terminal:resume');
 }
 
 /**

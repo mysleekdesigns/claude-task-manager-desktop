@@ -24,6 +24,7 @@ import type { Task, TaskStatus } from '@/types/ipc';
 import { TaskCardStartButton } from './TaskCardStartButton';
 import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
 import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
+import { TaskOutputPreview } from './TaskOutputPreview';
 
 // ============================================================================
 // Types
@@ -153,6 +154,11 @@ export function TaskCard({
             />
           )}
         </div>
+
+        {/* Live Output Preview - shown when Claude is running */}
+        {isClaudeRunning && task.claudeTerminalId && (
+          <TaskOutputPreview terminalId={task.claudeTerminalId} />
+        )}
 
         {/* Bottom Row: Time, Start Button, Menu */}
         <div className="flex items-center justify-between gap-2 pt-1">

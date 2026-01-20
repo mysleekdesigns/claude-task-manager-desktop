@@ -12,12 +12,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Play, Loader2, Pause, RefreshCw } from 'lucide-react';
+import { Play, Loader2, Pause } from 'lucide-react';
 import { useIPCQuery } from '@/hooks/useIPC';
 import {
   useStartClaudeTask,
-  usePauseClaudeTask,
-  useResumeClaudeTask,
   useClaudeStatusPolling,
   getClaudeStatusFromTask,
 } from '@/hooks/useClaudeStatus';
@@ -30,9 +28,9 @@ import { toast } from 'sonner';
 
 interface TaskCardStartButtonProps {
   task: Task;
-  onStart?: () => void;
-  onStateChange?: () => void;
-  refetchTasks?: () => Promise<void>;
+  onStart?: (() => void) | undefined;
+  onStateChange?: (() => void) | undefined;
+  refetchTasks?: (() => Promise<void>) | undefined;
 }
 
 // ============================================================================
@@ -46,10 +44,7 @@ export function TaskCardStartButton({
   refetchTasks,
 }: TaskCardStartButtonProps) {
   const [isStarting, setIsStarting] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
   const { mutate: startTask } = useStartClaudeTask();
-  const { mutate: pauseTask } = usePauseClaudeTask();
-  const { mutate: resumeTask } = useResumeClaudeTask();
 
   // Fetch project data to get targetPath
   const { data: project } = useIPCQuery('projects:get', [task.projectId]);
@@ -125,15 +120,30 @@ export function TaskCardStartButton({
   const handlePause = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    try {
-      await pauseTask({ taskId: task.id });
-      toast.success('Claude Code session paused');
+    if (!task.claudeTerminalId) {
+      toast.error('No terminal ID found. Cannot pause.');
+      return;
+    }
 
-      // Refresh status and tasks after pausing
-      setTimeout(async () => {
-        void refetchStatus();
-        await refetchTasks?.();
-      }, 500);
+    try {
+      // Pause the terminal process
+      const { invoke } = window.electron;
+      const success = await invoke('terminal:pause', task.claudeTerminalId);
+
+      if (success) {
+        // Update task status to PAUSED
+        await invoke('tasks:update', task.id, {
+          claudeStatus: 'PAUSED',
+        });
+
+        toast.success('Claude Code session paused');
+
+        // Refresh status and tasks after pausing
+        setTimeout(async () => {
+          void refetchStatus();
+          await refetchTasks?.();
+        }, 500);
+      }
     } catch (err) {
       console.error('Failed to pause Claude Code session:', err);
       const errorMessage =
@@ -153,82 +163,50 @@ export function TaskCardStartButton({
   const handleResume = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!task.claudeSessionId) {
-      toast.error('No session ID found. Cannot resume.');
+    if (!task.claudeTerminalId) {
+      toast.error('No terminal ID found. Cannot resume.');
       return;
     }
 
     try {
-      await resumeTask({
-        taskId: task.id,
-        sessionId: task.claudeSessionId,
-      });
-      toast.success('Claude Code session resumed');
+      // Resume the terminal process
+      const { invoke } = window.electron;
+      const success = await invoke('terminal:resume', task.claudeTerminalId);
 
-      // Refresh status and tasks after resuming
-      setTimeout(async () => {
-        void refetchStatus();
-        await refetchTasks?.();
-      }, 500);
+      if (success) {
+        // Update task status back to RUNNING
+        await invoke('tasks:update', task.id, {
+          claudeStatus: 'RUNNING',
+        });
+
+        toast.success('Claude Code session resumed');
+
+        // Refresh status and tasks after resuming
+        setTimeout(async () => {
+          void refetchStatus();
+          await refetchTasks?.();
+        }, 500);
+      }
     } catch (err) {
       console.error('Failed to resume Claude Code session:', err);
-      toast.error('Failed to resume Claude Code session');
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to resume Claude Code session';
+      toast.error(errorMessage);
+
+      // If the error is because terminal doesn't exist, trigger a status and task refresh
+      if (errorMessage.includes('not paused') || errorMessage.includes('not found')) {
+        setTimeout(async () => {
+          void refetchStatus();
+          await refetchTasks?.();
+        }, 100);
+      }
     }
   };
 
-  const handleReset = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    setIsResetting(true);
-    try {
-      // Reset the task status in the database by updating it back to IDLE
-      const { invoke } = window.electron;
-      await invoke('tasks:update', task.id, {
-        claudeStatus: 'IDLE',
-        claudeCompletedAt: new Date().toISOString(),
-      });
-
-      toast.success('Task status reset successfully');
-
-      // Refresh status and tasks after reset
-      setTimeout(async () => {
-        void refetchStatus();
-        await refetchTasks?.();
-      }, 500);
-    } catch (err) {
-      console.error('Failed to reset task status:', err);
-      toast.error('Failed to reset task status');
-    } finally {
-      setIsResetting(false);
-    }
-  };
 
   // Show nothing if task is not in PLANNING or IN_PROGRESS
   if (task.status !== 'PLANNING' && task.status !== 'IN_PROGRESS') {
     return null;
-  }
-
-  // Show Reset button when there's a state mismatch (database says RUNNING but terminal isn't)
-  if (hasStateMismatch) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={handleReset}
-            disabled={isResetting}
-            className="h-7 px-3 text-xs gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300"
-          >
-            <RefreshCw className={`h-3 w-3 ${isResetting ? 'animate-spin' : ''}`} />
-            Reset
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Terminal not running. Click to reset task status.</p>
-        </TooltipContent>
-      </Tooltip>
-    );
   }
 
   // Show Pause button when Claude is running (and terminal actually exists)
@@ -238,9 +216,9 @@ export function TaskCardStartButton({
         <TooltipTrigger asChild>
           <Button
             size="sm"
-            variant="secondary"
+            variant="outline"
             onClick={handlePause}
-            className="h-7 px-3 text-xs gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-700 dark:text-orange-300"
+            className="h-7 px-3 text-xs gap-1.5 border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-600 dark:text-amber-500 dark:hover:bg-amber-950"
           >
             <Pause className="h-3 w-3" />
             Pause
@@ -260,11 +238,11 @@ export function TaskCardStartButton({
         <TooltipTrigger asChild>
           <Button
             size="sm"
-            variant="secondary"
+            variant="outline"
             onClick={handleResume}
-            className="h-7 px-3 text-xs gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
+            className="h-7 px-3 text-xs gap-1.5 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 dark:border-green-600 dark:text-green-500 dark:hover:bg-green-950"
           >
-            <RefreshCw className="h-3 w-3" />
+            <Play className="h-3 w-3" />
             Resume
           </Button>
         </TooltipTrigger>

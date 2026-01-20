@@ -152,6 +152,7 @@ async function handleStartTask(
       data: {
         status: 'IN_PROGRESS',
         claudeStatus: 'RUNNING',
+        claudeTerminalId: terminalId,
         claudeStartedAt: new Date(),
       },
     });
@@ -184,6 +185,7 @@ async function handleStartTask(
       data: {
         status: 'PENDING', // Rollback to PENDING since it never started
         claudeStatus: 'FAILED',
+        claudeTerminalId: null,
         claudeCompletedAt: new Date(),
       },
     });
@@ -251,6 +253,7 @@ async function handleResumeTask(
     data: {
       status: 'IN_PROGRESS',
       claudeStatus: 'RUNNING',
+      claudeTerminalId: terminalId,
       claudeStartedAt: new Date(),
     },
   });
@@ -286,6 +289,7 @@ async function handleResumeTask(
       data: {
         status: 'PENDING', // Rollback to PENDING since resume failed
         claudeStatus: 'FAILED',
+        claudeTerminalId: null,
         claudeCompletedAt: new Date(),
       },
     });

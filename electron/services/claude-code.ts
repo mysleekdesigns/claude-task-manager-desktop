@@ -320,11 +320,12 @@ class ClaudeCodeService {
       // Exit code 0 = success, non-zero = failure
       const claudeStatus = exitCode === 0 ? 'COMPLETED' : 'FAILED';
 
-      // Update task with completion status
+      // Update task with completion status and clear terminal ID
       await prisma.task.update({
         where: { id: taskId },
         data: {
           claudeStatus,
+          claudeTerminalId: null,
           claudeCompletedAt: new Date(),
         },
       });
