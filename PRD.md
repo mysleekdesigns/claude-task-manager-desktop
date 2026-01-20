@@ -32,9 +32,10 @@
 | 12 | GitHub Integration | ✅ Complete |
 | 13 | Additional Features | ✅ Complete |
 | 14 | Settings and Preferences | ✅ Complete |
-| 15 | Distribution and Packaging | Next |
+| 15 | Claude Code Task Automation | Next |
+| Final | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 14 complete. Settings and Preferences fully implemented with Settings UI (Profile, API Keys, Preferences, Shortcuts sections), Theme system with database persistence, and ScrollArea for tab content. Ready for Phase 15 (Distribution and Packaging).
+**Current Status:** Phase 14 complete. Settings and Preferences fully implemented with Settings UI (Profile, API Keys, Preferences, Shortcuts sections), Theme system with database persistence, and ScrollArea for tab content. Ready for Phase 15 (Claude Code Task Automation).
 
 ## Recent Changes
 
@@ -1239,9 +1240,9 @@ Latest 5 commits:
 
 ---
 
-## Phase 15: Distribution and Packaging
+## Final Phase: Distribution and Packaging
 
-### 15.1 Build Configuration
+### Final.1 Build Configuration
 - [ ] Configure electron-builder
   - [ ] macOS: .dmg and .zip
   - [ ] Windows: .exe (NSIS installer) and .zip
@@ -1250,7 +1251,7 @@ Latest 5 commits:
 - [ ] Configure app icons for all platforms
 - [ ] Set up file associations (optional)
 
-### 15.2 Code Signing
+### Final.2 Code Signing
 - [ ] macOS signing:
   - [ ] Apple Developer certificate
   - [ ] Notarization setup
@@ -1259,7 +1260,7 @@ Latest 5 commits:
   - [ ] Code signing certificate
   - [ ] SignTool configuration
 
-### 15.3 Auto-Update System
+### Final.3 Auto-Update System
 - [ ] Install electron-updater
 - [ ] Configure update server (GitHub Releases)
 - [ ] Implement update check on app launch
@@ -1268,7 +1269,7 @@ Latest 5 commits:
 - [ ] Create update installation dialog
 - [ ] Handle update errors gracefully
 
-### 15.4 Release Process
+### Final.4 Release Process
 - [ ] Set up GitHub Actions workflow:
   - [ ] Build on push to release branch
   - [ ] Build for all platforms in parallel
@@ -1278,7 +1279,7 @@ Latest 5 commits:
 - [ ] Create manual release script for local builds
 - [ ] Set up beta/stable release channels
 
-### 15.5 Installation Experience
+### Final.5 Installation Experience
 - [ ] macOS:
   - [ ] DMG with app and Applications folder link
   - [ ] Background image
@@ -1291,14 +1292,14 @@ Latest 5 commits:
   - [ ] Desktop integration
   - [ ] Icon installation
 
-### 15.6 Testing Distribution
+### Final.6 Testing Distribution
 - [ ] Test fresh install on macOS
 - [ ] Test fresh install on Windows
 - [ ] Test fresh install on Linux (Ubuntu, Fedora)
 - [ ] Test auto-update flow on each platform
 - [ ] Test upgrade from previous version
 
-**Phase 15 Verification:**
+**Final Phase Verification:**
 - [ ] macOS .dmg installs correctly
 - [ ] macOS app is notarized and runs without warnings
 - [ ] Windows installer works correctly
@@ -2021,7 +2022,14 @@ useEffect(() => {
 - [x] API keys save securely
 - [x] Theme switching works
 
-### Phase 15 - Distribution
+### Phase 15 - Claude Code Task Automation
+- [ ] Task "Start" button spawns Claude Code
+- [ ] Task description passed as initial prompt
+- [ ] Session ID linked to task for resumption
+- [ ] Output streaming to terminal pane
+- [ ] Task status auto-updates based on Claude activity
+
+### Final Phase - Distribution
 - [ ] macOS build works
 - [ ] Windows build works
 - [ ] Linux build works
@@ -2030,15 +2038,319 @@ useEffect(() => {
 
 ---
 
+## Phase 15: Claude Code Task Automation
+
+### Overview
+
+This phase integrates Claude Code CLI directly with the task management workflow. When a user creates a task in the "Planning" column and clicks "Start", the application will:
+1. Automatically move the task to "In Progress"
+2. Spawn a new terminal with Claude Code
+3. Pass the task details as the initial prompt
+4. Monitor and capture the session for later review
+
+### 15.1 Claude Code CLI Integration
+
+Based on the official Claude Code CLI documentation (https://code.claude.com/docs/en/cli-reference):
+
+**Key CLI Flags for Automation:**
+| Flag | Purpose | Usage |
+|------|---------|-------|
+| `-p` (print mode) | Non-interactive mode for SDK usage | `claude -p "task description"` |
+| `--output-format` | Control output format (text/json/stream-json) | `claude -p --output-format stream-json "query"` |
+| `--session-id` | Use specific UUID for session tracking | `claude --session-id "uuid" "query"` |
+| `--resume`, `-r` | Resume session by ID or name | `claude -r "session-id" "continue work"` |
+| `--continue`, `-c` | Continue most recent conversation | `claude -c` |
+| `--append-system-prompt` | Add custom instructions | `claude --append-system-prompt "Follow task requirements"` |
+| `--max-turns` | Limit agentic turns (print mode only) | `claude -p --max-turns 50 "query"` |
+| `--max-budget-usd` | Set spending limit (print mode only) | `claude -p --max-budget-usd 5.00 "query"` |
+| `--allowedTools` | Pre-approve specific tools | `"Bash(git:*)" "Read" "Edit"` |
+| `--dangerously-skip-permissions` | Skip permission prompts (use with caution) | For trusted automated workflows |
+| `--verbose` | Enable detailed logging | For debugging and monitoring |
+
+### 15.2 Database Schema Updates
+
+- [ ] Add Claude session tracking fields to Task model
+  ```prisma
+  model Task {
+    // ... existing fields ...
+    claudeSessionId    String?   // UUID for Claude Code session
+    claudeSessionName  String?   // Human-readable session name
+    claudeStartedAt    DateTime? // When Claude started working
+    claudeCompletedAt  DateTime? // When Claude finished
+    claudeStatus       ClaudeTaskStatus @default(IDLE)
+  }
+
+  enum ClaudeTaskStatus {
+    IDLE           // Not started with Claude
+    STARTING       // Spawning Claude process
+    RUNNING        // Claude actively working
+    PAUSED         // Session paused/resumable
+    COMPLETED      // Claude finished successfully
+    FAILED         // Claude encountered error
+    AWAITING_INPUT // Waiting for user input
+  }
+  ```
+
+### 15.3 Task Card "Start" Button
+
+- [ ] Add "Start" button to TaskCard in Planning column
+  - [ ] Only visible for tasks in PLANNING status
+  - [ ] Icon: Play button (▶️) or "Start with Claude" text
+  - [ ] Tooltip: "Start task with Claude Code"
+- [ ] Button click triggers:
+  1. Task status → IN_PROGRESS
+  2. Generate unique session ID (UUID)
+  3. Save session ID to task
+  4. Spawn terminal with Claude Code
+  5. Navigate to Terminals page (optional)
+
+### 15.4 Claude Code Spawning Service
+
+- [ ] Create `electron/services/claude-code.ts`
+  ```typescript
+  interface ClaudeCodeOptions {
+    taskId: string;
+    taskTitle: string;
+    taskDescription: string;
+    projectPath: string;
+    sessionId: string;
+    worktreeId?: string;
+    maxTurns?: number;
+    maxBudget?: number;
+    allowedTools?: string[];
+    appendSystemPrompt?: string;
+  }
+
+  class ClaudeCodeService {
+    // Spawn Claude Code for a task
+    async startTask(options: ClaudeCodeOptions): Promise<Terminal>;
+
+    // Resume an existing Claude session
+    async resumeTask(taskId: string, prompt?: string): Promise<Terminal>;
+
+    // Pause/stop Claude session
+    async pauseTask(taskId: string): Promise<void>;
+
+    // Get session status
+    async getTaskStatus(taskId: string): Promise<ClaudeTaskStatus>;
+  }
+  ```
+
+- [ ] Build Claude Code command generator
+  ```typescript
+  function buildClaudeCommand(options: ClaudeCodeOptions): string {
+    const args = [
+      'claude',
+      `--session-id "${options.sessionId}"`,
+      '--output-format stream-json',
+      '--verbose',
+    ];
+
+    if (options.maxTurns) {
+      args.push(`--max-turns ${options.maxTurns}`);
+    }
+
+    if (options.appendSystemPrompt) {
+      args.push(`--append-system-prompt "${options.appendSystemPrompt}"`);
+    }
+
+    if (options.allowedTools?.length) {
+      args.push(`--allowedTools ${options.allowedTools.map(t => `"${t}"`).join(' ')}`);
+    }
+
+    // Add task as initial prompt
+    const prompt = buildTaskPrompt(options);
+    args.push(`"${prompt}"`);
+
+    return args.join(' ');
+  }
+  ```
+
+### 15.5 Task Prompt Generation
+
+- [ ] Create task-to-prompt formatter
+  ```typescript
+  function buildTaskPrompt(options: ClaudeCodeOptions): string {
+    return `
+## Task: ${options.taskTitle}
+
+${options.taskDescription || 'No description provided.'}
+
+## Instructions
+- Work in the project directory: ${options.projectPath}
+- Complete the task as described above
+- Create appropriate git commits for your changes
+- Report any blockers or questions
+    `.trim();
+  }
+  ```
+
+- [ ] Support custom prompt templates per project
+- [ ] Include relevant context (branch name, related files, etc.)
+
+### 15.6 IPC Handlers
+
+- [ ] Create `electron/ipc/claude-code.ts`
+  ```typescript
+  // Start Claude Code for a task
+  ipcMain.handle('claude:startTask', async (_, taskId: string) => {
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
+    const project = await prisma.project.findUnique({ where: { id: task.projectId } });
+
+    const sessionId = crypto.randomUUID();
+    const terminal = await claudeCodeService.startTask({
+      taskId: task.id,
+      taskTitle: task.title,
+      taskDescription: task.description,
+      projectPath: project.targetPath,
+      sessionId,
+    });
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: 'IN_PROGRESS',
+        claudeSessionId: sessionId,
+        claudeStartedAt: new Date(),
+        claudeStatus: 'RUNNING',
+      },
+    });
+
+    return { terminalId: terminal.id, sessionId };
+  });
+
+  // Resume Claude session for a task
+  ipcMain.handle('claude:resumeTask', async (_, taskId: string, prompt?: string) => {
+    // Resume existing session
+  });
+
+  // Pause Claude session
+  ipcMain.handle('claude:pauseTask', async (_, taskId: string) => {
+    // Gracefully pause session
+  });
+
+  // Get Claude task status
+  ipcMain.handle('claude:getTaskStatus', async (_, taskId: string) => {
+    // Return current status
+  });
+  ```
+
+### 15.7 Terminal Integration
+
+- [ ] Link terminal to task via `taskId` field
+  ```prisma
+  model Terminal {
+    // ... existing fields ...
+    taskId    String?
+    task      Task?    @relation(fields: [taskId], references: [id])
+  }
+  ```
+
+- [ ] Show task info in terminal header when linked
+- [ ] Add "View Task" button in terminal pane
+- [ ] Auto-close terminal option when task completes
+
+### 15.8 UI Components
+
+#### Task Card Start Button
+- [ ] `src/components/kanban/TaskCardStartButton.tsx`
+  - Play icon button
+  - Loading spinner while spawning
+  - Tooltip with keyboard shortcut (S)
+
+#### Claude Status Indicator
+- [ ] `src/components/task/ClaudeStatusBadge.tsx`
+  - Color-coded status (green=running, yellow=paused, etc.)
+  - Animated indicator when actively working
+  - Click to view linked terminal
+
+#### Task Modal Claude Tab
+- [ ] Add "Claude" tab to TaskModal
+  - Session history
+  - Resume/Pause buttons
+  - Output preview
+  - Time and cost tracking
+
+### 15.9 Session Management
+
+- [ ] Track Claude session state
+  - Store session ID for resumption
+  - Track turns/cost if available
+  - Capture key outputs/decisions
+
+- [ ] Session resumption flow
+  1. User clicks "Resume" on paused task
+  2. App calls `claude -r <session-id>` or `claude -c`
+  3. Continue from previous context
+
+- [ ] Session persistence
+  - Claude Code stores sessions locally
+  - Link session name to task title for easy lookup
+  - Option to fork sessions for branching work
+
+### 15.10 Auto-Status Updates
+
+- [ ] Parse Claude output stream for status changes
+  - Detect completion signals
+  - Detect error states
+  - Detect "awaiting input" states
+
+- [ ] Update task status automatically
+  - IN_PROGRESS → AI_REVIEW when Claude signals completion
+  - Handle errors gracefully
+  - Notify user of status changes
+
+### 15.11 Settings Integration
+
+- [ ] Add Claude Code settings section
+  - Default max turns
+  - Default max budget
+  - Auto-approve tools list
+  - Custom system prompt template
+  - Enable/disable permission skipping
+
+### 15.12 Advanced Features (Future)
+
+- [ ] Multi-task orchestration
+  - Run multiple Claude sessions in parallel
+  - Task dependencies and sequencing
+
+- [ ] Claude Code subagents
+  - Configure custom subagents via `--agents` flag
+  - Specialized agents for code review, testing, etc.
+
+- [ ] Webhook/notification integration
+  - Notify when Claude completes
+  - Slack/email notifications
+
+**Phase 15 Verification:**
+- [ ] "Start" button appears on Planning tasks
+- [ ] Clicking Start moves task to In Progress
+- [ ] Claude Code spawns in terminal with task prompt
+- [ ] Session ID saved to task for resumption
+- [ ] Can resume paused sessions
+- [ ] Task status updates when Claude completes
+- [ ] Terminal shows task linkage in header
+
+---
+
 ## End-to-End Workflow
 
 1. **Launch** → App opens, checks for updates
 2. **Login/Register** → Local authentication
 3. **Create Project** → Native file picker for directory
-4. **Create Task** → Kanban board updates
-5. **Open Terminal** → Claude Code launches
-6. **Work on Task** → Move through statuses via drag-drop
-7. **Capture Insights** → Memory auto-saves on session end
-8. **View Progress** → Insights dashboard shows metrics
-9. **Generate Changelog** → Auto-generate from completed tasks
-10. **Update** → Auto-updater downloads and installs new version
+4. **Create Task** → Kanban board updates (task in Planning)
+5. **Start Task with Claude** → Click "Start" button on task card
+   - Task moves to "In Progress" automatically
+   - Terminal spawns with Claude Code
+   - Task description passed as initial prompt
+   - Session ID linked for resumption
+6. **Monitor Claude** → Watch Claude work in terminal pane
+7. **Resume/Pause** → Control Claude sessions as needed
+8. **Review Completion** → Task moves to AI Review when Claude finishes
+9. **Human Review** → Drag to Human Review, verify changes
+10. **Complete Task** → Drag to Completed column
+11. **Capture Insights** → Memory auto-saves on session end
+12. **View Progress** → Insights dashboard shows metrics
+13. **Generate Changelog** → Auto-generate from completed tasks
+14. **Update** → Auto-updater downloads and installs new version
