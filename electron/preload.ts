@@ -70,6 +70,16 @@ const VALID_INVOKE_CHANNELS = [
   'terminal:resize',
   'terminal:close',
   'terminal:list',
+  // Worktrees
+  'worktrees:list',
+  'worktrees:create',
+  'worktrees:get',
+  'worktrees:update',
+  'worktrees:delete',
+  'worktrees:sync',
+  // Git
+  'branches:list',
+  'git:status',
 ] as const;
 
 /**

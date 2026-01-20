@@ -30,11 +30,11 @@ import {
   Maximize2,
   Minimize2,
   X,
-  GitBranch,
   MoreVertical,
   Pencil,
   Sparkles,
 } from 'lucide-react';
+import { WorktreeSelector } from '@/components/worktrees';
 
 // ============================================================================
 // Types
@@ -46,12 +46,15 @@ export interface TerminalPaneProps {
     name: string;
     status: 'idle' | 'running' | 'exited';
     claudeStatus?: 'inactive' | 'active' | 'waiting';
+    worktreeId?: string | null;
   };
+  projectId: string;
   isExpanded?: boolean;
   onClose: (id: string) => void;
   onExpand: (id: string) => void;
   onCollapse: () => void;
   onLaunchClaude?: (id: string) => void;
+  onWorktreeChange?: (terminalId: string, worktreeId: string | null, path: string) => void;
   children?: React.ReactNode; // Slot for XTermWrapper content
 }
 
@@ -61,11 +64,13 @@ export interface TerminalPaneProps {
 
 export function TerminalPane({
   terminal,
+  projectId,
   isExpanded = false,
   onClose,
   onExpand,
   onCollapse,
   onLaunchClaude,
+  onWorktreeChange,
   children,
 }: TerminalPaneProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -126,6 +131,12 @@ export function TerminalPane({
     setIsRenaming(false);
     // TODO: Call IPC to rename terminal
     // For now, just update local state
+  };
+
+  const handleWorktreeChange = (worktreeId: string | null, path: string) => {
+    if (onWorktreeChange) {
+      onWorktreeChange(terminal.id, worktreeId, path);
+    }
   };
 
   return (
@@ -211,26 +222,14 @@ export function TerminalPane({
                 </Button>
               )}
 
-              {/* Worktree selector (placeholder for Phase 8) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    title="Select worktree"
-                  >
-                    <GitBranch className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Worktree</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem disabled>
-                    Main worktree (coming in Phase 8)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Worktree selector */}
+              <WorktreeSelector
+                projectId={projectId}
+                value={terminal.worktreeId}
+                onChange={handleWorktreeChange}
+                disabled={terminal.status !== 'running'}
+                size="sm"
+              />
 
               {/* More options */}
               <DropdownMenu>

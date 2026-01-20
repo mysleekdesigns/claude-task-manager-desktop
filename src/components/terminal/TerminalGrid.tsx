@@ -13,6 +13,7 @@ import { TerminalPane } from './TerminalPane';
 // ============================================================================
 
 export interface TerminalGridProps {
+  projectId: string;
   terminals: Array<{
     id: string;
     name: string;
@@ -66,6 +67,7 @@ function getGridRows(count: number): string {
 // ============================================================================
 
 export function TerminalGrid({
+  projectId,
   terminals,
   expandedTerminalId = null,
   onTerminalClose,
@@ -104,6 +106,7 @@ export function TerminalGrid({
       <div className="h-full w-full p-4">
         <TerminalPane
           terminal={expandedTerminal}
+          projectId={projectId}
           isExpanded={true}
           onClose={onTerminalClose}
           onExpand={onTerminalExpand}
@@ -125,6 +128,7 @@ export function TerminalGrid({
         <div key={terminal.id} className="min-h-0">
           <TerminalPane
             terminal={terminal}
+            projectId={projectId}
             isExpanded={false}
             onClose={onTerminalClose}
             onExpand={onTerminalExpand}

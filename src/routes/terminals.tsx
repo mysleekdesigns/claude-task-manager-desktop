@@ -219,6 +219,38 @@ export function TerminalsPage() {
     []
   );
 
+  const handleWorktreeChange = useCallback(
+    async (terminalId: string, worktreeId: string | null, path: string) => {
+      if (!currentProject) return;
+
+      try {
+        // Option: Send a cd command to change the terminal's working directory
+        if (path) {
+          await writeTerminalMutation.mutate({
+            id: terminalId,
+            data: `cd "${path}"\n`,
+          });
+        } else {
+          // If path is empty (default/project root), cd to project target path
+          if (currentProject.targetPath) {
+            await writeTerminalMutation.mutate({
+              id: terminalId,
+              data: `cd "${currentProject.targetPath}"\n`,
+            });
+          }
+        }
+
+        // Note: In the future, we could add a terminal:update IPC handler to
+        // persist the worktreeId association in the database
+        console.log(`Terminal ${terminalId} changed to worktree ${worktreeId || 'default'}`);
+      } catch (err) {
+        console.error('Failed to change worktree:', err);
+        alert('Failed to change worktree. Please try again.');
+      }
+    },
+    [writeTerminalMutation, currentProject]
+  );
+
   // ============================================================================
   // Effects
   // ============================================================================
@@ -235,6 +267,8 @@ export function TerminalsPage() {
   // ============================================================================
 
   const renderTerminalGrid = () => {
+    if (!currentProject) return null;
+
     // Empty state
     if (activeTerminals.length === 0) {
       return (
@@ -271,12 +305,15 @@ export function TerminalsPage() {
               name: expandedTerminal.name,
               status: expandedTerminal.status,
               claudeStatus: expandedTerminal.claudeStatus,
+              worktreeId: expandedTerminal.worktreeId,
             }}
+            projectId={currentProject.id}
             isExpanded={true}
             onClose={handleCloseTerminal}
             onExpand={handleExpandTerminal}
             onCollapse={handleCollapseExpanded}
             onLaunchClaude={handleLaunchClaude}
+            onWorktreeChange={handleWorktreeChange}
           >
             <XTermWrapper
               terminalId={expandedTerminal.id}
@@ -303,12 +340,15 @@ export function TerminalsPage() {
                 name: terminal.name,
                 status: terminal.status,
                 claudeStatus: terminal.claudeStatus,
+                worktreeId: terminal.worktreeId,
               }}
+              projectId={currentProject.id}
               isExpanded={false}
               onClose={handleCloseTerminal}
               onExpand={handleExpandTerminal}
               onCollapse={handleCollapseExpanded}
               onLaunchClaude={handleLaunchClaude}
+              onWorktreeChange={handleWorktreeChange}
             >
               <XTermWrapper
                 terminalId={terminal.id}

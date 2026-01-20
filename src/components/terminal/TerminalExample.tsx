@@ -75,6 +75,7 @@ export function TerminalExample() {
       {/* Terminal Grid */}
       <div className="flex-1 overflow-hidden">
         <TerminalGrid
+          projectId="example-project-id"
           terminals={terminals}
           expandedTerminalId={expandedTerminalId}
           onTerminalClose={handleTerminalClose}

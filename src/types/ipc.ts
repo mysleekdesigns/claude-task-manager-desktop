@@ -331,6 +331,109 @@ export interface CreateTerminalResponse {
   pid: number;
 }
 
+// ============================================================================
+// Worktree Types
+// ============================================================================
+
+/**
+ * Worktree entity
+ */
+export interface Worktree {
+  id: string;
+  name: string;
+  path: string;
+  branch: string;
+  isMain: boolean;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+  terminals?: Terminal[];
+  _count?: {
+    terminals: number;
+  };
+}
+
+/**
+ * Create worktree input data
+ */
+export interface CreateWorktreeInput {
+  projectId: string;
+  name: string;
+  branch: string;
+  path: string;
+  createBranch?: boolean;
+}
+
+/**
+ * Update worktree input data
+ */
+export interface UpdateWorktreeInput {
+  name?: string;
+}
+
+/**
+ * Worktree info from git
+ */
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  isMain: boolean;
+  commit?: string;
+}
+
+/**
+ * Worktree with git status information
+ */
+export interface WorktreeWithStatus extends Worktree {
+  gitStatus?: {
+    current: string | null;
+    ahead: number;
+    behind: number;
+    staged: number;
+    modified: number;
+    untracked: number;
+  };
+}
+
+/**
+ * Delete worktree input data
+ */
+export interface DeleteWorktreeInput {
+  id: string;
+  force?: boolean;
+}
+
+/**
+ * Sync worktrees result
+ */
+export interface SyncWorktreesResult {
+  added: number;
+  removed: number;
+}
+
+/**
+ * Git branch information
+ */
+export interface BranchInfo {
+  name: string;
+  current: boolean;
+  isRemote: boolean;
+  commit: string | undefined;
+}
+
+/**
+ * Git repository status
+ */
+export interface GitStatus {
+  current: string | null;
+  tracking: string | null;
+  ahead: number;
+  behind: number;
+  staged: string[];
+  modified: string[];
+  untracked: string[];
+}
+
 /**
  * Project member information
  */
@@ -467,6 +570,18 @@ export interface IpcChannels {
   'terminal:resize': (data: ResizeTerminalInput) => Promise<void>;
   'terminal:close': (id: string) => Promise<void>;
   'terminal:list': (projectId: string) => Promise<Terminal[]>;
+
+  // Worktree channels
+  'worktrees:list': (projectId: string) => Promise<WorktreeWithStatus[]>;
+  'worktrees:create': (data: CreateWorktreeInput) => Promise<Worktree>;
+  'worktrees:get': (id: string) => Promise<Worktree | null>;
+  'worktrees:update': (id: string, data: UpdateWorktreeInput) => Promise<Worktree>;
+  'worktrees:delete': (data: DeleteWorktreeInput) => Promise<boolean>;
+  'worktrees:sync': (data: { projectId: string }) => Promise<SyncWorktreesResult>;
+
+  // Git channels
+  'branches:list': (projectId: string) => Promise<BranchInfo[]>;
+  'git:status': (path: string) => Promise<GitStatus>;
 }
 
 /**
@@ -623,6 +738,14 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'terminal:resize',
   'terminal:close',
   'terminal:list',
+  'worktrees:list',
+  'worktrees:create',
+  'worktrees:get',
+  'worktrees:update',
+  'worktrees:delete',
+  'worktrees:sync',
+  'branches:list',
+  'git:status',
 ] as const;
 
 /**

@@ -43,8 +43,8 @@ export function MainLayout() {
           <ProjectSelector />
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-background">
+        {/* Main Content - pt-6 accounts for macOS titlebar spacing */}
+        <main className="flex-1 overflow-y-auto bg-background pt-6">
           <Outlet />
         </main>
       </div>

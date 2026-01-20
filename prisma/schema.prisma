@@ -36,9 +36,10 @@ model Project {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  members   ProjectMember[]
-  tasks     Task[]
-  terminals Terminal[]
+  members    ProjectMember[]
+  tasks      Task[]
+  terminals  Terminal[]
+  worktrees  Worktree[]
 
   @@index([createdAt])
 }
@@ -157,6 +158,25 @@ model TaskFile {
   @@index([createdAt])
 }
 
+model Worktree {
+  id        String     @id @default(cuid())
+  name      String
+  path      String
+  branch    String
+  isMain    Boolean    @default(false)
+  projectId String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  terminals Terminal[]
+
+  @@index([projectId])
+  @@index([branch])
+  @@index([createdAt])
+}
+
 model Terminal {
   id         String   @id @default(cuid())
   name       String
@@ -168,9 +188,11 @@ model Terminal {
   updatedAt  DateTime @updatedAt
 
   // Relations
-  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worktree   Worktree? @relation(fields: [worktreeId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([worktreeId])
   @@index([status])
   @@index([createdAt])
 }
