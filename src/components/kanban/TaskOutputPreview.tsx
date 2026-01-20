@@ -35,7 +35,7 @@ function stripAnsiCodes(text: string): string {
 export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const MAX_LINES = 5;
+  const MAX_LINES = 12;
 
   /**
    * Handle incoming terminal output
@@ -102,7 +102,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   return (
     <div
       ref={scrollRef}
-      className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md max-h-32 overflow-y-auto"
+      className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md max-h-80 overflow-y-auto"
     >
       <div className="space-y-0.5">
         {outputLines.map((line, index) => (

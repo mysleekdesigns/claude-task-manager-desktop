@@ -379,7 +379,13 @@ async function handleGetTaskStatus(
   });
 
   if (!task) {
-    throw new Error('Task not found');
+    // Return graceful default response instead of throwing
+    // This prevents status polling from crashing when task is deleted
+    return {
+      isRunning: false,
+      terminalId: null,
+      sessionId: null,
+    };
   }
 
   // Check if Claude is running for this task
@@ -424,7 +430,16 @@ async function handleGetActiveTask(
   });
 
   if (!task) {
-    throw new Error('Task not found');
+    // Return graceful default response instead of throwing
+    // This prevents status polling from crashing when task is deleted
+    return {
+      isRunning: false,
+      terminalId: null,
+      sessionId: null,
+      claudeStatus: 'IDLE' as ClaudeTaskStatus,
+      startedAt: null,
+      completedAt: null,
+    };
   }
 
   // Check if Claude terminal is currently running

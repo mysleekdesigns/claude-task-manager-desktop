@@ -114,6 +114,8 @@ const VALID_INVOKE_CHANNELS = [
   'terminal:resize',
   'terminal:close',
   'terminal:list',
+  'terminal:pause',
+  'terminal:resume',
   // Worktrees
   'worktrees:list',
   'worktrees:create',

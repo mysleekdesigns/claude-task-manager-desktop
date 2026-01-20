@@ -75,7 +75,7 @@ export function TaskCard({
     setRefreshKey(prev => prev + 1);
   }, []);
 
-  // Check if Claude is actively working
+  // Check if Claude is actively working (includes paused state)
   const claudeStatus = getClaudeStatusFromTask(task);
   const isClaudeRunning = isClaudeActive(claudeStatus);
 

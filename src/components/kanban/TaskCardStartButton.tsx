@@ -120,30 +120,18 @@ export function TaskCardStartButton({
   const handlePause = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!task.claudeTerminalId) {
-      toast.error('No terminal ID found. Cannot pause.');
-      return;
-    }
-
     try {
-      // Pause the terminal process
+      // Pause the Claude Code session using claude:pauseTask
       const { invoke } = window.electron;
-      const success = await invoke('terminal:pause', task.claudeTerminalId);
+      await invoke('claude:pauseTask', { taskId: task.id });
 
-      if (success) {
-        // Update task status to PAUSED
-        await invoke('tasks:update', task.id, {
-          claudeStatus: 'PAUSED',
-        });
+      toast.success('Claude Code session paused');
 
-        toast.success('Claude Code session paused');
-
-        // Refresh status and tasks after pausing
-        setTimeout(async () => {
-          void refetchStatus();
-          await refetchTasks?.();
-        }, 500);
-      }
+      // Refresh status and tasks after pausing
+      setTimeout(async () => {
+        void refetchStatus();
+        await refetchTasks?.();
+      }, 500);
     } catch (err) {
       console.error('Failed to pause Claude Code session:', err);
       const errorMessage =
@@ -163,30 +151,27 @@ export function TaskCardStartButton({
   const handleResume = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!task.claudeTerminalId) {
-      toast.error('No terminal ID found. Cannot resume.');
+    // Validate we have a session ID to resume
+    if (!task.claudeSessionId) {
+      toast.error('No Claude session ID found. Cannot resume.');
       return;
     }
 
     try {
-      // Resume the terminal process
+      // Resume the Claude Code session using claude:resumeTask
       const { invoke } = window.electron;
-      const success = await invoke('terminal:resume', task.claudeTerminalId);
+      await invoke('claude:resumeTask', {
+        taskId: task.id,
+        sessionId: task.claudeSessionId,
+      });
 
-      if (success) {
-        // Update task status back to RUNNING
-        await invoke('tasks:update', task.id, {
-          claudeStatus: 'RUNNING',
-        });
+      toast.success('Claude Code session resumed');
 
-        toast.success('Claude Code session resumed');
-
-        // Refresh status and tasks after resuming
-        setTimeout(async () => {
-          void refetchStatus();
-          await refetchTasks?.();
-        }, 500);
-      }
+      // Refresh status and tasks after resuming
+      setTimeout(async () => {
+        void refetchStatus();
+        await refetchTasks?.();
+      }, 500);
     } catch (err) {
       console.error('Failed to resume Claude Code session:', err);
       const errorMessage =

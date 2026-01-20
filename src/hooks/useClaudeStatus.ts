@@ -75,12 +75,13 @@ export function useClaudeStatusPolling(taskId: string, interval = 2000) {
       return;
     }
 
-    // Only poll if Claude is in an active state
+    // Only poll if Claude is in an active state (including paused)
     const shouldPoll =
       statusQuery.data.isRunning ||
       (statusQuery.data as any).status === 'STARTING' ||
       (statusQuery.data as any).status === 'RUNNING' ||
-      (statusQuery.data as any).status === 'AWAITING_INPUT';
+      (statusQuery.data as any).status === 'AWAITING_INPUT' ||
+      (statusQuery.data as any).status === 'PAUSED';
 
     setIsPolling(shouldPoll);
 
@@ -188,8 +189,8 @@ export function getClaudeStatusFromTask(task: Task | null | undefined): ClaudeTa
  * Check if Claude is actively working on a task
  *
  * @param status - ClaudeTaskStatus
- * @returns true if Claude is in an active state
+ * @returns true if Claude is in an active state (including paused)
  */
 export function isClaudeActive(status: ClaudeTaskStatus): boolean {
-  return status === 'STARTING' || status === 'RUNNING' || status === 'AWAITING_INPUT';
+  return status === 'STARTING' || status === 'RUNNING' || status === 'AWAITING_INPUT' || status === 'PAUSED';
 }

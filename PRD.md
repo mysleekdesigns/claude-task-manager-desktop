@@ -32,34 +32,43 @@
 | 12 | GitHub Integration | ✅ Complete |
 | 13 | Additional Features | ✅ Complete |
 | 14 | Settings and Preferences | ✅ Complete |
-| 15 | Claude Code Task Automation | Next |
+| 15 | Claude Code Task Automation | ✅ Complete |
 | Final | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 14 complete. Settings and Preferences fully implemented with Settings UI (Profile, API Keys, Preferences, Shortcuts sections), Theme system with database persistence, and ScrollArea for tab content. Ready for Phase 15 (Claude Code Task Automation).
+**Current Status:** Phase 15 complete. Claude Code Task Automation fully implemented with live task output preview, pause/resume functionality, and automatic task status updates. Ready for Final Phase (Distribution and Packaging).
 
 ## Recent Changes
 
 Latest 5 commits:
 
-1. **455bb4d** - Implement Phase 14: Settings and Preferences
-   - Add UserSettings model with Prisma migration
-   - Create Settings IPC handlers (get, update, updateApiKey, updateProfile)
-   - Build 4 UI section components: ProfileSection, ApiKeysSection, PreferencesSection, ShortcutsSection
-   - Implement Theme system with database persistence and system theme detection
-   - Add ScrollArea for tab content overflow handling
-   - Apply cyan tab styling for active state consistency
+1. **3571780** - Add live task output preview and pause/resume functionality
+   - Implement TaskOutputPreview component for live terminal output on task cards
+   - Add pause/resume functionality with SIGSTOP/SIGCONT signals
+   - Create ClaudeStatusBadge component with status indicators
+   - Add real-time output streaming to task cards
+   - Implement terminal process control (pause/resume)
 
-2. **3ffae0b** - Add missing Phase 13 IPC channels to preload whitelist
+2. **35ecb7d** - Fix Claude Code task automation: card movement and status updates
+   - Fix task card not moving to In Progress column after starting Claude
+   - Implement proper task status updates after Claude Code spawn
+   - Add terminal ID tracking to tasks
+   - Fix claudeTerminalId field in task updates
 
-3. **504f871** - Implement Phase 13: Additional Features
-   - Insights Dashboard with metrics cards, charts, productivity trends
-   - Ideation Board with voting and idea-to-feature conversion
-   - Changelog with auto-generation and markdown export
-   - Native Features: notifications, enhanced system tray, global keyboard shortcuts
+3. **976a3f3** - Implement Phase 15: Claude Code Task Automation
+   - Create Claude Code CLI integration service
+   - Add TaskCardStartButton component with Start/Pause/Resume states
+   - Implement Claude session management (start, pause, resume)
+   - Add ClaudeTaskStatus enum and database fields
+   - Build claude-code.ts IPC handlers for task automation
 
-4. **435814b** - Add Prisma 7 documentation and configuration
+4. **741d68c** - Add Phase 15: Claude Code Task Automation
+   - Add Phase 15 section to PRD with full specification
+   - Document Claude Code CLI flags and integration patterns
+   - Define database schema updates for Claude session tracking
 
-5. **2ac1504** - Update PRD with Prisma 7 upgrade details
+5. **b4937bc** - Update PRD with Phase 14 completion status
+   - Mark Phase 14 as complete in implementation progress table
+   - Update current status and verification checklist
 
 ## Implementation Statistics
 
@@ -108,6 +117,13 @@ Latest 5 commits:
 
 **MCP Service:**
 - `electron/services/mcp-config.ts` - MCP config file generation for Claude Desktop
+
+**Claude Code Task Automation Components:**
+- `src/components/kanban/TaskCardStartButton.tsx` - Start/Pause/Resume button for Claude tasks
+- `src/components/kanban/TaskOutputPreview.tsx` - Live terminal output preview on task cards
+- `src/components/kanban/ClaudeStatusBadge.tsx` - Status indicator for Claude task state
+- `electron/services/claude-code.ts` - Claude Code CLI integration service
+- `electron/ipc/claude-code.ts` - IPC handlers for Claude task automation
 
 ---
 
@@ -1522,26 +1538,32 @@ model Worktree {
 
 // Tasks
 model Task {
-  id          String          @id @default(cuid())
-  title       String
-  description String?
-  branchName  String?
-  status      TaskStatus      @default(PENDING)
-  priority    Priority        @default(MEDIUM)
-  tags        String          @default("[]") // JSON array as string
-  projectId   String
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assigneeId  String?
-  assignee    User?           @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  phases      TaskPhase[]
-  logs        TaskLog[]
-  files       TaskFile[]
-  subtasks    Task[]          @relation("Subtasks")
-  parentId    String?
-  parent      Task?           @relation("Subtasks", fields: [parentId], references: [id])
-  changelog   ChangelogEntry?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id                 String          @id @default(cuid())
+  title              String
+  description        String?
+  branchName         String?
+  status             TaskStatus      @default(PENDING)
+  priority           Priority        @default(MEDIUM)
+  tags               String          @default("[]") // JSON array as string
+  projectId          String
+  project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assigneeId         String?
+  assignee           User?           @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  phases             TaskPhase[]
+  logs               TaskLog[]
+  files              TaskFile[]
+  subtasks           Task[]          @relation("Subtasks")
+  parentId           String?
+  parent             Task?           @relation("Subtasks", fields: [parentId], references: [id])
+  changelog          ChangelogEntry?
+  claudeSessionId    String?         // UUID for Claude Code session
+  claudeSessionName  String?         // Human-readable session name
+  claudeTerminalId   String?         // Link to active terminal
+  claudeStartedAt    DateTime?       // When Claude started working
+  claudeCompletedAt  DateTime?       // When Claude finished
+  claudeStatus       ClaudeTaskStatus @default(IDLE)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 }
 
 enum TaskStatus {
@@ -1559,6 +1581,16 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum ClaudeTaskStatus {
+  IDLE           // Not started with Claude
+  STARTING       // Spawning Claude process
+  RUNNING        // Claude actively working
+  PAUSED         // Session paused/resumable
+  COMPLETED      // Claude finished successfully
+  FAILED         // Claude encountered error
+  AWAITING_INPUT // Waiting for user input
 }
 
 model TaskPhase {
@@ -2022,12 +2054,14 @@ useEffect(() => {
 - [x] API keys save securely
 - [x] Theme switching works
 
-### Phase 15 - Claude Code Task Automation
-- [ ] Task "Start" button spawns Claude Code
-- [ ] Task description passed as initial prompt
-- [ ] Session ID linked to task for resumption
-- [ ] Output streaming to terminal pane
-- [ ] Task status auto-updates based on Claude activity
+### Phase 15 - Claude Code Task Automation ✅
+- [x] Task "Start" button spawns Claude Code
+- [x] Task description passed as initial prompt
+- [x] Session ID linked to task for resumption
+- [x] Output streaming to terminal pane
+- [x] Task status auto-updates based on Claude activity
+- [x] Live task output preview on task cards
+- [x] Pause/Resume functionality for Claude sessions
 
 ### Final Phase - Distribution
 - [ ] macOS build works
@@ -2324,13 +2358,17 @@ ${options.taskDescription || 'No description provided.'}
   - Slack/email notifications
 
 **Phase 15 Verification:**
-- [ ] "Start" button appears on Planning tasks
-- [ ] Clicking Start moves task to In Progress
-- [ ] Claude Code spawns in terminal with task prompt
-- [ ] Session ID saved to task for resumption
-- [ ] Can resume paused sessions
-- [ ] Task status updates when Claude completes
-- [ ] Terminal shows task linkage in header
+- [x] "Start" button appears on Planning tasks
+- [x] Clicking Start moves task to In Progress
+- [x] Claude Code spawns in terminal with task prompt
+- [x] Session ID saved to task for resumption
+- [x] Can pause running Claude sessions
+- [x] Can resume paused sessions
+- [x] Task status updates when Claude completes
+- [x] Terminal shows task linkage in header
+- [x] Live output preview visible on running task cards
+- [x] Pause button sends SIGSTOP to Claude process
+- [x] Resume button continues Claude session
 
 ---
 
