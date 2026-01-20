@@ -18,8 +18,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Clock, Play, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Clock, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
+import { TaskCardStartButton } from './TaskCardStartButton';
+import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
 
 // ============================================================================
 // Types
@@ -30,7 +32,6 @@ interface TaskCardProps {
   onClick?: (() => void) | undefined;
   onEdit?: ((task: Task) => void) | undefined;
   onDelete?: ((task: Task) => void) | undefined;
-  onStatusChange?: ((taskId: string, newStatus: TaskStatus) => Promise<void>) | undefined;
   isDragging?: boolean | undefined;
 }
 
@@ -43,7 +44,6 @@ export function TaskCard({
   onClick,
   onEdit,
   onDelete,
-  onStatusChange,
   isDragging = false,
 }: TaskCardProps) {
   const {
@@ -96,18 +96,6 @@ export function TaskCard({
     return labels[status];
   };
 
-  // Handle start button click
-  const handleStartClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onStatusChange && task.status !== 'IN_PROGRESS') {
-      try {
-        await onStatusChange(task.id, 'IN_PROGRESS');
-      } catch (error) {
-        console.error('Failed to start task:', error);
-      }
-    }
-  };
-
   return (
     <Card
       ref={setNodeRef}
@@ -135,11 +123,19 @@ export function TaskCard({
           </p>
         )}
 
-        {/* Status Badge */}
-        <div>
+        {/* Status Badges */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="text-xs rounded-full bg-muted text-foreground">
             {getStatusLabel(task.status)}
           </Badge>
+
+          {/* Claude Status Badge - only shown when Claude is active */}
+          {task.claudeStatus && task.claudeStatus !== 'IDLE' && (
+            <ClaudeStatusBadge
+              status={task.claudeStatus}
+              terminalId={task.claudeTerminalId ?? undefined}
+            />
+          )}
         </div>
 
         {/* Bottom Row: Time, Start Button, Menu */}
@@ -154,17 +150,8 @@ export function TaskCard({
 
           {/* Right Side: Start Button + Menu */}
           <div className="flex items-center gap-1">
-            {/* Start Button - only show if not already in progress or completed */}
-            {task.status !== 'IN_PROGRESS' && task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && (
-              <Button
-                size="sm"
-                onClick={handleStartClick}
-                className="h-7 px-3 text-xs gap-1 bg-cyan-500 hover:bg-cyan-600 text-white"
-              >
-                <Play className="h-3 w-3 fill-current" />
-                Start
-              </Button>
-            )}
+            {/* Claude Code Start Button - only for PLANNING tasks */}
+            <TaskCardStartButton task={task} />
 
             {/* Actions Menu */}
             <DropdownMenu>

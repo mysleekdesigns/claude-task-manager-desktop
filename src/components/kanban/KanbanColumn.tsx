@@ -28,7 +28,6 @@ interface KanbanColumnProps {
   onTaskClick?: ((task: Task) => void) | undefined;
   onTaskEdit?: ((task: Task) => void) | undefined;
   onTaskDelete?: ((task: Task) => void) | undefined;
-  onTaskStatusChange?: ((taskId: string, newStatus: TaskStatus) => Promise<void>) | undefined;
   onAddTask?: ((status: TaskStatus) => void) | undefined;
   collapsible?: boolean | undefined;
 }
@@ -44,7 +43,6 @@ export function KanbanColumn({
   onTaskClick,
   onTaskEdit,
   onTaskDelete,
-  onTaskStatusChange,
   onAddTask,
   collapsible = false,
 }: KanbanColumnProps) {
@@ -136,7 +134,6 @@ export function KanbanColumn({
                     onClick={onTaskClick ? () => onTaskClick(task) : undefined}
                     onEdit={onTaskEdit}
                     onDelete={onTaskDelete}
-                    onStatusChange={onTaskStatusChange}
                   />
                 ))}
               </SortableContext>

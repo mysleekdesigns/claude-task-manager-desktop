@@ -1,0 +1,280 @@
+/**
+ * Claude Code Service
+ *
+ * Manages Claude Code CLI integration for task automation.
+ * Handles spawning Claude Code processes, session management, and terminal integration.
+ */
+
+import { terminalManager } from './terminal.js';
+import type { BrowserWindow } from 'electron';
+
+/**
+ * Options for starting a Claude Code task
+ */
+export interface ClaudeCodeOptions {
+  /** Task ID for tracking */
+  taskId: string;
+  /** Task title for context */
+  taskTitle: string;
+  /** Task description with requirements */
+  taskDescription: string;
+  /** Project directory path */
+  projectPath: string;
+  /** Claude Code session ID */
+  sessionId: string;
+  /** Optional worktree ID if task runs in a worktree */
+  worktreeId?: string | undefined;
+  /** Maximum number of turns (default: unlimited) */
+  maxTurns?: number | undefined;
+  /** Maximum budget in USD (default: unlimited) */
+  maxBudget?: number | undefined;
+  /** Allowed tools for Claude (default: all) */
+  allowedTools?: string[] | undefined;
+  /** Custom system prompt to append */
+  appendSystemPrompt?: string | undefined;
+}
+
+/**
+ * Options for resuming a Claude Code task
+ */
+export interface ResumeTaskOptions {
+  /** Task ID to resume */
+  taskId: string;
+  /** Session ID to resume */
+  sessionId: string;
+  /** Project path */
+  projectPath: string;
+  /** Optional prompt to send after resuming */
+  prompt?: string | undefined;
+}
+
+/**
+ * Result from starting a Claude Code task
+ */
+export interface ClaudeCodeStartResult {
+  /** Terminal ID for the Claude process */
+  terminalId: string;
+  /** Session ID for the Claude session */
+  sessionId: string;
+}
+
+/**
+ * Result from resuming a Claude Code task
+ */
+export interface ClaudeCodeResumeResult {
+  /** Terminal ID for the Claude process */
+  terminalId: string;
+}
+
+/**
+ * ClaudeCodeService manages Claude Code CLI processes for task automation.
+ *
+ * Features:
+ * - Start Claude Code with task context
+ * - Resume existing Claude sessions
+ * - Pause/stop Claude sessions gracefully
+ * - Build task prompts with requirements
+ * - Configure Claude CLI options
+ */
+class ClaudeCodeService {
+  /**
+   * Start a new Claude Code task.
+   *
+   * @param options - Claude Code configuration options
+   * @param mainWindow - Main BrowserWindow for output streaming
+   * @returns Terminal ID and session ID
+   */
+  async startTask(
+    options: ClaudeCodeOptions,
+    mainWindow: BrowserWindow
+  ): Promise<ClaudeCodeStartResult> {
+    const terminalId = `claude-${options.taskId}`;
+
+    // Build the Claude Code command
+    const command = this.buildClaudeCommand(options);
+
+    // Build the task prompt
+    const taskPrompt = this.buildTaskPrompt(options);
+
+    // Spawn terminal for Claude Code
+    terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
+      cwd: options.projectPath,
+      onData: (data: string) => {
+        // Stream output to renderer
+        mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
+      },
+      onExit: (code: number) => {
+        // Notify renderer of process exit
+        mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+      },
+    });
+
+    // Write the Claude Code command to start the task
+    terminalManager.write(terminalId, `${command}\n`);
+
+    // Wait a moment for Claude to initialize
+    await this.sleep(1000);
+
+    // Send the task prompt
+    if (taskPrompt) {
+      terminalManager.write(terminalId, `${taskPrompt}\n`);
+    }
+
+    return {
+      terminalId,
+      sessionId: options.sessionId,
+    };
+  }
+
+  /**
+   * Resume an existing Claude Code session.
+   *
+   * @param options - Resume task options
+   * @param mainWindow - Main BrowserWindow for output streaming
+   * @returns Terminal ID
+   */
+  async resumeTask(
+    options: ResumeTaskOptions,
+    mainWindow: BrowserWindow
+  ): Promise<ClaudeCodeResumeResult> {
+    const terminalId = `claude-${options.taskId}`;
+
+    // Build the resume command
+    const command = `claude --resume --session-id "${options.sessionId}" --verbose`;
+
+    // Spawn terminal for Claude Code
+    terminalManager.spawn(terminalId, `Claude Code (Resumed) - ${options.taskId}`, {
+      cwd: options.projectPath,
+      onData: (data: string) => {
+        // Stream output to renderer
+        mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
+      },
+      onExit: (code: number) => {
+        // Notify renderer of process exit
+        mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+      },
+    });
+
+    // Write the resume command
+    terminalManager.write(terminalId, `${command}\n`);
+
+    // Wait a moment for Claude to initialize
+    await this.sleep(1000);
+
+    // Send additional prompt if provided
+    if (options.prompt) {
+      terminalManager.write(terminalId, `${options.prompt}\n`);
+    }
+
+    return {
+      terminalId,
+    };
+  }
+
+  /**
+   * Pause a Claude Code task (graceful stop).
+   * Sends Ctrl+C to the terminal to stop Claude gracefully.
+   *
+   * @param taskId - Task ID to pause
+   */
+  pauseTask(taskId: string): void {
+    const terminalId = `claude-${taskId}`;
+
+    if (!terminalManager.has(terminalId)) {
+      throw new Error(`Claude Code terminal for task ${taskId} not found`);
+    }
+
+    // Send Ctrl+C to gracefully stop Claude
+    terminalManager.write(terminalId, '\x03');
+  }
+
+  /**
+   * Build the Claude Code CLI command from options.
+   *
+   * @param options - Claude Code options
+   * @returns Complete Claude CLI command
+   */
+  private buildClaudeCommand(options: ClaudeCodeOptions): string {
+    const parts = ['claude'];
+
+    // Session tracking
+    parts.push(`--session-id "${options.sessionId}"`);
+
+    // Verbose logging
+    parts.push('--verbose');
+
+    // Max turns
+    if (options.maxTurns !== undefined) {
+      parts.push(`--max-turns ${options.maxTurns}`);
+    }
+
+    // Max budget
+    if (options.maxBudget !== undefined) {
+      parts.push(`--max-budget ${options.maxBudget}`);
+    }
+
+    // Allowed tools
+    if (options.allowedTools && options.allowedTools.length > 0) {
+      parts.push(`--allowed-tools ${options.allowedTools.join(',')}`);
+    }
+
+    // Custom system prompt
+    if (options.appendSystemPrompt) {
+      // Escape quotes in the system prompt
+      const escapedPrompt = options.appendSystemPrompt.replace(/"/g, '\\"');
+      parts.push(`--append-system-prompt "${escapedPrompt}"`);
+    }
+
+    return parts.join(' ');
+  }
+
+  /**
+   * Build the task prompt from task details.
+   *
+   * @param options - Claude Code options
+   * @returns Formatted task prompt
+   */
+  private buildTaskPrompt(options: ClaudeCodeOptions): string {
+    const lines: string[] = [];
+
+    // Task title
+    lines.push(`# Task: ${options.taskTitle}`);
+    lines.push('');
+
+    // Task description
+    if (options.taskDescription) {
+      lines.push('## Requirements');
+      lines.push('');
+      lines.push(options.taskDescription);
+      lines.push('');
+    }
+
+    // Additional context
+    lines.push('## Context');
+    lines.push('');
+    lines.push(`This task is being tracked in the Claude Tasks Desktop application.`);
+    lines.push(`Task ID: ${options.taskId}`);
+    lines.push(`Session ID: ${options.sessionId}`);
+    lines.push('');
+
+    // Instructions
+    lines.push('## Instructions');
+    lines.push('');
+    lines.push('Please implement the requirements above following best practices.');
+    lines.push('When complete, provide a summary of the changes made.');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Sleep utility for waiting.
+   *
+   * @param ms - Milliseconds to sleep
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}
+
+// Export singleton instance
+export const claudeCodeService = new ClaudeCodeService();

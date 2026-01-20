@@ -177,7 +177,6 @@ export function KanbanBoard({
             onTaskClick={onTaskClick || undefined}
             onTaskEdit={onTaskEdit || undefined}
             onTaskDelete={onTaskDelete || undefined}
-            onTaskStatusChange={onTaskStatusChange}
             onAddTask={onAddTask || undefined}
             collapsible={column.collapsible || false}
           />

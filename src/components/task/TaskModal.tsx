@@ -30,6 +30,7 @@ import { OverviewTab } from './tabs/OverviewTab';
 import { SubtasksTab } from './tabs/SubtasksTab';
 import { LogsTab } from './tabs/LogsTab';
 import { FilesTab } from './tabs/FilesTab';
+import { ClaudeTab } from './tabs/ClaudeTab';
 
 import type { Task, TaskStatus } from '@/types/ipc';
 
@@ -219,7 +220,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="subtasks">
               Subtasks
@@ -245,6 +246,12 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="claude" className="gap-1">
+              Claude
+              {task.claudeStatus && task.claudeStatus === 'RUNNING' && (
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
@@ -266,6 +273,10 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
             <TabsContent value="files" className="mt-0">
               <FilesTab task={task} />
+            </TabsContent>
+
+            <TabsContent value="claude" className="mt-0">
+              <ClaudeTab task={task} onStatusChange={refetch} />
             </TabsContent>
           </div>
         </Tabs>

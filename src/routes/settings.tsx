@@ -4,6 +4,7 @@ import { ProfileSection } from '@/components/settings/ProfileSection';
 import { ApiKeysSection } from '@/components/settings/ApiKeysSection';
 import { PreferencesSection } from '@/components/settings/PreferencesSection';
 import { KeyboardShortcutsSection } from '@/components/settings/KeyboardShortcutsSection';
+import { ClaudeCodeSection } from '@/components/settings/ClaudeCodeSection';
 
 export function SettingsPage() {
   return (
@@ -11,7 +12,7 @@ export function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="text-muted-foreground mt-2">
-          Manage your profile, API keys, preferences, and shortcuts
+          Manage your profile, API keys, preferences, shortcuts, and Claude Code automation
         </p>
       </div>
 
@@ -41,6 +42,12 @@ export function SettingsPage() {
           >
             Shortcuts
           </TabsTrigger>
+          <TabsTrigger
+            value="claude-code"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            Claude Code
+          </TabsTrigger>
         </TabsList>
 
         <ScrollArea className="h-[calc(100vh-16rem)] w-full mt-6">
@@ -58,6 +65,10 @@ export function SettingsPage() {
 
           <TabsContent value="shortcuts" className="mt-0">
             <KeyboardShortcutsSection />
+          </TabsContent>
+
+          <TabsContent value="claude-code" className="mt-0">
+            <ClaudeCodeSection />
           </TabsContent>
         </ScrollArea>
       </Tabs>

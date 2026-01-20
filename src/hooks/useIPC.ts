@@ -210,8 +210,12 @@ export function useIPCMutation<TChannel extends IpcChannelName>(
         setState((prev) => ({ ...prev, loading: true, error: null }));
       }
 
+      console.log('[useIPCMutation] Calling channel:', channel, 'with args:', args);
+
       try {
         const result = await invoke(channel, ...args);
+
+        console.log('[useIPCMutation] Result from', channel, ':', result);
 
         if (isMountedRef.current) {
           setState({ data: result, loading: false, error: null });
@@ -219,6 +223,8 @@ export function useIPCMutation<TChannel extends IpcChannelName>(
 
         return result;
       } catch (err) {
+        console.error('[useIPCMutation] Error from', channel, ':', err);
+
         const error =
           err instanceof Error
             ? err

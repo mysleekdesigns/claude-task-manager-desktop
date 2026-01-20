@@ -102,18 +102,23 @@ model Session {
 }
 
 model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  branchName  String?
-  status      String   @default("PLANNING") // TaskStatus: PENDING, PLANNING, IN_PROGRESS, AI_REVIEW, HUMAN_REVIEW, COMPLETED, CANCELLED
-  priority    String   @default("MEDIUM") // Priority: LOW, MEDIUM, HIGH, URGENT
-  tags        String   @default("[]") // JSON array as string
-  projectId   String
-  assigneeId  String?
-  parentId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String             @id @default(cuid())
+  title              String
+  description        String?
+  branchName         String?
+  status             String             @default("PLANNING") // TaskStatus: PENDING, PLANNING, IN_PROGRESS, AI_REVIEW, HUMAN_REVIEW, COMPLETED, CANCELLED
+  priority           String             @default("MEDIUM") // Priority: LOW, MEDIUM, HIGH, URGENT
+  tags               String             @default("[]") // JSON array as string
+  projectId          String
+  assigneeId         String?
+  parentId           String?
+  claudeSessionId    String?            // UUID for Claude Code session
+  claudeSessionName  String?            // Human-readable session name
+  claudeStartedAt    DateTime?          // When Claude started working
+  claudeCompletedAt  DateTime?          // When Claude finished
+  claudeStatus       ClaudeTaskStatus   @default(IDLE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   // Relations
   project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -123,6 +128,7 @@ model Task {
   phases         TaskPhase[]
   logs           TaskLog[]
   files          TaskFile[]
+  terminals      Terminal[]
   changelogEntry ChangelogEntry?
 
   @@index([projectId])
@@ -130,6 +136,7 @@ model Task {
   @@index([priority])
   @@index([assigneeId])
   @@index([parentId])
+  @@index([claudeStatus])
   @@index([createdAt])
 }
 
@@ -212,15 +219,18 @@ model Terminal {
   pid        Int?
   projectId  String
   worktreeId String?
+  taskId     String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   // Relations
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   worktree   Worktree? @relation(fields: [worktreeId], references: [id], onDelete: SetNull)
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([worktreeId])
+  @@index([taskId])
   @@index([status])
   @@index([createdAt])
 }
@@ -230,6 +240,16 @@ enum MoscowPriority {
   SHOULD
   COULD
   WONT
+}
+
+enum ClaudeTaskStatus {
+  IDLE
+  STARTING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  AWAITING_INPUT
 }
 
 model Phase {

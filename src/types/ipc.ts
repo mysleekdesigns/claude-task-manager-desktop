@@ -139,6 +139,11 @@ export type TaskStatus = 'PENDING' | 'PLANNING' | 'IN_PROGRESS' | 'AI_REVIEW' | 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 /**
+ * Claude Code task automation status (Phase 15)
+ */
+export type ClaudeTaskStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED' | 'AWAITING_INPUT';
+
+/**
  * Phase status enum
  */
 export type PhaseStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
@@ -170,6 +175,14 @@ export interface Task {
   files?: TaskFile[];
   subtasks?: Task[];
   parent?: Task | null;
+  // Phase 15: Claude Code automation fields
+  claudeSessionId?: string | null;
+  claudeSessionName?: string | null;
+  claudeStartedAt?: string | null;
+  claudeCompletedAt?: string | null;
+  claudeStatus?: ClaudeTaskStatus;
+  claudeTerminalId?: string | null;
+  linkedTerminal?: Terminal | null;
 }
 
 /**
@@ -979,6 +992,73 @@ export interface AssignmentNotificationInput {
 }
 
 // ============================================================================
+// Claude Code Types (Phase 15)
+// ============================================================================
+
+/**
+ * Input for starting a Claude Code task
+ */
+export interface ClaudeCodeStartInput {
+  taskId: string;
+  taskTitle: string;
+  taskDescription?: string;
+  projectPath: string;
+  sessionId: string;
+  worktreeId?: string;
+  maxTurns?: number;
+  maxBudget?: number;
+  allowedTools?: string[];
+  appendSystemPrompt?: string;
+}
+
+/**
+ * Response from starting a Claude Code task
+ */
+export interface ClaudeCodeStartResponse {
+  terminalId: string;
+  sessionId: string;
+}
+
+/**
+ * Input for resuming a Claude Code task
+ */
+export interface ClaudeCodeResumeInput {
+  taskId: string;
+  sessionId: string;
+  prompt?: string;
+}
+
+/**
+ * Response from resuming a Claude Code task
+ */
+export interface ClaudeCodeResumeResponse {
+  terminalId: string;
+}
+
+/**
+ * Input for pausing a Claude Code task
+ */
+export interface ClaudeCodePauseInput {
+  taskId: string;
+}
+
+/**
+ * Input for getting Claude Code task status
+ */
+export interface ClaudeCodeStatusInput {
+  taskId: string;
+}
+
+/**
+ * Response with Claude Code task status
+ */
+export interface ClaudeCodeStatusResponse {
+  isRunning: boolean;
+  terminalId: string | null;
+  sessionId: string | null;
+}
+
+// ============================================================================
 // Settings Types (Phase 14)
 // ============================================================================
 
@@ -1304,6 +1384,12 @@ export interface IpcChannels {
   // Preferences channels (simplified - deprecated, use settings:* instead)
   'settings:getPreferences': () => Promise<UserSettings>;
   'settings:savePreferences': (data: UpdateSettingsInput) => Promise<UserSettings>;
+
+  // Claude Code Task Automation channels (Phase 15)
+  'claude:startTask': (data: ClaudeCodeStartInput) => Promise<ClaudeCodeStartResponse>;
+  'claude:resumeTask': (data: ClaudeCodeResumeInput) => Promise<ClaudeCodeResumeResponse>;
+  'claude:pauseTask': (data: ClaudeCodePauseInput) => Promise<void>;
+  'claude:getTaskStatus': (data: ClaudeCodeStatusInput) => Promise<ClaudeCodeStatusResponse>;
 }
 
 /**
@@ -1540,6 +1626,10 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'dialog:openFile',
   'file:readAsBase64',
   'auth:changePassword',
+  'claude:startTask',
+  'claude:resumeTask',
+  'claude:pauseTask',
+  'claude:getTaskStatus',
 ] as const;
 
 /**

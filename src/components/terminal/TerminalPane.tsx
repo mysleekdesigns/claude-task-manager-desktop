@@ -33,8 +33,10 @@ import {
   MoreVertical,
   Pencil,
   Sparkles,
+  CheckSquare,
 } from 'lucide-react';
 import { WorktreeSelector } from '@/components/worktrees';
+import { useIPCQuery } from '@/hooks/useIPC';
 
 // ============================================================================
 // Types
@@ -47,6 +49,7 @@ export interface TerminalPaneProps {
     status: 'idle' | 'running' | 'exited';
     claudeStatus?: 'inactive' | 'active' | 'waiting';
     worktreeId?: string | null;
+    taskId?: string | null;
   };
   projectId: string;
   isExpanded?: boolean;
@@ -55,6 +58,7 @@ export interface TerminalPaneProps {
   onCollapse: () => void;
   onLaunchClaude?: (id: string) => void;
   onWorktreeChange?: (terminalId: string, worktreeId: string | null, path: string) => void;
+  onViewTask?: (taskId: string) => void;
   children?: React.ReactNode; // Slot for XTermWrapper content
 }
 
@@ -71,11 +75,17 @@ export function TerminalPane({
   onCollapse,
   onLaunchClaude,
   onWorktreeChange,
+  onViewTask,
   children,
 }: TerminalPaneProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [terminalName, setTerminalName] = useState(terminal.name);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Fetch linked task if terminal has a taskId
+  const { data: linkedTask } = useIPCQuery('tasks:get', [terminal.taskId || ''], {
+    enabled: !!terminal.taskId,
+  });
 
   // Status indicator styling
   const getStatusColor = (status: string) => {
@@ -198,6 +208,19 @@ export function TerminalPane({
                 >
                   <Sparkles className="h-3 w-3" />
                   Claude {terminal.claudeStatus}
+                </Badge>
+              )}
+
+              {/* Linked task badge */}
+              {linkedTask && (
+                <Badge
+                  variant="outline"
+                  className="text-xs flex-shrink-0 gap-1 cursor-pointer hover:bg-accent"
+                  onClick={() => onViewTask?.(linkedTask.id)}
+                  title={linkedTask.title}
+                >
+                  <CheckSquare className="h-3 w-3" />
+                  <span className="max-w-[150px] truncate">{linkedTask.title}</span>
                 </Badge>
               )}
             </div>

@@ -139,7 +139,7 @@ export function Sidebar({ onNewTask }: SidebarProps) {
             <TooltipTrigger asChild>
               <Button
                 className={cn(
-                  'w-full bg-gradient-to-r from-cyan-400 to-cyan-600 hover:from-cyan-500 hover:to-cyan-700',
+                  'w-full bg-cyan-500 text-gray-900 hover:bg-cyan-400',
                   collapsed && 'px-0'
                 )}
                 onClick={onNewTask}

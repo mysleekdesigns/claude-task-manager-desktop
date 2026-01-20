@@ -158,6 +158,11 @@ const VALID_INVOKE_CHANNELS = [
   'settings:update',
   'settings:updateApiKey',
   'settings:updateProfile',
+  // Claude Code (Phase 15)
+  'claude:startTask',
+  'claude:resumeTask',
+  'claude:pauseTask',
+  'claude:getTaskStatus',
 ] as const;
 
 /**
