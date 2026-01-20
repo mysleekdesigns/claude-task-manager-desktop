@@ -17,6 +17,10 @@ import { registerRoadmapHandlers, unregisterRoadmapHandlers } from './roadmap.js
 import { registerMemoryHandlers, unregisterMemoryHandlers } from './memories.js';
 import { registerMcpHandlers, unregisterMcpHandlers } from './mcp.js';
 import { registerGitHubHandlers, unregisterGitHubHandlers } from './github.js';
+import { registerInsightsHandlers, unregisterInsightsHandlers } from './insights.js';
+import { registerNotificationHandlers, unregisterNotificationHandlers } from './notifications.js';
+import { registerIdeaHandlers, unregisterIdeaHandlers } from './ideas.js';
+import { registerChangelogHandlers, unregisterChangelogHandlers } from './changelog.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -60,6 +64,10 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerMemoryHandlers();
     registerMcpHandlers();
     registerGitHubHandlers();
+    registerInsightsHandlers();
+    registerNotificationHandlers();
+    registerIdeaHandlers();
+    registerChangelogHandlers();
 
     isRegistered = true;
     logger.info('IPC handlers registered successfully.');
@@ -95,6 +103,10 @@ export function unregisterIPCHandlers(): void {
     unregisterMemoryHandlers();
     unregisterMcpHandlers();
     unregisterGitHubHandlers();
+    unregisterInsightsHandlers();
+    unregisterNotificationHandlers();
+    unregisterIdeaHandlers();
+    unregisterChangelogHandlers();
 
     isRegistered = false;
     logger.info('IPC handlers unregistered successfully.');

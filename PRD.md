@@ -30,11 +30,11 @@
 | 10 | Context and Memory | ✅ Complete |
 | 11 | MCP Configuration | ✅ Complete |
 | 12 | GitHub Integration | ✅ Complete |
-| 13 | Additional Features | Next |
-| 14 | Settings and Preferences | Planned |
+| 13 | Additional Features | ✅ Complete |
+| 14 | Settings and Preferences | Next |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 12 complete. GitHub Integration fully implemented with GitHubToken model, Octokit-based GitHub service, IPC handlers for token management, issues, and PRs, and complete UI components for issues and pull requests. Ready for Phase 13 (Additional Features).
+**Current Status:** Phase 13 complete. Additional Features fully implemented with Insights Dashboard (metrics cards, charts, productivity trends), Ideation Board (voting, idea-to-feature conversion), Changelog (auto-generation, markdown export), and Native Features (notifications, enhanced system tray, global keyboard shortcuts). Ready for Phase 14 (Settings and Preferences).
 
 ## Recent Changes
 
@@ -1105,23 +1105,23 @@ Latest 5 commits:
 
 ---
 
-## Phase 13: Additional Features
+## Phase 13: Additional Features ✅
 
 ### 13.1 Insights Dashboard
-- [ ] Create /insights page
-- [ ] Build metrics cards:
-  - [ ] Tasks completed (this week/month)
-  - [ ] Average task duration
-  - [ ] Tasks by status breakdown
-  - [ ] Tasks by priority breakdown
-- [ ] Add time tracking visualizations
-  - [ ] Task completion over time chart
-  - [ ] Time per phase breakdown
-- [ ] Show productivity trends
-- [ ] Display model usage stats (if tracked)
+- [x] Create /insights page
+- [x] Build metrics cards:
+  - [x] Tasks completed (this week/month)
+  - [x] Average task duration
+  - [x] Tasks by status breakdown
+  - [x] Tasks by priority breakdown
+- [x] Add time tracking visualizations
+  - [x] Task completion over time chart
+  - [x] Time per phase breakdown
+- [x] Show productivity trends
+- [x] Display model usage stats (if tracked)
 
 ### 13.2 Ideation Board
-- [ ] Create Idea model
+- [x] Create Idea model
   ```prisma
   model Idea {
     id          String     @id @default(cuid())
@@ -1142,41 +1142,41 @@ Latest 5 commits:
     CONVERTED
   }
   ```
-- [ ] Create /ideation page
-- [ ] Build IdeaCard component
-- [ ] Implement voting (upvote/downvote)
-- [ ] Add idea → feature conversion
+- [x] Create /ideation page
+- [x] Build IdeaCard component
+- [x] Implement voting (upvote/downvote)
+- [x] Add idea → feature conversion
 
 ### 13.3 Changelog
-- [ ] Create ChangelogEntry model
-- [ ] Create /changelog page
-- [ ] Auto-generate entries from completed tasks
-- [ ] Group by date/version
-- [ ] Support manual entries
-- [ ] Export changelog (markdown)
+- [x] Create ChangelogEntry model
+- [x] Create /changelog page
+- [x] Auto-generate entries from completed tasks
+- [x] Group by date/version
+- [x] Support manual entries
+- [x] Export changelog (markdown)
 
 ### 13.4 Native Features
-- [ ] Implement native notifications
-  - [ ] Task completion
-  - [ ] Terminal errors
-  - [ ] Mentions/assignments
-- [ ] Add to system tray quick actions:
-  - [ ] New Task
-  - [ ] Show/Hide window
-  - [ ] Recent projects
-  - [ ] Quit
-- [ ] Implement global keyboard shortcuts
-  - [ ] Show/hide app
-  - [ ] New task
+- [x] Implement native notifications
+  - [x] Task completion
+  - [x] Terminal errors
+  - [x] Mentions/assignments
+- [x] Add to system tray quick actions:
+  - [x] New Task
+  - [x] Show/Hide window
+  - [x] Recent projects
+  - [x] Quit
+- [x] Implement global keyboard shortcuts
+  - [x] Show/hide app
+  - [x] New task
 
 **Phase 13 Verification:**
-- [ ] Insights dashboard shows metrics
-- [ ] Charts render correctly
-- [ ] Ideation board displays ideas
-- [ ] Can vote on ideas
-- [ ] Changelog auto-generates from tasks
-- [ ] Native notifications work
-- [ ] System tray actions work
+- [x] Insights dashboard shows metrics
+- [x] Charts render correctly
+- [x] Ideation board displays ideas
+- [x] Can vote on ideas
+- [x] Changelog auto-generates from tasks
+- [x] Native notifications work
+- [x] System tray actions work
 
 ---
 
@@ -2013,11 +2013,11 @@ useEffect(() => {
 - [x] PRs list/detail
 - [x] Issue → Task works
 
-### Phase 13 - Additional
-- [ ] Insights displays metrics
-- [ ] Ideation voting works
-- [ ] Changelog generates
-- [ ] Native notifications work
+### Phase 13 - Additional ✅
+- [x] Insights displays metrics
+- [x] Ideation voting works
+- [x] Changelog generates
+- [x] Native notifications work
 
 ### Phase 14 - Settings
 - [ ] Profile updates

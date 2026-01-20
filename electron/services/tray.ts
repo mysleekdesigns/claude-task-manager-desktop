@@ -1,6 +1,7 @@
-import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron';
+import { app, Tray, Menu, nativeImage, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { databaseService } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,43 +79,168 @@ export class TrayService {
   private updateContextMenu(): void {
     if (!this.tray) return;
 
-    const contextMenu = Menu.buildFromTemplate([
+    // Get recent projects asynchronously
+    void this.buildContextMenuAsync();
+  }
+
+  /**
+   * Build context menu with recent projects (async)
+   */
+  private async buildContextMenuAsync(): Promise<void> {
+    if (!this.tray) return;
+
+    // Build menu items
+    const menuItems: MenuItemConstructorOptions[] = [
       {
-        label: 'Show Claude Tasks',
+        label: this.isWindowVisible() ? 'Hide Claude Tasks' : 'Show Claude Tasks',
         click: (): void => {
-          this.showWindow();
+          this.toggleWindow();
         },
       },
       { type: 'separator' },
       {
         label: 'New Task',
+        accelerator: process.platform === 'darwin' ? 'Command+Shift+N' : 'Control+Shift+N',
         click: (): void => {
-          // Placeholder - will be implemented when task creation is added
-          this.showWindow();
-          // TODO: Send IPC message to open new task dialog
-          console.log('New Task clicked');
+          this.openNewTaskDialog();
         },
       },
-      {
-        label: 'Recent Projects',
-        submenu: [
-          {
-            label: 'No recent projects',
-            enabled: false,
-          },
-          // TODO: Populate with actual recent projects
-        ],
-      },
+    ];
+
+    // Add recent projects submenu
+    const recentProjectsMenu = await this.buildRecentProjectsMenu();
+    menuItems.push(recentProjectsMenu);
+
+    // Add quit option
+    menuItems.push(
       { type: 'separator' },
       {
         label: 'Quit',
+        accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Control+Q',
         click: (): void => {
           this.quit();
         },
-      },
-    ]);
+      }
+    );
 
+    const contextMenu = Menu.buildFromTemplate(menuItems);
     this.tray.setContextMenu(contextMenu);
+  }
+
+  /**
+   * Build recent projects submenu
+   */
+  private async buildRecentProjectsMenu(): Promise<MenuItemConstructorOptions> {
+    try {
+      // Check if database is connected
+      if (!databaseService.isConnected()) {
+        return {
+          label: 'Recent Projects',
+          submenu: [
+            {
+              label: 'Database not connected',
+              enabled: false,
+            },
+          ],
+        };
+      }
+
+      const prisma = databaseService.getClient();
+
+      // Get recent projects (limit to 5)
+      const recentProjects = await prisma.project.findMany({
+        take: 5,
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      if (recentProjects.length === 0) {
+        return {
+          label: 'Recent Projects',
+          submenu: [
+            {
+              label: 'No recent projects',
+              enabled: false,
+            },
+          ],
+        };
+      }
+
+      // Build submenu items for each project
+      const projectMenuItems: MenuItemConstructorOptions[] = recentProjects.map((project) => ({
+        label: project.name,
+        click: (): void => {
+          this.openProject(project.id);
+        },
+      }));
+
+      return {
+        label: 'Recent Projects',
+        submenu: projectMenuItems,
+      };
+    } catch (error) {
+      console.error('Failed to load recent projects for tray menu:', error);
+      return {
+        label: 'Recent Projects',
+        submenu: [
+          {
+            label: 'Failed to load projects',
+            enabled: false,
+          },
+        ],
+      };
+    }
+  }
+
+  /**
+   * Toggle window visibility
+   */
+  private toggleWindow(): void {
+    if (!this.mainWindow) return;
+
+    if (this.mainWindow.isVisible()) {
+      this.mainWindow.hide();
+    } else {
+      this.showWindow();
+    }
+
+    // Update menu after toggle
+    void this.buildContextMenuAsync();
+  }
+
+  /**
+   * Open new task dialog by sending IPC message to renderer
+   */
+  private openNewTaskDialog(): void {
+    if (!this.mainWindow) return;
+
+    // First, ensure window is visible
+    if (!this.mainWindow.isVisible()) {
+      this.showWindow();
+    }
+
+    // Send IPC event to renderer to open new task modal
+    this.mainWindow.webContents.send('tray:new-task');
+  }
+
+  /**
+   * Open a specific project
+   */
+  private openProject(projectId: string): void {
+    if (!this.mainWindow) return;
+
+    // Ensure window is visible
+    if (!this.mainWindow.isVisible()) {
+      this.showWindow();
+    }
+
+    // Send IPC event to renderer to navigate to project
+    this.mainWindow.webContents.send('tray:open-project', projectId);
   }
 
   /**
@@ -197,6 +323,13 @@ export class TrayService {
    */
   setMainWindow(window: BrowserWindow | null): void {
     this.mainWindow = window;
+  }
+
+  /**
+   * Refresh the tray context menu (useful when projects change)
+   */
+  refreshMenu(): void {
+    this.updateContextMenu();
   }
 
   /**

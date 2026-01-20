@@ -481,6 +481,76 @@ export interface MemoryListFilters {
 }
 
 // ============================================================================
+// Idea Types (Phase 13.2)
+// ============================================================================
+
+/**
+ * Idea status enum
+ */
+export type IdeaStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CONVERTED';
+
+/**
+ * Idea entity for ideation board
+ */
+export interface Idea {
+  id: string;
+  title: string;
+  description: string | null;
+  votes: number;
+  status: IdeaStatus;
+  projectId: string;
+  createdById: string;
+  createdBy?: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create idea input data
+ */
+export interface CreateIdeaInput {
+  title: string;
+  description?: string;
+  projectId: string;
+}
+
+/**
+ * Update idea input data
+ */
+export interface UpdateIdeaInput {
+  title?: string;
+  description?: string;
+  status?: IdeaStatus;
+}
+
+/**
+ * Idea list filter options
+ */
+export interface IdeaListFilters {
+  status?: IdeaStatus;
+}
+
+/**
+ * Vote on idea input data
+ */
+export interface VoteIdeaInput {
+  ideaId: string;
+  delta: number; // +1 for upvote, -1 for downvote
+}
+
+/**
+ * Convert idea to feature response
+ */
+export interface ConvertIdeaToFeatureResponse {
+  feature: Feature;
+  idea: Idea;
+}
+
+// ============================================================================
 // Terminal Types
 // ============================================================================
 
@@ -680,6 +750,109 @@ export interface UpdateProjectInput {
 }
 
 // ============================================================================
+// Changelog Types (Phase 13.3)
+// ============================================================================
+
+/**
+ * Changelog entry type enum
+ */
+export type ChangelogEntryType = 'FEATURE' | 'FIX' | 'IMPROVEMENT' | 'BREAKING';
+
+/**
+ * Changelog entry entity
+ */
+export interface ChangelogEntry {
+  id: string;
+  title: string;
+  description: string | null;
+  version: string | null;
+  type: ChangelogEntryType;
+  taskId: string | null;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+  task?: {
+    id: string;
+    title: string;
+  } | null;
+}
+
+/**
+ * Create changelog entry input data
+ */
+export interface CreateChangelogInput {
+  title: string;
+  description?: string;
+  version?: string;
+  type: ChangelogEntryType;
+  taskId?: string;
+  projectId: string;
+}
+
+/**
+ * Update changelog entry input data
+ */
+export interface UpdateChangelogInput {
+  title?: string;
+  description?: string;
+  version?: string;
+  type?: ChangelogEntryType;
+  taskId?: string;
+}
+
+/**
+ * Changelog export format
+ */
+export interface ChangelogExportResult {
+  markdown: string;
+  entries: ChangelogEntry[];
+}
+
+// ============================================================================
+// Insights Types (Phase 13)
+// ============================================================================
+
+/**
+ * Task metrics for insights dashboard
+ */
+export interface TaskMetrics {
+  total: number;
+  completedThisWeek: number;
+  completedThisMonth: number;
+  completedTotal: number;
+  byStatus: Array<{
+    status: TaskStatus;
+    count: number;
+  }>;
+  byPriority: Array<{
+    priority: Priority;
+    count: number;
+  }>;
+}
+
+/**
+ * Time metrics for insights dashboard
+ */
+export interface TimeMetrics {
+  averageDurationMinutes: number;
+  totalTimeMinutes: number;
+  phaseBreakdown: Array<{
+    phaseName: string;
+    averageMinutes: number;
+    taskCount: number;
+  }>;
+}
+
+/**
+ * Productivity trend data point
+ */
+export interface ProductivityTrend {
+  date: string;
+  completedCount: number;
+  createdCount: number;
+}
+
+// ============================================================================
 // MCP Types (Phase 11)
 // ============================================================================
 
@@ -762,6 +935,47 @@ export interface AppInfo {
   version: string;
   platform: NodeJS.Platform;
   isDev: boolean;
+}
+
+// ============================================================================
+// Notification Types (Phase 13.4)
+// ============================================================================
+
+/**
+ * Notification input data
+ */
+export interface ShowNotificationInput {
+  title: string;
+  body: string;
+  silent?: boolean;
+  urgency?: 'normal' | 'critical' | 'low';
+}
+
+/**
+ * Task completed notification input
+ */
+export interface TaskCompletedNotificationInput {
+  taskId: string;
+  taskTitle: string;
+  projectName?: string;
+}
+
+/**
+ * Terminal error notification input
+ */
+export interface TerminalErrorNotificationInput {
+  terminalName: string;
+  error: string;
+}
+
+/**
+ * Assignment notification input
+ */
+export interface AssignmentNotificationInput {
+  taskId: string;
+  taskTitle: string;
+  projectName?: string;
+  assignerName: string;
 }
 
 export interface IpcChannels {
@@ -879,6 +1093,25 @@ export interface IpcChannels {
   'memories:update': (id: string, data: UpdateMemoryInput) => Promise<Memory>;
   'memories:delete': (id: string) => Promise<void>;
 
+  // Idea channels (Phase 13.2)
+  'ideas:list': (
+    projectId: string,
+    filters?: IdeaListFilters
+  ) => Promise<Idea[]>;
+  'ideas:create': (data: CreateIdeaInput) => Promise<Idea>;
+  'ideas:get': (id: string) => Promise<Idea | null>;
+  'ideas:update': (id: string, data: UpdateIdeaInput) => Promise<Idea>;
+  'ideas:delete': (id: string) => Promise<void>;
+  'ideas:vote': (ideaId: string, delta: number) => Promise<Idea>;
+  'ideas:convertToFeature': (ideaId: string) => Promise<ConvertIdeaToFeatureResponse>;
+
+  // Changelog channels (Phase 13.3)
+  'changelog:list': (projectId: string) => Promise<ChangelogEntry[]>;
+  'changelog:create': (data: CreateChangelogInput) => Promise<ChangelogEntry>;
+  'changelog:update': (id: string, data: UpdateChangelogInput) => Promise<ChangelogEntry>;
+  'changelog:delete': (id: string) => Promise<void>;
+  'changelog:export': (projectId: string) => Promise<ChangelogExportResult>;
+
   // MCP channels (Phase 11)
   'mcp:list': (projectId: string) => Promise<McpConfig[]>;
   'mcp:create': (data: CreateMcpInput) => Promise<McpConfig>;
@@ -890,6 +1123,14 @@ export interface IpcChannels {
   'mcp:generateConfig': (projectId: string) => Promise<ClaudeDesktopConfig>;
   'mcp:writeConfig': (projectId: string) => Promise<void>;
   'mcp:readConfig': () => Promise<ClaudeDesktopConfig | null>;
+
+  // Insights channels (Phase 13)
+  'insights:getTaskMetrics': (projectId: string) => Promise<TaskMetrics>;
+  'insights:getTimeMetrics': (projectId: string) => Promise<TimeMetrics>;
+  'insights:getProductivityTrends': (
+    projectId: string,
+    days?: number
+  ) => Promise<ProductivityTrend[]>;
 
   // GitHub channels (Phase 12)
   'github:saveToken': (token: string) => Promise<void>;
@@ -943,6 +1184,14 @@ export interface IpcChannels {
     body?: string;
     draft?: boolean;
   }) => Promise<unknown>;
+
+  // Notification channels (Phase 13.4)
+  'notifications:isSupported': () => Promise<boolean>;
+  'notifications:requestPermission': () => Promise<boolean>;
+  'notifications:show': (data: ShowNotificationInput) => Promise<void>;
+  'notifications:taskCompleted': (data: TaskCompletedNotificationInput) => Promise<void>;
+  'notifications:terminalError': (data: TerminalErrorNotificationInput) => Promise<void>;
+  'notifications:assignment': (data: AssignmentNotificationInput) => Promise<void>;
 }
 
 /**
@@ -1145,6 +1394,21 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'github:getPRs',
   'github:getPR',
   'github:createPR',
+  'insights:getTaskMetrics',
+  'insights:getTimeMetrics',
+  'insights:getProductivityTrends',
+  'ideas:list',
+  'ideas:create',
+  'ideas:get',
+  'ideas:update',
+  'ideas:delete',
+  'ideas:vote',
+  'ideas:convertToFeature',
+  'changelog:list',
+  'changelog:create',
+  'changelog:update',
+  'changelog:delete',
+  'changelog:export',
 ] as const;
 
 /**

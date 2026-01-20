@@ -11,6 +11,7 @@ import {
   type WindowStateDefaults,
 } from './utils/window-state.js';
 import { trayService } from './services/tray.js';
+import { shortcutService } from './services/shortcuts.js';
 import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
 import { databaseService } from './services/database.js';
 import { terminalManager } from './services/terminal.js';
@@ -140,6 +141,9 @@ async function createWindow(): Promise<void> {
 
   // Initialize tray after window is created
   trayService.initialize(mainWindow);
+
+  // Initialize global keyboard shortcuts
+  shortcutService.initialize(mainWindow);
 
   // Load the app
   if (isDev && VITE_DEV_SERVER_URL) {
