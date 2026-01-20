@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Label } from '@/components/ui/label';
+import { GitHubTokenSettings } from '@/components/github/GitHubTokenSettings';
 
 export function SettingsPage() {
   return (
@@ -24,6 +25,8 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <GitHubTokenSettings />
 
       <Card>
         <CardHeader>

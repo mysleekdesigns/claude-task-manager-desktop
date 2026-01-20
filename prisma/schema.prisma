@@ -24,6 +24,7 @@ model User {
   projectMembers ProjectMember[]
   sessions       Session[]
   assignedTasks  Task[]      @relation("assignee")
+  githubTokens   GitHubToken[]
 }
 
 model Project {
@@ -300,5 +301,24 @@ model McpConfig {
 
   @@index([projectId])
   @@index([type])
+  @@index([createdAt])
+}
+
+model GitHubToken {
+  id            String   @id @default(cuid())
+  userId        String
+  encryptedToken String  // Encrypted token (encryption handled at service layer)
+  scopes        String   @default("[]") // JSON array of scopes as string
+  isValid       Boolean  @default(true) // Validation status
+  lastValidatedAt DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isValid])
   @@index([createdAt])
 }

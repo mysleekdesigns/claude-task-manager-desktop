@@ -29,18 +29,30 @@
 | 9 | Roadmap and Planning | ✅ Complete |
 | 10 | Context and Memory | ✅ Complete |
 | 11 | MCP Configuration | ✅ Complete |
-| 12 | GitHub Integration | Next |
-| 13 | Additional Features | Planned |
+| 12 | GitHub Integration | ✅ Complete |
+| 13 | Additional Features | Next |
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 11 complete. MCP Configuration system fully implemented with McpConfig model, IPC handlers, UI components, preset servers, and Claude Desktop config file generation. Ready for Phase 12 (GitHub Integration).
+**Current Status:** Phase 12 complete. GitHub Integration fully implemented with GitHubToken model, Octokit-based GitHub service, IPC handlers for token management, issues, and PRs, and complete UI components for issues and pull requests. Ready for Phase 13 (Additional Features).
 
 ## Recent Changes
 
 Latest 5 commits:
 
-1. **TBD** - Implement Phase 11: MCP Configuration
+1. **TBD** - Implement Phase 12: GitHub Integration
+   - Add GitHubToken database model with Prisma migration
+   - Create GitHub service with Octokit integration for API calls
+   - Add IPC handlers for token management (github:setToken, github:getToken, github:validateToken)
+   - Add IPC handlers for issues (github:getIssues, github:getIssue, github:createTaskFromIssue)
+   - Add IPC handlers for PRs (github:getPRs, github:getPR)
+   - Build IssueCard and IssuesList components for issue display
+   - Build IssueDetailModal with markdown rendering and task creation
+   - Build PrCard and PrList components for PR display
+   - Build PrDetailModal with files changed and review comments
+   - Add GitHub token settings section in Settings page
+
+2. **f98ee0d** - Implement Phase 11: MCP Configuration
    - Add McpConfig database model with Prisma migration
    - Create MCP IPC handlers (list, create, update, delete, toggle, generateConfig, writeConfig, readConfig)
    - Build MCP page with server list grouped by category
@@ -50,7 +62,7 @@ Latest 5 commits:
    - Add "Sync to Claude Desktop" button with toast notifications
    - Include preset MCP servers (Context7, ContextForge, GitHub, Slack, etc.)
 
-2. **8bea84c** - Implement Phase 10: Context and Memory
+3. **8bea84c** - Implement Phase 10: Context and Memory
    - Add Memory database model with Prisma migration
    - Create memory IPC handlers (list, create, get, delete, search)
    - Build Context page with tabs (Project Index, Memories)
@@ -58,28 +70,19 @@ Latest 5 commits:
    - Implement automatic session insight capture on terminal close
    - Add output buffering to terminal service
 
-2. **3057952** - Implement Phase 9: Roadmap and Planning
+4. **3057952** - Implement Phase 9: Roadmap and Planning
    - Add Phase, Feature, and Milestone database models
    - Create roadmap IPC handlers for phases, features, milestones
    - Build RoadmapPage with phase cards and feature management
    - Implement MoSCoW priority system (Must/Should/Could/Won't)
    - Add "Build" button to convert features to tasks
 
-3. **b580804** - Implement Phase 8: Git Worktree Management
+5. **b580804** - Implement Phase 8: Git Worktree Management
    - Add Worktree database model with Project/Terminal relations
    - Create git service using simple-git for worktree/branch operations
    - Add IPC handlers: worktrees:list/create/delete/sync, branches:list, git:status
    - Create WorktreeList, CreateWorktreeModal, WorktreeSelector components
    - Integrate worktree selection into terminal panes
-
-4. **778beb4** - Fix terminal close functionality and race condition errors
-   - Fixed race condition in terminal cleanup during window close
-   - Improved terminal process management to prevent zombie processes
-   - Enhanced error handling in terminal IPC handlers
-
-5. **b580804** - Implement Phase 8: Git Worktree Management
-   - Add Worktree database model with Project/Terminal relations
-   - Create git service using simple-git for worktree/branch operations
 
 ## Implementation Statistics
 
@@ -1066,60 +1069,60 @@ Latest 5 commits:
 
 ---
 
-## Phase 12: GitHub Integration
+## Phase 12: GitHub Integration ✅
 
 ### 12.1 GitHub Authentication
-- [ ] Create GitHubToken storage in UserSettings
-- [ ] Build token input UI in settings
-- [ ] Validate token on save
-- [ ] Encrypt token at rest (electron-store encryption)
+- [x] Create GitHubToken storage in UserSettings
+- [x] Build token input UI in settings
+- [x] Validate token on save
+- [x] Encrypt token at rest (electron-store encryption)
 
 ### 12.2 GitHub IPC Handlers
-- [ ] Create github service using Octokit
-- [ ] Create `github:getIssues` handler
-- [ ] Create `github:getIssue` handler
-- [ ] Create `github:getPRs` handler
-- [ ] Create `github:getPR` handler
-- [ ] Create `github:createIssue` handler
-- [ ] Create `github:createPR` handler
-- [ ] Handle rate limiting gracefully
+- [x] Create github service using Octokit
+- [x] Create `github:getIssues` handler
+- [x] Create `github:getIssue` handler
+- [x] Create `github:getPRs` handler
+- [x] Create `github:getPR` handler
+- [x] Create `github:createIssue` handler
+- [x] Create `github:createPR` handler
+- [x] Handle rate limiting gracefully
 
 ### 12.3 GitHub Issues UI
-- [ ] Create /github/issues page
-- [ ] Build IssuesList component
-- [ ] Build IssueCard component:
-  - [ ] Issue number and title
-  - [ ] State (open/closed) badge
-  - [ ] Labels
-  - [ ] Assignees
-  - [ ] Created date
-- [ ] Build IssueDetailModal:
-  - [ ] Full issue body (markdown)
-  - [ ] Comments
-  - [ ] "Create Task from Issue" button
-- [ ] Implement issue → task conversion
+- [x] Create /github/issues page
+- [x] Build IssuesList component
+- [x] Build IssueCard component:
+  - [x] Issue number and title
+  - [x] State (open/closed) badge
+  - [x] Labels
+  - [x] Assignees
+  - [x] Created date
+- [x] Build IssueDetailModal:
+  - [x] Full issue body (markdown)
+  - [x] Comments
+  - [x] "Create Task from Issue" button
+- [x] Implement issue → task conversion
 
 ### 12.4 GitHub PRs UI
-- [ ] Create /github/prs page
-- [ ] Build PrList component
-- [ ] Build PrCard component:
-  - [ ] PR number and title
-  - [ ] State (open/merged/closed) badge
-  - [ ] Branch info (head → base)
-  - [ ] Review status
-  - [ ] Created date
-- [ ] Build PrDetailModal:
-  - [ ] PR body
-  - [ ] Files changed
-  - [ ] Review comments
+- [x] Create /github/prs page
+- [x] Build PrList component
+- [x] Build PrCard component:
+  - [x] PR number and title
+  - [x] State (open/merged/closed) badge
+  - [x] Branch info (head → base)
+  - [x] Review status
+  - [x] Created date
+- [x] Build PrDetailModal:
+  - [x] PR body
+  - [x] Files changed
+  - [x] Review comments
 
 **Phase 12 Verification:**
-- [ ] Can add GitHub token in settings
-- [ ] Issues list loads from repository
-- [ ] Issue detail shows full content
-- [ ] Can create task from issue
-- [ ] PRs list loads from repository
-- [ ] PR detail shows files and reviews
+- [x] Can add GitHub token in settings
+- [x] Issues list loads from repository
+- [x] Issue detail shows full content
+- [x] Can create task from issue
+- [x] PRs list loads from repository
+- [x] PR detail shows files and reviews
 
 ---
 
@@ -2024,11 +2027,11 @@ useEffect(() => {
 - [x] Custom server add works
 - [x] Config file generation works
 
-### Phase 12 - GitHub
-- [ ] Token authentication works
-- [ ] Issues list/detail
-- [ ] PRs list/detail
-- [ ] Issue → Task works
+### Phase 12 - GitHub ✅
+- [x] Token authentication works
+- [x] Issues list/detail
+- [x] PRs list/detail
+- [x] Issue → Task works
 
 ### Phase 13 - Additional
 - [ ] Insights displays metrics

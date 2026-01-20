@@ -5,6 +5,8 @@
  * Both main and renderer processes use these types for type safety.
  */
 
+import type { GitHubTokenValidation } from './github.js';
+
 // ============================================================================
 // Request/Response Types
 // ============================================================================
@@ -888,6 +890,59 @@ export interface IpcChannels {
   'mcp:generateConfig': (projectId: string) => Promise<ClaudeDesktopConfig>;
   'mcp:writeConfig': (projectId: string) => Promise<void>;
   'mcp:readConfig': () => Promise<ClaudeDesktopConfig | null>;
+
+  // GitHub channels (Phase 12)
+  'github:saveToken': (token: string) => Promise<void>;
+  'github:validateToken': () => Promise<GitHubTokenValidation>;
+  'github:deleteToken': () => Promise<void>;
+  'github:getToken': () => Promise<{ hasToken: boolean }>;
+  'github:getIssues': (params: {
+    owner: string;
+    repo: string;
+    state?: 'open' | 'closed' | 'all';
+    labels?: string[];
+    sort?: 'created' | 'updated' | 'comments';
+    direction?: 'asc' | 'desc';
+    per_page?: number;
+    page?: number;
+  }) => Promise<unknown>;
+  'github:getIssue': (params: {
+    owner: string;
+    repo: string;
+    issue_number: number;
+  }) => Promise<unknown>;
+  'github:createIssue': (params: {
+    owner: string;
+    repo: string;
+    title: string;
+    body?: string;
+    labels?: string[];
+    assignees?: string[];
+    milestone?: number;
+  }) => Promise<unknown>;
+  'github:getPRs': (params: {
+    owner: string;
+    repo: string;
+    state?: 'open' | 'closed' | 'all';
+    sort?: 'created' | 'updated' | 'popularity' | 'long-running';
+    direction?: 'asc' | 'desc';
+    per_page?: number;
+    page?: number;
+  }) => Promise<unknown>;
+  'github:getPR': (params: {
+    owner: string;
+    repo: string;
+    pull_number: number;
+  }) => Promise<unknown>;
+  'github:createPR': (params: {
+    owner: string;
+    repo: string;
+    title: string;
+    head: string;
+    base: string;
+    body?: string;
+    draft?: boolean;
+  }) => Promise<unknown>;
 }
 
 /**
@@ -1080,6 +1135,16 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'mcp:generateConfig',
   'mcp:writeConfig',
   'mcp:readConfig',
+  'github:saveToken',
+  'github:validateToken',
+  'github:deleteToken',
+  'github:getToken',
+  'github:getIssues',
+  'github:getIssue',
+  'github:createIssue',
+  'github:getPRs',
+  'github:getPR',
+  'github:createPR',
 ] as const;
 
 /**

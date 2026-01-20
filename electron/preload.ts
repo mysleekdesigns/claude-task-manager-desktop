@@ -107,6 +107,17 @@ const VALID_INVOKE_CHANNELS = [
   'mcp:update',
   'mcp:delete',
   'mcp:toggle',
+  // GitHub (Phase 12)
+  'github:saveToken',
+  'github:validateToken',
+  'github:deleteToken',
+  'github:getToken',
+  'github:getIssues',
+  'github:getIssue',
+  'github:createIssue',
+  'github:getPRs',
+  'github:getPR',
+  'github:createPR',
 ] as const;
 
 /**
