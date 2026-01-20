@@ -58,10 +58,15 @@ const VALID_INVOKE_CHANNELS = [
   'tasks:delete',
   'tasks:updateStatus',
   'tasks:reorder',
+  'tasks:addPhase',
+  'tasks:addLog',
+  'tasks:addFile',
+  'tasks:getSubtasks',
   // Users
   'users:create',
   'users:getById',
   'users:getByEmail',
+  'users:findByEmail',
   'users:update',
   'users:delete',
   // Roadmap (Phase 9)
@@ -78,6 +83,31 @@ const VALID_INVOKE_CHANNELS = [
   'milestones:create',
   'milestones:toggle',
   'milestones:delete',
+  // Ideas (Phase 13)
+  'ideas:list',
+  'ideas:get',
+  'ideas:create',
+  'ideas:update',
+  'ideas:delete',
+  'ideas:vote',
+  'ideas:convertToFeature',
+  // Changelog (Phase 13)
+  'changelog:list',
+  'changelog:create',
+  'changelog:update',
+  'changelog:delete',
+  'changelog:export',
+  // Notifications (Phase 13)
+  'notifications:isSupported',
+  'notifications:requestPermission',
+  'notifications:show',
+  'notifications:taskCompleted',
+  'notifications:terminalError',
+  'notifications:assignment',
+  // Insights (Phase 13)
+  'insights:getTaskMetrics',
+  'insights:getTimeMetrics',
+  'insights:getProductivityTrends',
   // Terminals
   'terminal:create',
   'terminal:write',
@@ -98,6 +128,7 @@ const VALID_INVOKE_CHANNELS = [
   'memories:list',
   'memories:create',
   'memories:get',
+  'memories:update',
   'memories:delete',
   'memories:search',
   // MCP (Phase 11)
@@ -107,6 +138,10 @@ const VALID_INVOKE_CHANNELS = [
   'mcp:update',
   'mcp:delete',
   'mcp:toggle',
+  'mcp:presets',
+  'mcp:generateConfig',
+  'mcp:writeConfig',
+  'mcp:readConfig',
   // GitHub (Phase 12)
   'github:saveToken',
   'github:validateToken',
