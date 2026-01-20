@@ -5,6 +5,7 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
+import Database from 'better-sqlite3';
 import { getDatabasePath, getBackupsPath, ensureDirectory } from '../utils/paths';
 
 /**
@@ -42,6 +43,9 @@ class DatabaseService {
    * Initialize the database connection.
    * This should be called when the Electron app starts.
    *
+   * For Prisma 6: Uses DATABASE_URL environment variable
+   * For Prisma 7+: Uses the adapter pattern with better-sqlite3
+   *
    * @returns The initialized Prisma client
    */
   async initialize(): Promise<PrismaClientType> {
@@ -57,23 +61,38 @@ class DatabaseService {
       const userDataPath = app.getPath('userData');
       ensureDirectory(userDataPath);
 
-      // Set the DATABASE_URL environment variable for Prisma
-      const databaseUrl = this.getDatabaseUrl();
-      process.env['DATABASE_URL'] = databaseUrl;
+      // Get the database path
+      const dbPath = this.getDatabasePath();
 
       // Initialize Prisma client
       const logLevels = process.env['NODE_ENV'] === 'development'
         ? ['query', 'error', 'warn']
         : ['error'];
 
-      this.prisma = new PrismaClient({
-        log: logLevels as any,
-      }) as PrismaClientType;
+      // Try to use adapter pattern (Prisma 7+)
+      let adapter: unknown = undefined;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { PrismaSqlite } = require('@prisma/adapter-sqlite');
+        const sqliteClient = new Database(dbPath);
+        adapter = new PrismaSqlite(sqliteClient);
+        console.log('[Database] Using Prisma 7+ adapter pattern');
+      } catch {
+        // Fallback to Prisma 6 style with DATABASE_URL
+        process.env['DATABASE_URL'] = `file:${dbPath}`;
+        console.log('[Database] Using Prisma 6 environment variable pattern');
+      }
+
+      const clientConfig = adapter
+        ? { log: logLevels, adapter }
+        : { log: logLevels };
+
+      this.prisma = new PrismaClient(clientConfig as any) as PrismaClientType;
 
       // Test the connection
       await this.prisma.$connect();
 
-      console.log('[Database] Connected successfully to:', this.getDatabasePath());
+      console.log('[Database] Connected successfully to:', dbPath);
 
       return this.prisma;
     } catch (error) {
