@@ -274,6 +274,160 @@ export interface AddFileInput {
 }
 
 // ============================================================================
+// Roadmap Types (Phase 9)
+// ============================================================================
+
+/**
+ * MoSCoW priority enum for features
+ */
+export type MoscowPriority = 'MUST' | 'SHOULD' | 'COULD' | 'WONT';
+
+/**
+ * Roadmap phase status
+ */
+export type RoadmapPhaseStatus = 'planned' | 'in_progress' | 'completed';
+
+/**
+ * Feature status
+ */
+export type FeatureStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+/**
+ * Phase entity for roadmap planning
+ */
+export interface RoadmapPhase {
+  id: string;
+  name: string;
+  description: string | null;
+  order: number;
+  status: RoadmapPhaseStatus;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+  features?: Feature[];
+  milestones?: Milestone[];
+}
+
+/**
+ * Alias for Phase - used by IPC handlers
+ */
+export type Phase = RoadmapPhase;
+
+/**
+ * Feature entity with MoSCoW priority
+ */
+export interface Feature {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: MoscowPriority;
+  status: FeatureStatus;
+  projectId: string;
+  phaseId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  phase?: RoadmapPhase | null;
+}
+
+/**
+ * Milestone entity
+ */
+export interface Milestone {
+  id: string;
+  title: string;
+  completed: boolean;
+  phaseId: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create phase input data
+ */
+export interface CreatePhaseInput {
+  name: string;
+  description?: string;
+  order: number;
+  projectId: string;
+}
+
+/**
+ * Update phase input data
+ */
+export interface UpdatePhaseInput {
+  name?: string;
+  description?: string;
+  order?: number;
+  status?: RoadmapPhaseStatus;
+}
+
+/**
+ * Create feature input data
+ */
+export interface CreateFeatureInput {
+  title: string;
+  description?: string;
+  priority: MoscowPriority;
+  projectId: string;
+  phaseId?: string;
+}
+
+/**
+ * Update feature input data
+ */
+export interface UpdateFeatureInput {
+  title?: string;
+  description?: string;
+  priority?: MoscowPriority;
+  status?: FeatureStatus;
+  phaseId?: string;
+}
+
+/**
+ * Create milestone input data
+ */
+export interface CreateMilestoneInput {
+  title: string;
+  phaseId: string;
+  order: number;
+}
+
+/**
+ * Toggle milestone input data
+ */
+export interface ToggleMilestoneInput {
+  id: string;
+  completed: boolean;
+}
+
+/**
+ * Reorder phases input data
+ */
+export interface ReorderPhasesInput {
+  projectId: string;
+  phaseOrders: Array<{ id: string; order: number }>;
+}
+
+/**
+ * Feature list filter options
+ */
+export interface FeatureListFilters {
+  projectId?: string;
+  phaseId?: string;
+  priority?: MoscowPriority;
+  status?: FeatureStatus;
+}
+
+/**
+ * Create task from feature response
+ */
+export interface CreateTaskFromFeatureResponse {
+  task: Task;
+  feature: Feature;
+}
+
+// ============================================================================
 // Terminal Types
 // ============================================================================
 
@@ -564,6 +718,21 @@ export interface IpcChannels {
   'tasks:addFile': (data: AddFileInput) => Promise<TaskFile>;
   'tasks:getSubtasks': (parentId: string) => Promise<Task[]>;
 
+  // Roadmap channels (Phase 9)
+  'phases:list': (projectId: string) => Promise<Phase[]>;
+  'phases:create': (data: CreatePhaseInput) => Promise<Phase>;
+  'phases:update': (id: string, data: UpdatePhaseInput) => Promise<Phase>;
+  'phases:delete': (id: string) => Promise<void>;
+  'phases:reorder': (updates: Array<{ phaseId: string; order: number }>) => Promise<void>;
+  'features:list': (filters?: FeatureListFilters) => Promise<Feature[]>;
+  'features:create': (data: CreateFeatureInput) => Promise<Feature>;
+  'features:update': (id: string, data: UpdateFeatureInput) => Promise<Feature>;
+  'features:delete': (id: string) => Promise<void>;
+  'features:createTask': (featureId: string, assigneeId?: string) => Promise<CreateTaskFromFeatureResponse>;
+  'milestones:create': (data: CreateMilestoneInput) => Promise<Milestone>;
+  'milestones:toggle': (id: string) => Promise<Milestone>;
+  'milestones:delete': (id: string) => Promise<void>;
+
   // Terminal channels
   'terminal:create': (data: CreateTerminalInput) => Promise<CreateTerminalResponse>;
   'terminal:write': (data: WriteTerminalInput) => Promise<void>;
@@ -733,6 +902,19 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'tasks:addLog',
   'tasks:addFile',
   'tasks:getSubtasks',
+  'phases:list',
+  'phases:create',
+  'phases:update',
+  'phases:delete',
+  'phases:reorder',
+  'features:list',
+  'features:create',
+  'features:update',
+  'features:delete',
+  'features:createTask',
+  'milestones:create',
+  'milestones:toggle',
+  'milestones:delete',
   'terminal:create',
   'terminal:write',
   'terminal:resize',

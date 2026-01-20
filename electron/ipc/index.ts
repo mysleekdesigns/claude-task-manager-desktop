@@ -13,6 +13,7 @@ import { registerAuthHandlers, unregisterAuthHandlers } from './auth.js';
 import { registerTaskHandlers, unregisterTaskHandlers } from './tasks.js';
 import { registerTerminalHandlers, unregisterTerminalHandlers } from './terminals.js';
 import { registerWorktreeHandlers, unregisterWorktreeHandlers } from './worktrees.js';
+import { registerRoadmapHandlers, unregisterRoadmapHandlers } from './roadmap.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -52,6 +53,7 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerTaskHandlers();
     registerTerminalHandlers(mainWindow);
     registerWorktreeHandlers();
+    registerRoadmapHandlers();
 
     // Future handler registrations:
     // registerMemoryHandlers();
@@ -86,6 +88,7 @@ export function unregisterIPCHandlers(): void {
     unregisterTaskHandlers();
     unregisterTerminalHandlers();
     unregisterWorktreeHandlers();
+    unregisterRoadmapHandlers();
 
     // Future handler unregistrations would go here
 
