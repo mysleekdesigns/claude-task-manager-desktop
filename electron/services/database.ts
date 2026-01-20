@@ -5,7 +5,6 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
-import Database from 'better-sqlite3';
 import { getDatabasePath, getBackupsPath, ensureDirectory } from '../utils/paths';
 
 /**
@@ -69,23 +68,12 @@ class DatabaseService {
         ? ['query', 'error', 'warn']
         : ['error'];
 
-      // Try to use adapter pattern (Prisma 7+)
-      let adapter: unknown = undefined;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { PrismaSqlite } = require('@prisma/adapter-sqlite');
-        const sqliteClient = new Database(dbPath);
-        adapter = new PrismaSqlite(sqliteClient);
-        console.log('[Database] Using Prisma 7+ adapter pattern');
-      } catch {
-        // Fallback to Prisma 6 style with DATABASE_URL
-        process.env['DATABASE_URL'] = `file:${dbPath}`;
-        console.log('[Database] Using Prisma 6 environment variable pattern');
-      }
+      // Use Prisma 7+ adapter pattern with @prisma/adapter-better-sqlite3
+      const { PrismaBetterSqlite3 } = await import('@prisma/adapter-better-sqlite3');
+      const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
+      console.log('[Database] Using Prisma 7 adapter pattern');
 
-      const clientConfig = adapter
-        ? { log: logLevels, adapter }
-        : { log: logLevels };
+      const clientConfig = { log: logLevels, adapter };
 
       this.prisma = new PrismaClient(clientConfig as any) as PrismaClientType;
 
@@ -119,6 +107,11 @@ class DatabaseService {
    * This is typically called on app startup in production to apply
    * any new migrations from updates.
    *
+   * Note: Requires DATABASE_URL environment variable to be set.
+   * This is configured in:
+   * - .env file (development)
+   * - prisma/prisma.config.ts (auto-initialization)
+   *
    * @throws Error if migrations fail
    */
   async runMigrations(): Promise<void> {
@@ -127,12 +120,16 @@ class DatabaseService {
 
       const databaseUrl = this.getDatabaseUrl();
 
+      // Ensure DATABASE_URL is set for prisma CLI
+      // This is essential for the migration to find the database
+      const env = {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+      };
+
       // Run prisma migrate deploy to apply pending migrations
       execSync('npx prisma migrate deploy', {
-        env: {
-          ...process.env,
-          DATABASE_URL: databaseUrl,
-        },
+        env,
         stdio: 'inherit',
       });
 
