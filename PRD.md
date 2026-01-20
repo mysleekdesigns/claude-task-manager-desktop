@@ -40,49 +40,28 @@
 
 Latest 5 commits:
 
-1. **TBD** - Implement Phase 12: GitHub Integration
+1. **bc3bd14** - Upgrade to Prisma 7 with adapter pattern
+   - Remove deprecated `url` property from schema.prisma datasource (Prisma 7 requirement)
+   - Add prisma.config.ts at project root with `defineConfig` pattern
+   - Update database.ts to use `@prisma/adapter-better-sqlite3`
+   - Upgrade prisma and @prisma/client from 6.x to 7.2.0
+
+2. **2365378** - Add Prisma 7+ adapter pattern support with fallback
+
+3. **1f9468a** - Implement Phase 12: GitHub Integration
    - Add GitHubToken database model with Prisma migration
    - Create GitHub service with Octokit integration for API calls
-   - Add IPC handlers for token management (github:setToken, github:getToken, github:validateToken)
-   - Add IPC handlers for issues (github:getIssues, github:getIssue, github:createTaskFromIssue)
-   - Add IPC handlers for PRs (github:getPRs, github:getPR)
-   - Build IssueCard and IssuesList components for issue display
-   - Build IssueDetailModal with markdown rendering and task creation
-   - Build PrCard and PrList components for PR display
-   - Build PrDetailModal with files changed and review comments
+   - Add IPC handlers for token management and issues/PRs
+   - Build IssueCard, IssuesList, IssueDetailModal components
+   - Build PrCard, PrList, PrDetailModal components
    - Add GitHub token settings section in Settings page
 
-2. **f98ee0d** - Implement Phase 11: MCP Configuration
+4. **f98ee0d** - Implement Phase 11.5: MCP Config Generation
    - Add McpConfig database model with Prisma migration
-   - Create MCP IPC handlers (list, create, update, delete, toggle, generateConfig, writeConfig, readConfig)
+   - Create MCP IPC handlers and config file generation service
    - Build MCP page with server list grouped by category
-   - Create McpServerItem and McpServerList components
-   - Create AddCustomServerModal for custom MCP servers
-   - Implement MCP config file generation service for Claude Desktop
-   - Add "Sync to Claude Desktop" button with toast notifications
-   - Include preset MCP servers (Context7, ContextForge, GitHub, Slack, etc.)
 
-3. **8bea84c** - Implement Phase 10: Context and Memory
-   - Add Memory database model with Prisma migration
-   - Create memory IPC handlers (list, create, get, delete, search)
-   - Build Context page with tabs (Project Index, Memories)
-   - Create MemoryCard and AddMemoryModal components
-   - Implement automatic session insight capture on terminal close
-   - Add output buffering to terminal service
-
-4. **3057952** - Implement Phase 9: Roadmap and Planning
-   - Add Phase, Feature, and Milestone database models
-   - Create roadmap IPC handlers for phases, features, milestones
-   - Build RoadmapPage with phase cards and feature management
-   - Implement MoSCoW priority system (Must/Should/Could/Won't)
-   - Add "Build" button to convert features to tasks
-
-5. **b580804** - Implement Phase 8: Git Worktree Management
-   - Add Worktree database model with Project/Terminal relations
-   - Create git service using simple-git for worktree/branch operations
-   - Add IPC handlers: worktrees:list/create/delete/sync, branches:list, git:status
-   - Create WorktreeList, CreateWorktreeModal, WorktreeSelector components
-   - Integrate worktree selection into terminal panes
+5. **93900ba** - Fix memories:list IPC handler parameter mismatch
 
 ## Implementation Statistics
 
@@ -1436,6 +1415,7 @@ claude-tasks-desktop/
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
+├── prisma.config.ts              # Prisma 7 config (datasource URL, migrations)
 ├── resources/
 │   ├── icon.icns               # macOS icon
 │   ├── icon.ico                # Windows icon
@@ -1460,9 +1440,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Prisma 7: URL configured in prisma.config.ts, adapter used at runtime
 datasource db {
   provider = "sqlite"
-  url      = "file:./claude-tasks.db"
 }
 
 // Authentication
