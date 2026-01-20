@@ -25,8 +25,8 @@
 | 5 | Project Management | ✅ Complete |
 | 6 | Task Management Core | ✅ Complete |
 | 7 | Terminal Management | ✅ Complete |
-| 8 | Git Worktree Management | Next |
-| 9 | Roadmap and Planning | Planned |
+| 8 | Git Worktree Management | ✅ Complete |
+| 9 | Roadmap and Planning | Next |
 | 10 | Context and Memory | Planned |
 | 11 | MCP Configuration | Planned |
 | 12 | GitHub Integration | Planned |
@@ -34,40 +34,43 @@
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 7 complete with recent bug fixes. Terminal management stable. Ready for Phase 8 (Git Worktree Management).
+**Current Status:** Phase 8 complete. Git worktree management fully implemented with database models, IPC handlers, and UI components. Ready for Phase 9 (Roadmap and Planning).
 
 ## Recent Changes
 
 Latest 5 commits:
 
-1. **778beb4** - Fix terminal close functionality and race condition errors
+1. **b580804** - Implement Phase 8: Git Worktree Management
+   - Add Worktree database model with Project/Terminal relations
+   - Create git service using simple-git for worktree/branch operations
+   - Add IPC handlers: worktrees:list/create/delete/sync, branches:list, git:status
+   - Create WorktreeList, CreateWorktreeModal, WorktreeSelector components
+   - Integrate worktree selection into terminal panes
+   - Fix page layout for macOS titlebar spacing
+
+2. **778beb4** - Fix terminal close functionality and race condition errors
    - Fixed race condition in terminal cleanup during window close
    - Improved terminal process management to prevent zombie processes
    - Enhanced error handling in terminal IPC handlers
 
-2. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
+3. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
    - Added proper macOS window dragging support
    - Fixed frameless window interaction issues
 
-3. **3c87642** - Fix task IPC security and redesign Kanban task cards
+4. **3c87642** - Fix task IPC security and redesign Kanban task cards
    - Improved IPC handler security validation
    - Redesigned task card UI for better usability
 
-4. **160e41e** - Implement Phase 7: Terminal Management with Claude Code Integration
+5. **160e41e** - Implement Phase 7: Terminal Management with Claude Code Integration
    - Complete terminal management system with node-pty
    - XTerm.js integration with terminal grid UI
    - Claude Code launch and broadcast functionality
 
-5. **83e0b34** - Implement Phase 6: Task Management Core with Kanban Board
-   - Full Kanban board implementation with @dnd-kit
-   - Task CRUD operations with detailed modal
-   - Task cards with priority, tags, and phase tracking
-
 ## Implementation Statistics
 
 **Codebase Size:**
-- Total IPC Handlers: 48 across 8 handler files (2,570 lines)
-- React Components: 30+ components
+- Total IPC Handlers: 54 across 9 handler files (~2,900 lines)
+- React Components: 35+ components
 - Database Tables: 10 with 16 indexes
 
 **IPC Handler Files:**
@@ -78,7 +81,16 @@ Latest 5 commits:
 - `electron/ipc/projects.ts` - 499 lines (Project and team management)
 - `electron/ipc/tasks.ts` - 569 lines (Task CRUD and Kanban operations)
 - `electron/ipc/terminals.ts` - 333 lines (Terminal process management)
+- `electron/ipc/worktrees.ts` - ~300 lines (Git worktree and branch operations)
 - `electron/ipc/index.ts` - 118 lines (Handler registration and exports)
+
+**Service Files:**
+- `electron/services/git.ts` - Git operations using simple-git
+
+**Worktree Components:**
+- `src/components/worktrees/WorktreeList.tsx`
+- `src/components/worktrees/CreateWorktreeModal.tsx`
+- `src/components/worktrees/WorktreeSelector.tsx`
 
 ---
 
@@ -727,10 +739,10 @@ Latest 5 commits:
 
 ---
 
-## Phase 8: Git Worktree Management
+## Phase 8: Git Worktree Management ✅
 
 ### 8.1 Database Models
-- [ ] Create Worktree model
+- [x] Create Worktree model
   ```prisma
   model Worktree {
     id        String   @id @default(cuid())
@@ -742,54 +754,55 @@ Latest 5 commits:
     createdAt DateTime @default(now())
   }
   ```
-- [ ] Add worktreeId relation to Terminal model
-- [ ] Run migration
+- [x] Add worktreeId relation to Terminal model
+- [x] Run migration
 
 ### 8.2 Git Operations (Main Process)
-- [ ] Create git service using simple-git
-- [ ] Implement worktree operations:
-  - [ ] `listWorktrees(repoPath)` - List all worktrees
-  - [ ] `addWorktree(repoPath, branch, path)` - Create worktree
-  - [ ] `removeWorktree(repoPath, path)` - Remove worktree
-- [ ] Implement branch operations:
-  - [ ] `listBranches(repoPath)` - List local/remote branches
-  - [ ] `getCurrentBranch(repoPath)` - Get current branch
-- [ ] Handle git errors gracefully
-- [ ] Validate paths before operations
+- [x] Create git service using simple-git
+- [x] Implement worktree operations:
+  - [x] `listWorktrees(repoPath)` - List all worktrees
+  - [x] `addWorktree(repoPath, branch, path)` - Create worktree
+  - [x] `removeWorktree(repoPath, path)` - Remove worktree
+- [x] Implement branch operations:
+  - [x] `listBranches(repoPath)` - List local/remote branches
+  - [x] `getCurrentBranch(repoPath)` - Get current branch
+- [x] Handle git errors gracefully
+- [x] Validate paths before operations
 
 ### 8.3 Worktree IPC Handlers
-- [ ] Create `worktrees:list` handler
-- [ ] Create `worktrees:create` handler
-- [ ] Create `worktrees:delete` handler
-- [ ] Create `branches:list` handler
-- [ ] Create `git:status` handler
+- [x] Create `worktrees:list` handler
+- [x] Create `worktrees:create` handler
+- [x] Create `worktrees:delete` handler
+- [x] Create `worktrees:sync` handler
+- [x] Create `branches:list` handler
+- [x] Create `git:status` handler
 
 ### 8.4 Worktree UI
-- [ ] Create /worktrees page
-- [ ] Build WorktreeList component
-  - [ ] Table/card view
-  - [ ] Branch name column
-  - [ ] Path column
-  - [ ] Main indicator badge
-  - [ ] Terminal count using worktree
-  - [ ] Actions (open in terminal, delete)
-- [ ] Build CreateWorktreeModal
-  - [ ] Branch selector dropdown
-  - [ ] Custom path input with directory picker
-  - [ ] Create from new branch option
-  - [ ] Create button
-- [ ] Build worktree selector for terminals
-  - [ ] Dropdown in terminal header
-  - [ ] Shows available worktrees
-  - [ ] Changes terminal working directory
+- [x] Create /worktrees page
+- [x] Build WorktreeList component
+  - [x] Table/card view
+  - [x] Branch name column
+  - [x] Path column
+  - [x] Main indicator badge
+  - [x] Terminal count using worktree
+  - [x] Actions (open in terminal, delete)
+- [x] Build CreateWorktreeModal
+  - [x] Branch selector dropdown
+  - [x] Custom path input with directory picker
+  - [x] Create from new branch option
+  - [x] Create button
+- [x] Build worktree selector for terminals
+  - [x] Dropdown in terminal header
+  - [x] Shows available worktrees
+  - [x] Changes terminal working directory
 
 **Phase 8 Verification:**
-- [ ] Worktree list shows existing worktrees
-- [ ] Can create worktree from existing branch
-- [ ] Can create worktree with new branch
-- [ ] Worktree selector in terminal works
-- [ ] Terminal opens in selected worktree path
-- [ ] Can delete worktree with confirmation
+- [x] Worktree list shows existing worktrees
+- [x] Can create worktree from existing branch
+- [x] Can create worktree with new branch
+- [x] Worktree selector in terminal works
+- [x] Terminal opens in selected worktree path
+- [x] Can delete worktree with confirmation
 
 ---
 
@@ -1953,10 +1966,10 @@ useEffect(() => {
 - [x] Resize works
 - [x] Claude Code launches
 
-### Phase 8 - Worktrees
-- [ ] Git operations work
-- [ ] Worktree CRUD works
-- [ ] Terminal worktree selector works
+### Phase 8 - Worktrees ✅
+- [x] Git operations work
+- [x] Worktree CRUD works
+- [x] Terminal worktree selector works
 
 ### Phase 9 - Roadmap
 - [ ] Phases display
