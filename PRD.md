@@ -842,7 +842,7 @@ Latest 5 commits:
 ## Phase 9: Roadmap and Planning
 
 ### 9.1 Database Models
-- [ ] Create Phase model
+- [x] Create Phase model
   ```prisma
   model Phase {
     id          String   @id @default(cuid())
@@ -853,7 +853,7 @@ Latest 5 commits:
     projectId   String
   }
   ```
-- [ ] Create Feature model with MoSCoW priority
+- [x] Create Feature model with MoSCoW priority
   ```prisma
   model Feature {
     id          String         @id @default(cuid())
@@ -872,64 +872,64 @@ Latest 5 commits:
     WONT
   }
   ```
-- [ ] Create Milestone model
-- [ ] Run migration
+- [x] Create Milestone model
+- [x] Run migration
 
 ### 9.2 Roadmap IPC Handlers
-- [ ] Create `phases:list` handler
-- [ ] Create `phases:create` handler
-- [ ] Create `phases:update` handler
-- [ ] Create `phases:delete` handler
-- [ ] Create `phases:reorder` handler
-- [ ] Create `features:list` handler
-- [ ] Create `features:create` handler
-- [ ] Create `features:update` handler
-- [ ] Create `features:delete` handler
-- [ ] Create `milestones:toggle` handler
+- [x] Create `phases:list` handler
+- [x] Create `phases:create` handler
+- [x] Create `phases:update` handler
+- [x] Create `phases:delete` handler
+- [x] Create `phases:reorder` handler
+- [x] Create `features:list` handler
+- [x] Create `features:create` handler
+- [x] Create `features:update` handler
+- [x] Create `features:delete` handler
+- [x] Create `milestones:toggle` handler
 
 ### 9.3 Roadmap UI
-- [ ] Create /roadmap page
-- [ ] Build project header section:
-  - [ ] Project name with status badge
-  - [ ] Description
-  - [ ] Stats (feature count, phase count, priority breakdown)
-- [ ] Build view tabs:
-  - [ ] Kanban view
-  - [ ] Phases view (default)
-  - [ ] All Features view
-  - [ ] By Priority view
-- [ ] Build PhaseCard component:
-  - [ ] Phase number and name
-  - [ ] Description
-  - [ ] Status badge (planned, active, completed)
-  - [ ] Progress bar
-  - [ ] Milestones with checkboxes
-  - [ ] Features list
-- [ ] Build FeatureItem component:
-  - [ ] MoSCoW priority badge
-  - [ ] Feature title
-  - [ ] "Build" button → creates task
+- [x] Create /roadmap page
+- [x] Build project header section:
+  - [x] Project name with status badge
+  - [x] Description
+  - [x] Stats (feature count, phase count, priority breakdown)
+- [x] Build view tabs:
+  - [x] Kanban view
+  - [x] Phases view (default)
+  - [x] All Features view
+  - [x] By Priority view
+- [x] Build PhaseCard component:
+  - [x] Phase number and name
+  - [x] Description
+  - [x] Status badge (planned, active, completed)
+  - [x] Progress bar
+  - [x] Milestones with checkboxes
+  - [x] Features list
+- [x] Build FeatureItem component:
+  - [x] MoSCoW priority badge
+  - [x] Feature title
+  - [x] "Build" button → creates task
 
 ### 9.4 Feature Management
-- [ ] Build AddFeatureModal
-  - [ ] Title input
-  - [ ] Description textarea
-  - [ ] Priority selector (Must/Should/Could/Won't)
-  - [ ] Phase selector
-  - [ ] Create button
-- [ ] Implement "Build" button action
-  - [ ] Create task from feature
-  - [ ] Link task to feature
-  - [ ] Update feature status
+- [x] Build AddFeatureModal
+  - [x] Title input
+  - [x] Description textarea
+  - [x] Priority selector (Must/Should/Could/Won't)
+  - [x] Phase selector
+  - [x] Create button
+- [x] Implement "Build" button action
+  - [x] Create task from feature
+  - [x] Link task to feature
+  - [x] Update feature status
 
 **Phase 9 Verification:**
-- [ ] Phases display in correct order
-- [ ] Features show with priority badges
-- [ ] Milestones can be checked/unchecked
-- [ ] "Build" button creates task from feature
-- [ ] View tabs switch correctly
-- [ ] Can add/edit/delete phases
-- [ ] Can add/edit/delete features
+- [x] Phases display in correct order
+- [x] Features show with priority badges
+- [x] Milestones can be checked/unchecked
+- [x] "Build" button creates task from feature
+- [x] View tabs switch correctly
+- [x] Can add/edit/delete phases
+- [x] Can add/edit/delete features
 
 ---
 
