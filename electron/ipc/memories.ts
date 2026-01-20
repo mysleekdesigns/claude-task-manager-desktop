@@ -25,11 +25,6 @@ export interface CreateMemoryInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface ListMemoriesInput {
-  projectId: string;
-  type?: string;
-}
-
 export interface SearchMemoriesInput {
   projectId: string;
   query: string;
@@ -52,9 +47,10 @@ export type MemoryWithMetadata = Omit<Memory, 'metadata'> & {
  */
 async function handleListMemories(
   _event: IpcMainInvokeEvent,
-  input: ListMemoriesInput
+  projectId: string,
+  filters?: { type?: string; search?: string }
 ): Promise<MemoryWithMetadata[]> {
-  if (!input.projectId) {
+  if (!projectId) {
     throw IPCErrors.invalidArguments('Project ID is required');
   }
 
@@ -65,11 +61,11 @@ async function handleListMemories(
     projectId: string;
     type?: string;
   } = {
-    projectId: input.projectId,
+    projectId,
   };
 
-  if (input.type) {
-    where.type = input.type;
+  if (filters?.type) {
+    where.type = filters.type;
   }
 
   const memories = await prisma.memory.findMany({
