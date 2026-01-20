@@ -1,7 +1,9 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { Label } from '@/components/ui/label';
-import { GitHubTokenSettings } from '@/components/github/GitHubTokenSettings';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ProfileSection } from '@/components/settings/ProfileSection';
+import { ApiKeysSection } from '@/components/settings/ApiKeysSection';
+import { PreferencesSection } from '@/components/settings/PreferencesSection';
+import { KeyboardShortcutsSection } from '@/components/settings/KeyboardShortcutsSection';
 
 export function SettingsPage() {
   return (
@@ -9,47 +11,56 @@ export function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="text-muted-foreground mt-2">
-          Manage your application preferences
+          Manage your profile, API keys, preferences, and shortcuts
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Customize the look and feel of the application</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label>Theme</Label>
-            <ThemeToggle />
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="inline-flex h-auto w-auto gap-2 bg-transparent p-0">
+          <TabsTrigger
+            value="profile"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            Profile
+          </TabsTrigger>
+          <TabsTrigger
+            value="api-keys"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            API Keys
+          </TabsTrigger>
+          <TabsTrigger
+            value="preferences"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            Preferences
+          </TabsTrigger>
+          <TabsTrigger
+            value="shortcuts"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            Shortcuts
+          </TabsTrigger>
+        </TabsList>
 
-      <GitHubTokenSettings />
+        <ScrollArea className="h-[calc(100vh-16rem)] w-full mt-6">
+          <TabsContent value="profile" className="mt-0">
+            <ProfileSection />
+          </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Keyboard Shortcuts</CardTitle>
-          <CardDescription>Navigation shortcuts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span>Toggle Sidebar</span>
-              <kbd className="px-2 py-1 rounded border border-border bg-muted font-mono text-xs">⌘B</kbd>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>New Task</span>
-              <kbd className="px-2 py-1 rounded border border-border bg-muted font-mono text-xs">⌘N</kbd>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Navigate to Page</span>
-              <kbd className="px-2 py-1 rounded border border-border bg-muted font-mono text-xs">⌘⇧ + Key</kbd>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          <TabsContent value="api-keys" className="mt-0">
+            <ApiKeysSection />
+          </TabsContent>
+
+          <TabsContent value="preferences" className="mt-0">
+            <PreferencesSection />
+          </TabsContent>
+
+          <TabsContent value="shortcuts" className="mt-0">
+            <KeyboardShortcutsSection />
+          </TabsContent>
+        </ScrollArea>
+      </Tabs>
     </div>
   );
 }

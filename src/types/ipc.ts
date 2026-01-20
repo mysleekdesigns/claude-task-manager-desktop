@@ -978,6 +978,95 @@ export interface AssignmentNotificationInput {
   assignerName: string;
 }
 
+// ============================================================================
+// Settings Types (Phase 14)
+// ============================================================================
+
+/**
+ * User settings response
+ */
+export interface UserSettings {
+  id: string;
+  userId: string;
+  theme: string;
+  defaultTerminalCount: number;
+  autoLaunchClaude: boolean;
+  minimizeToTray: boolean;
+  keyboardShortcuts: Record<string, string> | null;
+  hasClaudeApiKey: boolean;
+  hasGithubToken: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Update settings input
+ */
+export interface UpdateSettingsInput {
+  theme?: string;
+  defaultTerminalCount?: number;
+  autoLaunchClaude?: boolean;
+  minimizeToTray?: boolean;
+  keyboardShortcuts?: Record<string, string>;
+}
+
+/**
+ * Update API key input
+ */
+export interface UpdateApiKeyInput {
+  claudeApiKey?: string;
+  githubToken?: string;
+}
+
+/**
+ * Profile update data for settings
+ */
+export interface ProfileUpdateData {
+  name?: string;
+  avatar?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
+
+/**
+ * Change password input
+ */
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Claude API key validation result
+ */
+export interface ClaudeApiKeyValidation {
+  valid: boolean;
+  model?: string;
+  error?: string;
+}
+
+/**
+ * Dialog open file options
+ */
+export interface OpenFileOptions {
+  title?: string;
+  defaultPath?: string;
+  buttonLabel?: string;
+  filters?: Array<{
+    name: string;
+    extensions: string[];
+  }>;
+  properties?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles'>;
+}
+
+/**
+ * Dialog open file result
+ */
+export interface OpenFileResult {
+  canceled: boolean;
+  filePaths: string[];
+}
+
 export interface IpcChannels {
   // App channels
   'app:getInfo': () => Promise<AppInfo>;
@@ -1192,6 +1281,29 @@ export interface IpcChannels {
   'notifications:taskCompleted': (data: TaskCompletedNotificationInput) => Promise<void>;
   'notifications:terminalError': (data: TerminalErrorNotificationInput) => Promise<void>;
   'notifications:assignment': (data: AssignmentNotificationInput) => Promise<void>;
+
+  // Settings channels (Phase 14)
+  'settings:get': (userId: string) => Promise<UserSettings>;
+  'settings:update': (userId: string, data: UpdateSettingsInput) => Promise<UserSettings>;
+  'settings:updateApiKey': (userId: string, data: UpdateApiKeyInput) => Promise<{ success: boolean }>;
+  'settings:updateProfile': (data: ProfileUpdateData) => Promise<AuthUser>;
+
+  // Claude API key channels (Phase 14)
+  'claude:getApiKey': () => Promise<{ hasKey: boolean }>;
+  'claude:saveApiKey': (apiKey: string) => Promise<void>;
+  'claude:validateApiKey': () => Promise<ClaudeApiKeyValidation>;
+  'claude:deleteApiKey': () => Promise<void>;
+
+  // File operation channels
+  'dialog:openFile': (options: OpenFileOptions) => Promise<OpenFileResult>;
+  'file:readAsBase64': (filePath: string) => Promise<string>;
+
+  // Password change channel
+  'auth:changePassword': (data: ChangePasswordInput) => Promise<void>;
+
+  // Preferences channels (simplified - deprecated, use settings:* instead)
+  'settings:getPreferences': () => Promise<UserSettings>;
+  'settings:savePreferences': (data: UpdateSettingsInput) => Promise<UserSettings>;
 }
 
 /**
@@ -1409,6 +1521,25 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'changelog:update',
   'changelog:delete',
   'changelog:export',
+  'notifications:isSupported',
+  'notifications:requestPermission',
+  'notifications:show',
+  'notifications:taskCompleted',
+  'notifications:terminalError',
+  'notifications:assignment',
+  'settings:get',
+  'settings:update',
+  'settings:updateApiKey',
+  'settings:updateProfile',
+  'settings:getPreferences',
+  'settings:savePreferences',
+  'claude:getApiKey',
+  'claude:saveApiKey',
+  'claude:validateApiKey',
+  'claude:deleteApiKey',
+  'dialog:openFile',
+  'file:readAsBase64',
+  'auth:changePassword',
 ] as const;
 
 /**

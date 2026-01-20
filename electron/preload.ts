@@ -153,6 +153,11 @@ const VALID_INVOKE_CHANNELS = [
   'github:getPRs',
   'github:getPR',
   'github:createPR',
+  // Settings (Phase 14)
+  'settings:get',
+  'settings:update',
+  'settings:updateApiKey',
+  'settings:updateProfile',
 ] as const;
 
 /**

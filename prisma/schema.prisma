@@ -25,6 +25,26 @@ model User {
   assignedTasks  Task[]      @relation("assignee")
   githubTokens   GitHubToken[]
   ideas          Idea[]      @relation("CreatedIdeas")
+  settings       UserSettings?
+}
+
+model UserSettings {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  claudeApiKey         String?
+  githubToken          String?
+  defaultTerminalCount Int      @default(2)
+  theme                String   @default("system")
+  keyboardShortcuts    String?  // JSON string
+  autoLaunchClaude     Boolean  @default(true)
+  minimizeToTray       Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Project {
