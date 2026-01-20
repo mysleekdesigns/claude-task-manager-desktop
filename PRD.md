@@ -40,7 +40,7 @@
 
 Latest 5 commits:
 
-1. **[pending]** - Implement Phase 10: Context and Memory
+1. **8bea84c** - Implement Phase 10: Context and Memory
    - Add Memory database model with Prisma migration
    - Create memory IPC handlers (list, create, get, delete, search)
    - Build Context page with tabs (Project Index, Memories)
