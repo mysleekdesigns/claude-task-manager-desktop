@@ -2370,6 +2370,12 @@ ${options.taskDescription || 'No description provided.'}
 - [x] Pause button sends SIGSTOP to Claude process
 - [x] Resume button continues Claude session
 
+**Post-Implementation Bug Fixes:**
+- Fixed `handlePauseTask` to update database with PAUSED status (pause was not persisting to database)
+- Fixed `handleResumeTask` to clean up stale terminals before resuming (prevents terminal leaks)
+- Fixed `handleTaskExit` to preserve PAUSED status when terminal exits (was incorrectly showing FAILED badge after pause)
+- Reduced polling intervals and added throttling to `TaskOutputPreview` component to eliminate UI screen flashing
+
 ---
 
 ## End-to-End Workflow

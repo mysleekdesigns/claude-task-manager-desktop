@@ -133,10 +133,10 @@ export function KanbanPage() {
 
     if (!hasActiveTasks) return;
 
-    // Poll every 3 seconds when there are active tasks
+    // Poll every 5 seconds when there are active tasks (reduced from 3s to prevent flashing)
     const interval = setInterval(() => {
       void refetch();
-    }, 3000);
+    }, 5000);
 
     return () => {
       clearInterval(interval);

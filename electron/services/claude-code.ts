@@ -207,7 +207,7 @@ class ClaudeCodeService {
 
   /**
    * Pause a Claude Code task (graceful stop).
-   * Sends Ctrl+C to the terminal to stop Claude gracefully.
+   * Sends Ctrl+C to the terminal to stop Claude gracefully, then kills the terminal.
    *
    * @param taskId - Task ID to pause
    */
@@ -218,8 +218,25 @@ class ClaudeCodeService {
       throw new Error(`Claude Code terminal for task ${taskId} not found`);
     }
 
-    // Send Ctrl+C to gracefully stop Claude
-    terminalManager.write(terminalId, '\x03');
+    try {
+      // Send Ctrl+C to gracefully stop Claude
+      terminalManager.write(terminalId, '\x03');
+
+      // Wait briefly for graceful shutdown before killing the terminal
+      setTimeout(() => {
+        if (terminalManager.has(terminalId)) {
+          terminalManager.kill(terminalId);
+          console.log(`[ClaudeCodeService] Killed terminal ${terminalId} after pause`);
+        }
+      }, 500);
+    } catch (error) {
+      console.error(`[ClaudeCodeService] Error pausing task ${taskId}:`, error);
+      // Try to kill the terminal anyway
+      if (terminalManager.has(terminalId)) {
+        terminalManager.kill(terminalId);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -315,6 +332,30 @@ class ClaudeCodeService {
   ): Promise<void> {
     try {
       const prisma = databaseService.getClient();
+
+      // Get current task status
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { claudeStatus: true },
+      });
+
+      // If task is already PAUSED, don't overwrite the status
+      // This happens when the terminal is killed after pausing
+      if (task?.claudeStatus === 'PAUSED') {
+        console.log(
+          `[ClaudeCodeService] Task ${taskId} is PAUSED, not updating status on exit (exit code: ${exitCode})`
+        );
+
+        // Still clear the terminal ID since the process has exited
+        await prisma.task.update({
+          where: { id: taskId },
+          data: {
+            claudeTerminalId: null,
+          },
+        });
+
+        return;
+      }
 
       // Determine the final status based on exit code
       // Exit code 0 = success, non-zero = failure

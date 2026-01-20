@@ -243,7 +243,17 @@ async function handleResumeTask(
 
   // Check if Claude is already running for this task
   const terminalId = `claude-${data.taskId}`;
-  if (terminalManager.has(terminalId)) {
+
+  // If task is PAUSED and terminal still exists, clean it up first
+  if (task.claudeStatus === 'PAUSED' && terminalManager.has(terminalId)) {
+    console.log(`[claude:resumeTask] Cleaning up stale terminal for paused task ${data.taskId}`);
+    try {
+      terminalManager.kill(terminalId);
+    } catch (error) {
+      console.warn(`[claude:resumeTask] Failed to clean up stale terminal:`, error);
+    }
+  } else if (terminalManager.has(terminalId)) {
+    // Only throw error if task is not PAUSED
     throw new Error('Claude Code is already running for this task');
   }
 
@@ -344,6 +354,14 @@ async function handlePauseTask(
   if (!terminalManager.has(terminalId)) {
     throw new Error('Claude Code is not running for this task');
   }
+
+  // Update task status to PAUSED
+  await prisma.task.update({
+    where: { id: data.taskId },
+    data: {
+      claudeStatus: 'PAUSED',
+    },
+  });
 
   // Pause the Claude Code task (sends Ctrl+C)
   claudeCodeService.pauseTask(data.taskId);

@@ -53,7 +53,7 @@ export function useClaudeStatus(taskId: string) {
  * Automatically refetches status at the specified interval
  *
  * @param taskId - The task ID to track
- * @param interval - Polling interval in milliseconds (default: 2000ms)
+ * @param interval - Polling interval in milliseconds (default: 5000ms)
  * @returns Query result with auto-refreshing Claude status
  *
  * @example
@@ -65,7 +65,7 @@ export function useClaudeStatus(taskId: string) {
  * }
  * ```
  */
-export function useClaudeStatusPolling(taskId: string, interval = 2000) {
+export function useClaudeStatusPolling(taskId: string, interval = 5000) {
   const statusQuery = useClaudeStatus(taskId);
   const [isPolling, setIsPolling] = useState(false);
 

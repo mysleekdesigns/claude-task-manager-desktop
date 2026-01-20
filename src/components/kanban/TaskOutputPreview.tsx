@@ -32,38 +32,48 @@ function stripAnsiCodes(text: string): string {
 // Component
 // ============================================================================
 
+const MAX_LINES = 12;
+
 export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const MAX_LINES = 12;
+  const bufferRef = useRef<string[]>([]);
+  const throttleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
-   * Handle incoming terminal output
+   * Handle incoming terminal output with throttling
    * Splits on newlines, strips ANSI codes, and maintains a rolling buffer
+   * Updates are throttled to once per 500ms to prevent excessive re-renders
    */
   const handleOutput = useCallback((...args: unknown[]) => {
     const data = args[0] as string;
     const cleanedData = stripAnsiCodes(data);
     const newLines = cleanedData.split('\n');
 
-    setOutputLines(prev => {
-      // Merge new lines with existing buffer
-      const merged = [...prev];
+    // Update buffer immediately (no delay for data capture)
+    const merged = [...bufferRef.current];
 
-      // If the last line in buffer is incomplete (no newline), append to it
-      if (merged.length > 0 && !data.startsWith('\n')) {
-        const lastLine = merged.pop() || '';
-        merged.push(lastLine + newLines[0]);
-        newLines.shift();
-      }
+    // If the last line in buffer is incomplete (no newline), append to it
+    if (merged.length > 0 && !data.startsWith('\n')) {
+      const lastLine = merged.pop() || '';
+      merged.push(lastLine + newLines[0]);
+      newLines.shift();
+    }
 
-      // Add remaining new lines
-      merged.push(...newLines);
+    // Add remaining new lines
+    merged.push(...newLines);
 
-      // Keep only last MAX_LINES, filtering empty lines at the end
-      const trimmed = merged.slice(-MAX_LINES * 2).filter(line => line.trim().length > 0);
-      return trimmed.slice(-MAX_LINES);
-    });
+    // Keep only last MAX_LINES, filtering empty lines at the end
+    const trimmed = merged.slice(-MAX_LINES * 2).filter(line => line.trim().length > 0);
+    bufferRef.current = trimmed.slice(-MAX_LINES);
+
+    // Throttle UI updates to once per 500ms
+    if (!throttleTimerRef.current) {
+      throttleTimerRef.current = setTimeout(() => {
+        setOutputLines([...bufferRef.current]);
+        throttleTimerRef.current = null;
+      }, 500);
+    }
   }, []);
 
   /**
@@ -75,9 +85,15 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
     // Subscribe to IPC events
     window.electron.on(channel, handleOutput);
 
-    // Cleanup on unmount
+    // Cleanup on unmount or when terminalId/handleOutput changes
     return () => {
       window.electron.removeListener(channel, handleOutput);
+
+      // Clear any pending throttle timer
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
+      }
     };
   }, [terminalId, handleOutput]);
 

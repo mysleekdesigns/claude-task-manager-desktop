@@ -5,7 +5,6 @@
  * Uses @dnd-kit/sortable for drag-and-drop functionality.
  */
 
-import { useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
@@ -68,12 +67,6 @@ export function TaskCard({
   };
 
   const isCurrentlyDragging = isDragging || isSortableDragging;
-
-  // Track if we need to refresh when Claude status changes
-  const [, setRefreshKey] = useState(0);
-  const handleStatusChange = useCallback(() => {
-    setRefreshKey(prev => prev + 1);
-  }, []);
 
   // Check if Claude is actively working (includes paused state)
   const claudeStatus = getClaudeStatusFromTask(task);
@@ -191,7 +184,6 @@ export function TaskCard({
             {/* Claude Code Start Button - shows Start/Pause/Resume based on status */}
             <TaskCardStartButton
               task={task}
-              onStateChange={handleStatusChange}
               refetchTasks={refetchTasks}
             />
 

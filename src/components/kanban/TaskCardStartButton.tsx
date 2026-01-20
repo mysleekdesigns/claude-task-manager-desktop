@@ -5,7 +5,7 @@
  * Shows different states based on current Claude status.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -29,7 +29,6 @@ import { toast } from 'sonner';
 interface TaskCardStartButtonProps {
   task: Task;
   onStart?: (() => void) | undefined;
-  onStateChange?: (() => void) | undefined;
   refetchTasks?: (() => Promise<void>) | undefined;
 }
 
@@ -40,7 +39,6 @@ interface TaskCardStartButtonProps {
 export function TaskCardStartButton({
   task,
   onStart,
-  onStateChange,
   refetchTasks,
 }: TaskCardStartButtonProps) {
   const [isStarting, setIsStarting] = useState(false);
@@ -49,8 +47,8 @@ export function TaskCardStartButton({
   // Fetch project data to get targetPath
   const { data: project } = useIPCQuery('projects:get', [task.projectId]);
 
-  // Poll for Claude status when active
-  const { data: statusData, refetch: refetchStatus } = useClaudeStatusPolling(task.id, 2000);
+  // Poll for Claude status when active (5s interval to reduce re-renders)
+  const { data: statusData, refetch: refetchStatus } = useClaudeStatusPolling(task.id, 5000);
 
   // Get current Claude status from task database
   const claudeStatusFromDB: ClaudeTaskStatus = getClaudeStatusFromTask(task);
@@ -66,11 +64,6 @@ export function TaskCardStartButton({
 
   // Determine the effective Claude status
   const claudeStatus: ClaudeTaskStatus = hasStateMismatch ? 'FAILED' : claudeStatusFromDB;
-
-  // Notify parent when status changes
-  useEffect(() => {
-    onStateChange?.();
-  }, [claudeStatus, onStateChange]);
 
   const handleStart = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click event
