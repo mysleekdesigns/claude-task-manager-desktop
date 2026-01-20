@@ -64,6 +64,20 @@ export interface TaskStatusResponse {
   sessionId: string | null;
 }
 
+export interface ActiveTaskResponse {
+  isRunning: boolean;
+  terminalId: string | null;
+  sessionId: string | null;
+  claudeStatus: ClaudeTaskStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+/**
+ * Import ClaudeTaskStatus from types
+ */
+type ClaudeTaskStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED' | 'AWAITING_INPUT';
+
 /**
  * Start a Claude Code task
  */
@@ -104,28 +118,6 @@ async function handleStartTask(
     throw new Error('Claude Code is already running for this task');
   }
 
-  // Update task status to IN_PROGRESS
-  await prisma.task.update({
-    where: { id: data.taskId },
-    data: {
-      status: 'IN_PROGRESS',
-    },
-  });
-
-  // Add a log entry for starting Claude Code
-  await prisma.taskLog.create({
-    data: {
-      taskId: data.taskId,
-      type: 'info',
-      message: 'Starting Claude Code automation',
-      metadata: JSON.stringify({
-        sessionId: data.sessionId,
-        maxTurns: data.maxTurns,
-        maxBudget: data.maxBudget,
-      }),
-    },
-  });
-
   // Build options for Claude Code service
   const options: ClaudeCodeOptions = {
     taskId: data.taskId,
@@ -140,8 +132,80 @@ async function handleStartTask(
     appendSystemPrompt: data.appendSystemPrompt,
   };
 
-  // Start the Claude Code task
-  const result = await claudeCodeService.startTask(options, mainWindow);
+  // Update task status to STARTING before spawning terminal
+  await prisma.task.update({
+    where: { id: data.taskId },
+    data: {
+      claudeStatus: 'STARTING',
+      claudeSessionId: data.sessionId,
+    },
+  });
+
+  let result;
+  try {
+    // Start the Claude Code task
+    result = await claudeCodeService.startTask(options, mainWindow);
+
+    // Update task with all Claude-related fields after successful spawn
+    await prisma.task.update({
+      where: { id: data.taskId },
+      data: {
+        status: 'IN_PROGRESS',
+        claudeStatus: 'RUNNING',
+        claudeStartedAt: new Date(),
+      },
+    });
+
+    // Add a log entry for starting Claude Code
+    await prisma.taskLog.create({
+      data: {
+        taskId: data.taskId,
+        type: 'info',
+        message: 'Starting Claude Code automation',
+        metadata: JSON.stringify({
+          sessionId: data.sessionId,
+          terminalId,
+          maxTurns: data.maxTurns,
+          maxBudget: data.maxBudget,
+        }),
+      },
+    });
+
+    // Send started event to renderer
+    mainWindow.webContents.send(`claude:started:${data.taskId}`, {
+      taskId: data.taskId,
+      terminalId,
+      sessionId: data.sessionId,
+    });
+  } catch (error) {
+    // Rollback database status if terminal spawn fails
+    await prisma.task.update({
+      where: { id: data.taskId },
+      data: {
+        status: 'PENDING', // Rollback to PENDING since it never started
+        claudeStatus: 'FAILED',
+        claudeCompletedAt: new Date(),
+      },
+    });
+
+    // Log the error
+    await prisma.taskLog.create({
+      data: {
+        taskId: data.taskId,
+        type: 'error',
+        message: 'Failed to start Claude Code automation',
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId: data.sessionId,
+        }),
+      },
+    });
+
+    console.error('[claude:startTask] Failed to start Claude Code:', error);
+    throw new Error(
+      `Failed to start Claude Code: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 
   return result;
 }
@@ -181,11 +245,13 @@ async function handleResumeTask(
     throw new Error('Claude Code is already running for this task');
   }
 
-  // Update task status to IN_PROGRESS
+  // Update task status to IN_PROGRESS and RUNNING
   await prisma.task.update({
     where: { id: data.taskId },
     data: {
       status: 'IN_PROGRESS',
+      claudeStatus: 'RUNNING',
+      claudeStartedAt: new Date(),
     },
   });
 
@@ -201,16 +267,47 @@ async function handleResumeTask(
     },
   });
 
-  // Resume the Claude Code task
-  const result = await claudeCodeService.resumeTask(
-    {
-      taskId: data.taskId,
-      sessionId: data.sessionId,
-      projectPath: task.project.targetPath,
-      prompt: data.prompt,
-    },
-    mainWindow
-  );
+  let result;
+  try {
+    // Resume the Claude Code task
+    result = await claudeCodeService.resumeTask(
+      {
+        taskId: data.taskId,
+        sessionId: data.sessionId,
+        projectPath: task.project.targetPath,
+        prompt: data.prompt,
+      },
+      mainWindow
+    );
+  } catch (error) {
+    // Rollback database status if resume fails
+    await prisma.task.update({
+      where: { id: data.taskId },
+      data: {
+        status: 'PENDING', // Rollback to PENDING since resume failed
+        claudeStatus: 'FAILED',
+        claudeCompletedAt: new Date(),
+      },
+    });
+
+    // Log the error
+    await prisma.taskLog.create({
+      data: {
+        taskId: data.taskId,
+        type: 'error',
+        message: 'Failed to resume Claude Code session',
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId: data.sessionId,
+        }),
+      },
+    });
+
+    console.error('[claude:resumeTask] Failed to resume Claude Code:', error);
+    throw new Error(
+      `Failed to resume Claude Code: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 
   return result;
 }
@@ -297,6 +394,50 @@ async function handleGetTaskStatus(
 }
 
 /**
+ * Get active Claude task information including runtime status
+ */
+async function handleGetActiveTask(
+  _event: IpcMainInvokeEvent,
+  data: GetTaskStatusInput
+): Promise<ActiveTaskResponse> {
+  // Validate required fields
+  if (!data.taskId) {
+    throw IPCErrors.invalidArguments('Task ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Get task with Claude-related fields
+  const task = await prisma.task.findUnique({
+    where: { id: data.taskId },
+    select: {
+      id: true,
+      claudeSessionId: true,
+      claudeStatus: true,
+      claudeStartedAt: true,
+      claudeCompletedAt: true,
+    },
+  });
+
+  if (!task) {
+    throw new Error('Task not found');
+  }
+
+  // Check if Claude terminal is currently running
+  const terminalId = `claude-${data.taskId}`;
+  const isRunning = terminalManager.has(terminalId);
+
+  return {
+    isRunning,
+    terminalId: isRunning ? terminalId : null,
+    sessionId: task.claudeSessionId,
+    claudeStatus: task.claudeStatus as ClaudeTaskStatus,
+    startedAt: task.claudeStartedAt?.toISOString() || null,
+    completedAt: task.claudeCompletedAt?.toISOString() || null,
+  };
+}
+
+/**
  * Register all Claude Code IPC handlers.
  *
  * @param mainWindow - The main BrowserWindow instance for output streaming
@@ -335,6 +476,12 @@ export function registerClaudeCodeHandlers(mainWindow: BrowserWindow): void {
     'claude:getTaskStatus',
     wrapWithLogging('claude:getTaskStatus', wrapHandler(handleGetTaskStatus))
   );
+
+  // claude:getActiveTask - Get detailed active task information
+  ipcMain.handle(
+    'claude:getActiveTask',
+    wrapWithLogging('claude:getActiveTask', wrapHandler(handleGetActiveTask))
+  );
 }
 
 /**
@@ -345,6 +492,7 @@ export function unregisterClaudeCodeHandlers(): void {
   ipcMain.removeHandler('claude:resumeTask');
   ipcMain.removeHandler('claude:pauseTask');
   ipcMain.removeHandler('claude:getTaskStatus');
+  ipcMain.removeHandler('claude:getActiveTask');
 }
 
 /**

@@ -5,6 +5,7 @@
  * Uses @dnd-kit/sortable for drag-and-drop functionality.
  */
 
+import { useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,10 +19,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Clock, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Clock, MoreVertical, Pencil, Trash2, Terminal } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
 import { TaskCardStartButton } from './TaskCardStartButton';
 import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
+import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
 
 // ============================================================================
 // Types
@@ -32,6 +34,8 @@ interface TaskCardProps {
   onClick?: (() => void) | undefined;
   onEdit?: ((task: Task) => void) | undefined;
   onDelete?: ((task: Task) => void) | undefined;
+  onViewTerminal?: ((task: Task) => void) | undefined;
+  refetchTasks?: (() => Promise<void>) | undefined;
   isDragging?: boolean | undefined;
 }
 
@@ -44,6 +48,8 @@ export function TaskCard({
   onClick,
   onEdit,
   onDelete,
+  onViewTerminal,
+  refetchTasks,
   isDragging = false,
 }: TaskCardProps) {
   const {
@@ -61,6 +67,16 @@ export function TaskCard({
   };
 
   const isCurrentlyDragging = isDragging || isSortableDragging;
+
+  // Track if we need to refresh when Claude status changes
+  const [, setRefreshKey] = useState(0);
+  const handleStatusChange = useCallback(() => {
+    setRefreshKey(prev => prev + 1);
+  }, []);
+
+  // Check if Claude is actively working
+  const claudeStatus = getClaudeStatusFromTask(task);
+  const isClaudeRunning = isClaudeActive(claudeStatus);
 
   // Format time ago
   const getTimeAgo = (dateString: string): string => {
@@ -148,10 +164,30 @@ export function TaskCard({
             </span>
           </div>
 
-          {/* Right Side: Start Button + Menu */}
+          {/* Right Side: Terminal Button + Start Button + Menu */}
           <div className="flex items-center gap-1">
-            {/* Claude Code Start Button - only for PLANNING tasks */}
-            <TaskCardStartButton task={task} />
+            {/* Terminal Button - only show when Claude is running */}
+            {isClaudeRunning && onViewTerminal && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewTerminal(task);
+                }}
+                aria-label="View terminal output"
+              >
+                <Terminal className="h-4 w-4 text-green-600 dark:text-green-400" />
+              </Button>
+            )}
+
+            {/* Claude Code Start Button - shows Start/Pause/Resume based on status */}
+            <TaskCardStartButton
+              task={task}
+              onStateChange={handleStatusChange}
+              refetchTasks={refetchTasks}
+            />
 
             {/* Actions Menu */}
             <DropdownMenu>

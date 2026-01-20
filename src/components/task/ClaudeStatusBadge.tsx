@@ -6,6 +6,11 @@
  */
 
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ClaudeTaskStatus } from '@/types/ipc';
 
@@ -80,27 +85,53 @@ export function ClaudeStatusBadge({
     return null;
   }
 
+  // Build tooltip content
+  const tooltipContent = (): string => {
+    switch (status) {
+      case 'STARTING':
+        return 'Claude Code is initializing...';
+      case 'RUNNING':
+        return `Claude Code is actively working${terminalId ? ` (Terminal: ${terminalId})` : ''}`;
+      case 'PAUSED':
+        return 'Claude Code session is paused. Click Resume to continue.';
+      case 'COMPLETED':
+        return 'Claude Code has completed this task';
+      case 'FAILED':
+        return 'Claude Code encountered an error';
+      case 'AWAITING_INPUT':
+        return 'Claude Code is waiting for your input';
+      default:
+        return terminalId ? `Terminal: ${terminalId}` : '';
+    }
+  };
+
   return (
-    <Badge
-      variant="outline"
-      onClick={onClick}
-      className={cn(
-        'text-xs cursor-pointer transition-all',
-        config.className,
-        config.animated && 'animate-pulse',
-        onClick && 'hover:scale-105'
-      )}
-      title={terminalId ? `Terminal: ${terminalId}` : undefined}
-    >
-      <span className="flex items-center gap-1.5">
-        {config.animated && (
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-current" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-current" />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant="outline"
+          onClick={onClick}
+          className={cn(
+            'text-xs transition-all',
+            config.className,
+            config.animated && 'animate-pulse',
+            onClick ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            {config.animated && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-current" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-current" />
+              </span>
+            )}
+            {config.label}
           </span>
-        )}
-        {config.label}
-      </span>
-    </Badge>
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="text-sm">{tooltipContent()}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

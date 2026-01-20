@@ -45,7 +45,9 @@ interface KanbanBoardProps {
   onTaskClick?: (task: Task) => void;
   onTaskEdit?: (task: Task) => void;
   onTaskDelete?: (task: Task) => void;
+  onViewTerminal?: (task: Task) => void;
   onAddTask?: (status: TaskStatus) => void;
+  refetchTasks?: () => Promise<void>;
   loading?: boolean;
 }
 
@@ -59,7 +61,9 @@ export function KanbanBoard({
   onTaskClick,
   onTaskEdit,
   onTaskDelete,
+  onViewTerminal,
   onAddTask,
+  refetchTasks,
   loading = false,
 }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -177,7 +181,9 @@ export function KanbanBoard({
             onTaskClick={onTaskClick || undefined}
             onTaskEdit={onTaskEdit || undefined}
             onTaskDelete={onTaskDelete || undefined}
+            onViewTerminal={onViewTerminal || undefined}
             onAddTask={onAddTask || undefined}
+            refetchTasks={refetchTasks || undefined}
             collapsible={column.collapsible || false}
           />
         ))}

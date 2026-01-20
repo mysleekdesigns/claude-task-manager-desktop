@@ -6,6 +6,7 @@
  */
 
 import { terminalManager } from './terminal.js';
+import { databaseService } from './database.js';
 import type { BrowserWindow } from 'electron';
 
 /**
@@ -90,40 +91,70 @@ class ClaudeCodeService {
   ): Promise<ClaudeCodeStartResult> {
     const terminalId = `claude-${options.taskId}`;
 
-    // Build the Claude Code command
-    const command = this.buildClaudeCommand(options);
+    try {
+      // Build the Claude Code command
+      const command = this.buildClaudeCommand(options);
 
-    // Build the task prompt
-    const taskPrompt = this.buildTaskPrompt(options);
+      // Build the task prompt
+      const taskPrompt = this.buildTaskPrompt(options);
 
-    // Spawn terminal for Claude Code
-    terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
-      cwd: options.projectPath,
-      onData: (data: string) => {
-        // Stream output to renderer
-        mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
-      },
-      onExit: (code: number) => {
-        // Notify renderer of process exit
-        mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
-      },
-    });
+      // Spawn terminal for Claude Code
+      terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
+        cwd: options.projectPath,
+        onData: (data: string) => {
+          // Stream output to renderer
+          mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
+        },
+        onExit: async (code: number) => {
+          // Update task status based on exit code
+          await this.handleTaskExit(options.taskId, code, mainWindow);
 
-    // Write the Claude Code command to start the task
-    terminalManager.write(terminalId, `${command}\n`);
+          // Notify renderer of process exit
+          mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+        },
+      });
 
-    // Wait a moment for Claude to initialize
-    await this.sleep(1000);
+      // Write the Claude Code command to start the task
+      terminalManager.write(terminalId, `${command}\n`);
 
-    // Send the task prompt
-    if (taskPrompt) {
-      terminalManager.write(terminalId, `${taskPrompt}\n`);
+      // Wait a moment for Claude to initialize
+      await this.sleep(1000);
+
+      // Send the task prompt
+      if (taskPrompt) {
+        terminalManager.write(terminalId, `${taskPrompt}\n`);
+      }
+
+      console.log(
+        `[ClaudeCodeService] Successfully started Claude Code for task ${options.taskId} (terminal: ${terminalId})`
+      );
+
+      return {
+        terminalId,
+        sessionId: options.sessionId,
+      };
+    } catch (error) {
+      console.error(
+        `[ClaudeCodeService] Failed to start Claude Code for task ${options.taskId}:`,
+        error
+      );
+
+      // Clean up terminal if it was created
+      if (terminalManager.has(terminalId)) {
+        try {
+          terminalManager.kill(terminalId);
+        } catch (killError) {
+          console.error(
+            `[ClaudeCodeService] Failed to clean up terminal ${terminalId}:`,
+            killError
+          );
+        }
+      }
+
+      throw new Error(
+        `Failed to start Claude Code: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
-
-    return {
-      terminalId,
-      sessionId: options.sessionId,
-    };
   }
 
   /**
@@ -149,7 +180,10 @@ class ClaudeCodeService {
         // Stream output to renderer
         mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
       },
-      onExit: (code: number) => {
+      onExit: async (code: number) => {
+        // Update task status based on exit code
+        await this.handleTaskExit(options.taskId, code, mainWindow);
+
         // Notify renderer of process exit
         mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
       },
@@ -264,6 +298,63 @@ class ClaudeCodeService {
     lines.push('When complete, provide a summary of the changes made.');
 
     return lines.join('\n');
+  }
+
+  /**
+   * Handle terminal exit event for a Claude Code task.
+   * Updates task status and sends completion event to renderer.
+   *
+   * @param taskId - Task ID
+   * @param exitCode - Process exit code
+   * @param mainWindow - Main BrowserWindow for events
+   */
+  private async handleTaskExit(
+    taskId: string,
+    exitCode: number,
+    mainWindow: BrowserWindow
+  ): Promise<void> {
+    try {
+      const prisma = databaseService.getClient();
+
+      // Determine the final status based on exit code
+      // Exit code 0 = success, non-zero = failure
+      const claudeStatus = exitCode === 0 ? 'COMPLETED' : 'FAILED';
+
+      // Update task with completion status
+      await prisma.task.update({
+        where: { id: taskId },
+        data: {
+          claudeStatus,
+          claudeCompletedAt: new Date(),
+        },
+      });
+
+      // Add a log entry
+      await prisma.taskLog.create({
+        data: {
+          taskId,
+          type: exitCode === 0 ? 'success' : 'error',
+          message: `Claude Code ${claudeStatus.toLowerCase()} with exit code ${exitCode}`,
+          metadata: JSON.stringify({ exitCode }),
+        },
+      });
+
+      // Send completion event to renderer
+      mainWindow.webContents.send(`claude:${claudeStatus.toLowerCase()}:${taskId}`, {
+        taskId,
+        exitCode,
+        status: claudeStatus,
+      });
+
+      console.log(
+        `[ClaudeCodeService] Task ${taskId} completed with status ${claudeStatus} (exit code: ${exitCode})`
+      );
+    } catch (error) {
+      console.error(
+        `[ClaudeCodeService] Error handling task exit for ${taskId}:`,
+        error
+      );
+    }
   }
 
   /**

@@ -28,7 +28,9 @@ interface KanbanColumnProps {
   onTaskClick?: ((task: Task) => void) | undefined;
   onTaskEdit?: ((task: Task) => void) | undefined;
   onTaskDelete?: ((task: Task) => void) | undefined;
+  onViewTerminal?: ((task: Task) => void) | undefined;
   onAddTask?: ((status: TaskStatus) => void) | undefined;
+  refetchTasks?: (() => Promise<void>) | undefined;
   collapsible?: boolean | undefined;
 }
 
@@ -43,7 +45,9 @@ export function KanbanColumn({
   onTaskClick,
   onTaskEdit,
   onTaskDelete,
+  onViewTerminal,
   onAddTask,
+  refetchTasks,
   collapsible = false,
 }: KanbanColumnProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -134,6 +138,8 @@ export function KanbanColumn({
                     onClick={onTaskClick ? () => onTaskClick(task) : undefined}
                     onEdit={onTaskEdit}
                     onDelete={onTaskDelete}
+                    onViewTerminal={onViewTerminal}
+                    refetchTasks={refetchTasks}
                   />
                 ))}
               </SortableContext>

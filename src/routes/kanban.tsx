@@ -4,12 +4,14 @@
  * Main page for the Kanban board view of tasks.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useTaskManager } from '@/hooks/useTasks';
+import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { TaskModal } from '@/components/task/TaskModal';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
+import { TaskTerminalPanel } from '@/components/kanban/TaskTerminalPanel';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, AlertCircle } from 'lucide-react';
@@ -22,6 +24,10 @@ export function KanbanPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState<TaskStatus>('PLANNING');
+
+  // Terminal panel state
+  const [terminalPanelTask, setTerminalPanelTask] = useState<Task | null>(null);
+  const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(false);
 
   // Fetch tasks for the current project
   const {
@@ -100,6 +106,43 @@ export function KanbanPage() {
     setIsCreateModalOpen(false);
   }, []);
 
+  // Handle view terminal
+  const handleViewTerminal = useCallback((task: Task) => {
+    setTerminalPanelTask(task);
+    setIsTerminalPanelOpen(true);
+  }, []);
+
+  // Handle close terminal panel
+  const handleCloseTerminalPanel = useCallback(() => {
+    setIsTerminalPanelOpen(false);
+    // Keep the task reference for a smooth close animation
+    setTimeout(() => {
+      setTerminalPanelTask(null);
+    }, 300);
+  }, []);
+
+  // Auto-refresh when there are active Claude tasks
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+
+    // Check if any tasks have active Claude sessions
+    const hasActiveTasks = tasks.some(task => {
+      const status = getClaudeStatusFromTask(task);
+      return isClaudeActive(status);
+    });
+
+    if (!hasActiveTasks) return;
+
+    // Poll every 3 seconds when there are active tasks
+    const interval = setInterval(() => {
+      void refetch();
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [tasks, refetch]);
+
   // No project selected
   if (!currentProject) {
     return (
@@ -156,7 +199,9 @@ export function KanbanPage() {
           onTaskClick={handleTaskClick}
           onTaskEdit={handleTaskEdit}
           onTaskDelete={handleTaskDelete}
+          onViewTerminal={handleViewTerminal}
           onAddTask={handleAddTask}
+          refetchTasks={refetch}
           loading={loading}
         />
       </div>
@@ -180,6 +225,13 @@ export function KanbanPage() {
           initialStatus={initialStatus}
         />
       )}
+
+      {/* Terminal Panel */}
+      <TaskTerminalPanel
+        task={terminalPanelTask}
+        isOpen={isTerminalPanelOpen}
+        onClose={handleCloseTerminalPanel}
+      />
     </div>
   );
 }

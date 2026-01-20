@@ -1058,6 +1058,18 @@ export interface ClaudeCodeStatusResponse {
   sessionId: string | null;
 }
 
+/**
+ * Response with detailed active Claude task information
+ */
+export interface ClaudeCodeActiveTaskResponse {
+  isRunning: boolean;
+  terminalId: string | null;
+  sessionId: string | null;
+  claudeStatus: ClaudeTaskStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 // ============================================================================
 // Settings Types (Phase 14)
 // ============================================================================
@@ -1390,6 +1402,7 @@ export interface IpcChannels {
   'claude:resumeTask': (data: ClaudeCodeResumeInput) => Promise<ClaudeCodeResumeResponse>;
   'claude:pauseTask': (data: ClaudeCodePauseInput) => Promise<void>;
   'claude:getTaskStatus': (data: ClaudeCodeStatusInput) => Promise<ClaudeCodeStatusResponse>;
+  'claude:getActiveTask': (data: ClaudeCodeStatusInput) => Promise<ClaudeCodeActiveTaskResponse>;
 }
 
 /**
@@ -1455,9 +1468,18 @@ export type DynamicTerminalEventChannel =
   | `terminal:exit:${string}`;
 
 /**
+ * Dynamic Claude event channels
+ * These use template literal types to support task-specific Claude lifecycle events
+ */
+export type DynamicClaudeEventChannel =
+  | `claude:started:${string}`
+  | `claude:completed:${string}`
+  | `claude:failed:${string}`;
+
+/**
  * Combined event channels (static + dynamic)
  */
-export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel;
+export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel | DynamicClaudeEventChannel;
 
 /**
  * Update information for auto-updater events
@@ -1630,6 +1652,7 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'claude:resumeTask',
   'claude:pauseTask',
   'claude:getTaskStatus',
+  'claude:getActiveTask',
 ] as const;
 
 /**
