@@ -42,6 +42,7 @@ model Project {
   worktrees  Worktree[]
   phases     Phase[]
   features   Feature[]
+  memories   Memory[]
 
   @@index([createdAt])
 }
@@ -262,5 +263,23 @@ model Milestone {
 
   @@index([phaseId])
   @@index([completed])
+  @@index([createdAt])
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  type      String   // session, pr_review, codebase, pattern, gotcha
+  title     String
+  content   String
+  metadata  String   @default("{}") // JSON string for SQLite
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
   @@index([createdAt])
 }

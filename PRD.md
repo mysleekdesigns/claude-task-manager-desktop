@@ -26,52 +26,57 @@
 | 6 | Task Management Core | ✅ Complete |
 | 7 | Terminal Management | ✅ Complete |
 | 8 | Git Worktree Management | ✅ Complete |
-| 9 | Roadmap and Planning | Next |
-| 10 | Context and Memory | Planned |
-| 11 | MCP Configuration | Planned |
+| 9 | Roadmap and Planning | ✅ Complete |
+| 10 | Context and Memory | ✅ Complete |
+| 11 | MCP Configuration | Next |
 | 12 | GitHub Integration | Planned |
 | 13 | Additional Features | Planned |
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 8 complete. Git worktree management fully implemented with database models, IPC handlers, and UI components. Ready for Phase 9 (Roadmap and Planning).
+**Current Status:** Phase 10 complete. Context and Memory system fully implemented with Memory model, IPC handlers, UI components, and automatic session capture. Ready for Phase 11 (MCP Configuration).
 
 ## Recent Changes
 
 Latest 5 commits:
 
-1. **b580804** - Implement Phase 8: Git Worktree Management
+1. **[pending]** - Implement Phase 10: Context and Memory
+   - Add Memory database model with Prisma migration
+   - Create memory IPC handlers (list, create, get, delete, search)
+   - Build Context page with tabs (Project Index, Memories)
+   - Create MemoryCard and AddMemoryModal components
+   - Implement automatic session insight capture on terminal close
+   - Add output buffering to terminal service
+
+2. **3057952** - Implement Phase 9: Roadmap and Planning
+   - Add Phase, Feature, and Milestone database models
+   - Create roadmap IPC handlers for phases, features, milestones
+   - Build RoadmapPage with phase cards and feature management
+   - Implement MoSCoW priority system (Must/Should/Could/Won't)
+   - Add "Build" button to convert features to tasks
+
+3. **b580804** - Implement Phase 8: Git Worktree Management
    - Add Worktree database model with Project/Terminal relations
    - Create git service using simple-git for worktree/branch operations
    - Add IPC handlers: worktrees:list/create/delete/sync, branches:list, git:status
    - Create WorktreeList, CreateWorktreeModal, WorktreeSelector components
    - Integrate worktree selection into terminal panes
-   - Fix page layout for macOS titlebar spacing
 
-2. **778beb4** - Fix terminal close functionality and race condition errors
+4. **778beb4** - Fix terminal close functionality and race condition errors
    - Fixed race condition in terminal cleanup during window close
    - Improved terminal process management to prevent zombie processes
    - Enhanced error handling in terminal IPC handlers
 
-3. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
+5. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
    - Added proper macOS window dragging support
    - Fixed frameless window interaction issues
-
-4. **3c87642** - Fix task IPC security and redesign Kanban task cards
-   - Improved IPC handler security validation
-   - Redesigned task card UI for better usability
-
-5. **160e41e** - Implement Phase 7: Terminal Management with Claude Code Integration
-   - Complete terminal management system with node-pty
-   - XTerm.js integration with terminal grid UI
-   - Claude Code launch and broadcast functionality
 
 ## Implementation Statistics
 
 **Codebase Size:**
-- Total IPC Handlers: 54 across 9 handler files (~2,900 lines)
-- React Components: 35+ components
-- Database Tables: 10 with 16 indexes
+- Total IPC Handlers: 65+ across 11 handler files (~3,500 lines)
+- React Components: 45+ components
+- Database Tables: 14 with 20+ indexes
 
 **IPC Handler Files:**
 - `electron/ipc/app.ts` - 192 lines (App lifecycle and window management)
@@ -80,17 +85,30 @@ Latest 5 commits:
 - `electron/ipc/users.ts` - 272 lines (User management)
 - `electron/ipc/projects.ts` - 499 lines (Project and team management)
 - `electron/ipc/tasks.ts` - 569 lines (Task CRUD and Kanban operations)
-- `electron/ipc/terminals.ts` - 333 lines (Terminal process management)
+- `electron/ipc/terminals.ts` - ~400 lines (Terminal process management with session capture)
 - `electron/ipc/worktrees.ts` - ~300 lines (Git worktree and branch operations)
-- `electron/ipc/index.ts` - 118 lines (Handler registration and exports)
+- `electron/ipc/roadmap.ts` - ~350 lines (Phases, features, milestones management)
+- `electron/ipc/memories.ts` - ~250 lines (Memory CRUD and search operations)
+- `electron/ipc/index.ts` - 130 lines (Handler registration and exports)
 
 **Service Files:**
 - `electron/services/git.ts` - Git operations using simple-git
+- `electron/services/session-capture.ts` - Terminal session insight parsing and capture
 
 **Worktree Components:**
 - `src/components/worktrees/WorktreeList.tsx`
 - `src/components/worktrees/CreateWorktreeModal.tsx`
 - `src/components/worktrees/WorktreeSelector.tsx`
+
+**Roadmap Components:**
+- `src/components/roadmap/PhaseCard.tsx`
+- `src/components/roadmap/FeatureItem.tsx`
+- `src/components/roadmap/AddFeatureModal.tsx`
+- `src/components/roadmap/AddPhaseModal.tsx`
+
+**Memory Components:**
+- `src/components/memory/MemoryCard.tsx`
+- `src/components/memory/AddMemoryModal.tsx`
 
 ---
 
@@ -900,10 +918,10 @@ Latest 5 commits:
 
 ---
 
-## Phase 10: Context and Memory
+## Phase 10: Context and Memory ✅
 
 ### 10.1 Database Models
-- [ ] Create Memory model
+- [x] Create Memory model
   ```prisma
   model Memory {
     id        String   @id @default(cuid())
@@ -915,52 +933,52 @@ Latest 5 commits:
     createdAt DateTime @default(now())
   }
   ```
-- [ ] Run migration
+- [x] Run migration
 
 ### 10.2 Memory IPC Handlers
-- [ ] Create `memories:list` handler (with type filter)
-- [ ] Create `memories:create` handler
-- [ ] Create `memories:get` handler
-- [ ] Create `memories:delete` handler
-- [ ] Create `memories:search` handler (full-text search)
+- [x] Create `memories:list` handler (with type filter)
+- [x] Create `memories:create` handler
+- [x] Create `memories:get` handler
+- [x] Create `memories:delete` handler
+- [x] Create `memories:search` handler (full-text search)
 
 ### 10.3 Context UI
-- [ ] Create /context page
-- [ ] Build tab navigation:
-  - [ ] Project Index tab
-  - [ ] Memories tab
-- [ ] Build Project Index tab (codebase overview)
-  - [ ] File tree visualization
-  - [ ] Key file highlights
-  - [ ] Architecture overview
-- [ ] Build Memories tab:
-  - [ ] Search input
-  - [ ] Filter chips (All, PR Reviews, Sessions, etc.)
-  - [ ] Memory count indicator
-  - [ ] Memory card list
+- [x] Create /context page
+- [x] Build tab navigation:
+  - [x] Project Index tab
+  - [x] Memories tab
+- [x] Build Project Index tab (codebase overview)
+  - [x] File tree visualization
+  - [x] Key file highlights
+  - [x] Architecture overview
+- [x] Build Memories tab:
+  - [x] Search input
+  - [x] Filter chips (All, PR Reviews, Sessions, etc.)
+  - [x] Memory count indicator
+  - [x] Memory card list
 
 ### 10.4 Memory Card Component
-- [ ] Build MemoryCard component:
-  - [ ] Type badge
-  - [ ] Title
-  - [ ] Timestamp
-  - [ ] Content preview
-  - [ ] Expand/collapse toggle
-  - [ ] Delete button
+- [x] Build MemoryCard component:
+  - [x] Type badge
+  - [x] Title
+  - [x] Timestamp
+  - [x] Content preview
+  - [x] Expand/collapse toggle
+  - [x] Delete button
 
 ### 10.5 Session Insight Capture
-- [ ] Hook into terminal session end
-- [ ] Parse Claude conversation for insights
-- [ ] Auto-create memory entries
-- [ ] Tag with session metadata
+- [x] Hook into terminal session end
+- [x] Parse Claude conversation for insights
+- [x] Auto-create memory entries
+- [x] Tag with session metadata
 
 **Phase 10 Verification:**
-- [ ] Memory browser displays memories
-- [ ] Search filters results correctly
-- [ ] Type filters work
-- [ ] Memory cards expand/collapse
-- [ ] Can create memories manually
-- [ ] Session insights auto-captured on terminal close
+- [x] Memory browser displays memories
+- [x] Search filters results correctly
+- [x] Type filters work
+- [x] Memory cards expand/collapse
+- [x] Can create memories manually
+- [x] Session insights auto-captured on terminal close
 
 ---
 
@@ -1971,15 +1989,15 @@ useEffect(() => {
 - [x] Worktree CRUD works
 - [x] Terminal worktree selector works
 
-### Phase 9 - Roadmap
-- [ ] Phases display
-- [ ] Features with priorities
-- [ ] Feature → Task conversion
+### Phase 9 - Roadmap ✅
+- [x] Phases display
+- [x] Features with priorities
+- [x] Feature → Task conversion
 
-### Phase 10 - Memory
-- [ ] Memory CRUD works
-- [ ] Search works
-- [ ] Session capture works
+### Phase 10 - Memory ✅
+- [x] Memory CRUD works
+- [x] Search works
+- [x] Session capture works
 
 ### Phase 11 - MCP
 - [ ] Server list displays

@@ -428,6 +428,57 @@ export interface CreateTaskFromFeatureResponse {
 }
 
 // ============================================================================
+// Memory Types (Phase 10)
+// ============================================================================
+
+/**
+ * Memory type enum
+ */
+export type MemoryType = 'session' | 'pr_review' | 'codebase' | 'pattern' | 'gotcha';
+
+/**
+ * Memory entity for project context
+ */
+export interface Memory {
+  id: string;
+  type: MemoryType;
+  title: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create memory input data
+ */
+export interface CreateMemoryInput {
+  type: MemoryType;
+  title: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  projectId: string;
+}
+
+/**
+ * Update memory input data
+ */
+export interface UpdateMemoryInput {
+  title?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Memory list filter options
+ */
+export interface MemoryListFilters {
+  type?: MemoryType;
+  search?: string;
+}
+
+// ============================================================================
 // Terminal Types
 // ============================================================================
 
@@ -751,6 +802,16 @@ export interface IpcChannels {
   // Git channels
   'branches:list': (projectId: string) => Promise<BranchInfo[]>;
   'git:status': (path: string) => Promise<GitStatus>;
+
+  // Memory channels (Phase 10)
+  'memories:list': (
+    projectId: string,
+    filters?: MemoryListFilters
+  ) => Promise<Memory[]>;
+  'memories:create': (data: CreateMemoryInput) => Promise<Memory>;
+  'memories:get': (id: string) => Promise<Memory | null>;
+  'memories:update': (id: string, data: UpdateMemoryInput) => Promise<Memory>;
+  'memories:delete': (id: string) => Promise<void>;
 }
 
 /**
@@ -928,6 +989,11 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'worktrees:sync',
   'branches:list',
   'git:status',
+  'memories:list',
+  'memories:create',
+  'memories:get',
+  'memories:update',
+  'memories:delete',
 ] as const;
 
 /**

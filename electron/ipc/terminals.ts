@@ -9,6 +9,7 @@
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { databaseService } from '../services/database.js';
 import { terminalManager } from '../services/terminal.js';
+import { captureSessionInsight } from '../services/session-capture.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
   logIPCRequest,
@@ -212,10 +213,28 @@ async function handleCloseTerminal(
   // Verify terminal exists in database
   const terminal = await prisma.terminal.findUnique({
     where: { id },
+    include: { project: true },
   });
 
   if (!terminal) {
     throw new Error('Terminal not found');
+  }
+
+  // Capture session output before closing (if buffer has content)
+  try {
+    const output = terminalManager.getBuffer(id);
+    if (output.trim().length > 0) {
+      await captureSessionInsight(
+        id,
+        output,
+        terminal.projectId,
+        terminal.name
+      );
+      console.log(`[Terminal IPC] Captured session insight for terminal ${id}`);
+    }
+  } catch (error) {
+    // Log error but don't fail the close operation
+    console.error(`[Terminal IPC] Failed to capture session insight:`, error);
   }
 
   // Kill the terminal process
@@ -252,6 +271,53 @@ async function handleListTerminals(
   });
 
   return terminals;
+}
+
+/**
+ * Manually capture a terminal session insight
+ */
+async function handleCaptureSession(
+  _event: IpcMainInvokeEvent,
+  id: string
+): Promise<{ memoryId: string }> {
+  if (!id) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Verify terminal exists
+  const terminal = await prisma.terminal.findUnique({
+    where: { id },
+  });
+
+  if (!terminal) {
+    throw new Error('Terminal not found');
+  }
+
+  // Get the output buffer
+  const output = terminalManager.getBuffer(id);
+
+  if (output.trim().length === 0) {
+    throw new Error('No output to capture');
+  }
+
+  // Capture the session
+  const memoryId = await captureSessionInsight(
+    id,
+    output,
+    terminal.projectId,
+    terminal.name
+  );
+
+  if (!memoryId) {
+    throw new Error('No meaningful activity to capture');
+  }
+
+  // Clear the buffer after successful capture
+  terminalManager.clearBuffer(id);
+
+  return { memoryId };
 }
 
 /**
@@ -292,6 +358,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     'terminal:list',
     wrapWithLogging('terminal:list', wrapHandler(handleListTerminals))
   );
+
+  // terminal:captureSession - Manually capture terminal session insights
+  ipcMain.handle(
+    'terminal:captureSession',
+    wrapWithLogging('terminal:captureSession', wrapHandler(handleCaptureSession))
+  );
 }
 
 /**
@@ -303,6 +375,7 @@ export function unregisterTerminalHandlers(): void {
   ipcMain.removeHandler('terminal:resize');
   ipcMain.removeHandler('terminal:close');
   ipcMain.removeHandler('terminal:list');
+  ipcMain.removeHandler('terminal:captureSession');
 }
 
 /**

@@ -34,6 +34,8 @@ interface ManagedTerminal {
   name: string;
   /** Process ID of the terminal */
   pid: number;
+  /** Output buffer for session capture */
+  outputBuffer: string;
 }
 
 /**
@@ -44,9 +46,13 @@ interface ManagedTerminal {
  * - Terminal spawning with custom environment and working directory
  * - Input writing and terminal resizing
  * - Process cleanup and resource management
+ * - Output buffering for session capture (limited to 100KB per terminal)
  */
 class TerminalManager {
   private terminals: Map<string, ManagedTerminal> = new Map();
+
+  /** Maximum buffer size per terminal (100KB) */
+  private readonly MAX_BUFFER_SIZE = 100 * 1024;
 
   /**
    * Get the default shell based on the current platform.
@@ -109,6 +115,10 @@ class TerminalManager {
       // Set up data handler
       ptyProcess.onData((data: string) => {
         try {
+          // Add to buffer for session capture
+          this.addToBuffer(id, data);
+
+          // Forward to callback
           options.onData(data);
         } catch (error) {
           console.error(
@@ -139,6 +149,7 @@ class TerminalManager {
         pty: ptyProcess,
         name,
         pid: ptyProcess.pid,
+        outputBuffer: '',
       };
 
       this.terminals.set(id, managedTerminal);
@@ -298,6 +309,54 @@ class TerminalManager {
    */
   has(id: string): boolean {
     return this.terminals.has(id);
+  }
+
+  /**
+   * Add output data to the terminal's buffer.
+   * Automatically truncates if buffer exceeds MAX_BUFFER_SIZE.
+   *
+   * @param id - Terminal ID
+   * @param data - Output data to add
+   */
+  addToBuffer(id: string, data: string): void {
+    const terminal = this.terminals.get(id);
+
+    if (!terminal) {
+      return;
+    }
+
+    // Append data
+    terminal.outputBuffer += data;
+
+    // Truncate if exceeds max size
+    if (terminal.outputBuffer.length > this.MAX_BUFFER_SIZE) {
+      // Keep only the last MAX_BUFFER_SIZE characters
+      terminal.outputBuffer = terminal.outputBuffer.slice(-this.MAX_BUFFER_SIZE);
+    }
+  }
+
+  /**
+   * Get the output buffer for a terminal.
+   *
+   * @param id - Terminal ID
+   * @returns The terminal's output buffer, or empty string if not found
+   */
+  getBuffer(id: string): string {
+    const terminal = this.terminals.get(id);
+    return terminal?.outputBuffer || '';
+  }
+
+  /**
+   * Clear the output buffer for a terminal.
+   *
+   * @param id - Terminal ID
+   */
+  clearBuffer(id: string): void {
+    const terminal = this.terminals.get(id);
+
+    if (terminal) {
+      terminal.outputBuffer = '';
+    }
   }
 }
 
