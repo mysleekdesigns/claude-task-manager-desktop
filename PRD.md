@@ -28,19 +28,29 @@
 | 8 | Git Worktree Management | ✅ Complete |
 | 9 | Roadmap and Planning | ✅ Complete |
 | 10 | Context and Memory | ✅ Complete |
-| 11 | MCP Configuration | Next |
-| 12 | GitHub Integration | Planned |
+| 11 | MCP Configuration | ✅ Complete |
+| 12 | GitHub Integration | Next |
 | 13 | Additional Features | Planned |
 | 14 | Settings and Preferences | Planned |
 | 15 | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 10 complete. Context and Memory system fully implemented with Memory model, IPC handlers, UI components, and automatic session capture. Ready for Phase 11 (MCP Configuration).
+**Current Status:** Phase 11 complete. MCP Configuration system fully implemented with McpConfig model, IPC handlers, UI components, preset servers, and Claude Desktop config file generation. Ready for Phase 12 (GitHub Integration).
 
 ## Recent Changes
 
 Latest 5 commits:
 
-1. **8bea84c** - Implement Phase 10: Context and Memory
+1. **TBD** - Implement Phase 11: MCP Configuration
+   - Add McpConfig database model with Prisma migration
+   - Create MCP IPC handlers (list, create, update, delete, toggle, generateConfig, writeConfig, readConfig)
+   - Build MCP page with server list grouped by category
+   - Create McpServerItem and McpServerList components
+   - Create AddCustomServerModal for custom MCP servers
+   - Implement MCP config file generation service for Claude Desktop
+   - Add "Sync to Claude Desktop" button with toast notifications
+   - Include preset MCP servers (Context7, ContextForge, GitHub, Slack, etc.)
+
+2. **8bea84c** - Implement Phase 10: Context and Memory
    - Add Memory database model with Prisma migration
    - Create memory IPC handlers (list, create, get, delete, search)
    - Build Context page with tabs (Project Index, Memories)
@@ -67,15 +77,15 @@ Latest 5 commits:
    - Improved terminal process management to prevent zombie processes
    - Enhanced error handling in terminal IPC handlers
 
-5. **3ec8ac5** - Fix window dragging on macOS by adding titlebar-drag-region class
-   - Added proper macOS window dragging support
-   - Fixed frameless window interaction issues
+5. **b580804** - Implement Phase 8: Git Worktree Management
+   - Add Worktree database model with Project/Terminal relations
+   - Create git service using simple-git for worktree/branch operations
 
 ## Implementation Statistics
 
 **Codebase Size:**
-- Total IPC Handlers: 65+ across 11 handler files (~3,500 lines)
-- React Components: 45+ components
+- Total IPC Handlers: 75+ across 12 handler files (~4,000 lines)
+- React Components: 50+ components
 - Database Tables: 14 with 20+ indexes
 
 **IPC Handler Files:**
@@ -89,6 +99,7 @@ Latest 5 commits:
 - `electron/ipc/worktrees.ts` - ~300 lines (Git worktree and branch operations)
 - `electron/ipc/roadmap.ts` - ~350 lines (Phases, features, milestones management)
 - `electron/ipc/memories.ts` - ~250 lines (Memory CRUD and search operations)
+- `electron/ipc/mcp.ts` - ~350 lines (MCP config management and file generation)
 - `electron/ipc/index.ts` - 130 lines (Handler registration and exports)
 
 **Service Files:**
@@ -109,6 +120,14 @@ Latest 5 commits:
 **Memory Components:**
 - `src/components/memory/MemoryCard.tsx`
 - `src/components/memory/AddMemoryModal.tsx`
+
+**MCP Components:**
+- `src/components/mcp/McpServerList.tsx`
+- `src/components/mcp/McpServerItem.tsx`
+- `src/components/mcp/AddCustomServerModal.tsx`
+
+**MCP Service:**
+- `electron/services/mcp-config.ts` - MCP config file generation for Claude Desktop
 
 ---
 
@@ -982,10 +1001,10 @@ Latest 5 commits:
 
 ---
 
-## Phase 11: MCP Configuration
+## Phase 11: MCP Configuration ✅
 
 ### 11.1 Database Models
-- [ ] Create McpConfig model
+- [x] Create McpConfig model
   ```prisma
   model McpConfig {
     id        String   @id @default(cuid())
@@ -997,53 +1016,53 @@ Latest 5 commits:
     createdAt DateTime @default(now())
   }
   ```
-- [ ] Run migration
+- [x] Run migration
 
 ### 11.2 MCP IPC Handlers
-- [ ] Create `mcp:list` handler
-- [ ] Create `mcp:create` handler
-- [ ] Create `mcp:update` handler
-- [ ] Create `mcp:delete` handler
-- [ ] Create `mcp:toggle` handler
+- [x] Create `mcp:list` handler
+- [x] Create `mcp:create` handler
+- [x] Create `mcp:update` handler
+- [x] Create `mcp:delete` handler
+- [x] Create `mcp:toggle` handler
 
 ### 11.3 MCP UI
-- [ ] Create /mcp page
-- [ ] Build MCP overview header:
-  - [ ] Project name
-  - [ ] Enabled server count
-- [ ] Build McpServerList component with categories:
-  - [ ] Documentation
-  - [ ] Knowledge Graphs
-  - [ ] Integrations
-  - [ ] Browser Automation
-  - [ ] Built-in
-- [ ] Build McpServerItem component:
-  - [ ] Icon
-  - [ ] Name
-  - [ ] Description
-  - [ ] Toggle switch
-  - [ ] Configure button
+- [x] Create /mcp page
+- [x] Build MCP overview header:
+  - [x] Project name
+  - [x] Enabled server count
+- [x] Build McpServerList component with categories:
+  - [x] Documentation
+  - [x] Knowledge Graphs
+  - [x] Integrations
+  - [x] Browser Automation
+  - [x] Built-in
+- [x] Build McpServerItem component:
+  - [x] Icon
+  - [x] Name
+  - [x] Description
+  - [x] Toggle switch
+  - [x] Configure button
 
 ### 11.4 Custom Server Management
-- [ ] Build Custom Servers section
-- [ ] Build AddCustomServerModal:
-  - [ ] Name input
-  - [ ] Type selector
-  - [ ] Configuration JSON editor
-  - [ ] Save/Cancel buttons
-- [ ] Implement server configuration validation
+- [x] Build Custom Servers section
+- [x] Build AddCustomServerModal:
+  - [x] Name input
+  - [x] Type selector
+  - [x] Configuration JSON editor
+  - [x] Save/Cancel buttons
+- [x] Implement server configuration validation
 
 ### 11.5 MCP Config File Generation
-- [ ] Generate claude_desktop_config.json format
-- [ ] Auto-update config when servers toggle
-- [ ] Support server-specific environment variables
+- [x] Generate claude_desktop_config.json format
+- [x] Auto-update config when servers toggle
+- [x] Support server-specific environment variables
 
 **Phase 11 Verification:**
-- [ ] MCP servers list displays preset servers
-- [ ] Toggle enables/disables servers
-- [ ] Custom server can be added
-- [ ] Configuration persists to database
-- [ ] Config file generates correctly
+- [x] MCP servers list displays preset servers
+- [x] Toggle enables/disables servers
+- [x] Custom server can be added
+- [x] Configuration persists to database
+- [x] Config file generates correctly
 
 ---
 
@@ -1999,10 +2018,11 @@ useEffect(() => {
 - [x] Search works
 - [x] Session capture works
 
-### Phase 11 - MCP
-- [ ] Server list displays
-- [ ] Toggle works
-- [ ] Custom server add works
+### Phase 11 - MCP ✅
+- [x] Server list displays
+- [x] Toggle works
+- [x] Custom server add works
+- [x] Config file generation works
 
 ### Phase 12 - GitHub
 - [ ] Token authentication works

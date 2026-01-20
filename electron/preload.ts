@@ -94,6 +94,19 @@ const VALID_INVOKE_CHANNELS = [
   // Git
   'branches:list',
   'git:status',
+  // Memory (Phase 10)
+  'memories:list',
+  'memories:create',
+  'memories:get',
+  'memories:delete',
+  'memories:search',
+  // MCP (Phase 11)
+  'mcp:list',
+  'mcp:create',
+  'mcp:get',
+  'mcp:update',
+  'mcp:delete',
+  'mcp:toggle',
 ] as const;
 
 /**

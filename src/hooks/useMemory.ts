@@ -10,7 +10,6 @@ import type {
   CreateMemoryInput,
   UpdateMemoryInput,
   MemoryListFilters,
-  Memory,
 } from '@/types/ipc';
 
 // ============================================================================
@@ -82,7 +81,7 @@ export function useDeleteMemory() {
  * @returns Object with memories data and mutation functions
  */
 export function useMemoryManager(projectId: string, filters?: MemoryListFilters) {
-  const { data: memories = [], isLoading, error, refetch } = useMemories(projectId, filters);
+  const { data: memories = [], loading, error, refetch } = useMemories(projectId, filters);
   const createMemory = useCreateMemory();
   const updateMemory = useUpdateMemory();
   const deleteMemory = useDeleteMemory();
@@ -98,7 +97,7 @@ export function useMemoryManager(projectId: string, filters?: MemoryListFilters)
 
   const handleUpdate = useCallback(
     async (id: string, data: UpdateMemoryInput) => {
-      await updateMemory.mutate([id, data] as any);
+      await updateMemory.mutate(id, data);
       await refetch();
     },
     [updateMemory, refetch]
@@ -114,19 +113,19 @@ export function useMemoryManager(projectId: string, filters?: MemoryListFilters)
 
   return {
     memories,
-    loading: isLoading,
+    loading,
     error,
     createMemory: {
       mutate: handleCreate,
-      isPending: createMemory.isPending,
+      isPending: createMemory.loading,
     },
     updateMemory: {
       mutate: handleUpdate,
-      isPending: updateMemory.isPending,
+      isPending: updateMemory.loading,
     },
     deleteMemory: {
       mutate: handleDelete,
-      isPending: deleteMemory.isPending,
+      isPending: deleteMemory.loading,
     },
     refetch,
   };

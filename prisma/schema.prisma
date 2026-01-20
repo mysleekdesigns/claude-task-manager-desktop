@@ -43,6 +43,7 @@ model Project {
   phases     Phase[]
   features   Feature[]
   memories   Memory[]
+  mcpConfigs McpConfig[]
 
   @@index([createdAt])
 }
@@ -272,6 +273,24 @@ model Memory {
   title     String
   content   String
   metadata  String   @default("{}") // JSON string for SQLite
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model McpConfig {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  enabled   Boolean  @default(false)
+  config    String?  // JSON string
   projectId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

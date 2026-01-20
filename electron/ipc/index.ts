@@ -15,6 +15,7 @@ import { registerTerminalHandlers, unregisterTerminalHandlers } from './terminal
 import { registerWorktreeHandlers, unregisterWorktreeHandlers } from './worktrees.js';
 import { registerRoadmapHandlers, unregisterRoadmapHandlers } from './roadmap.js';
 import { registerMemoryHandlers, unregisterMemoryHandlers } from './memories.js';
+import { registerMcpHandlers, unregisterMcpHandlers } from './mcp.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -56,9 +57,7 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerWorktreeHandlers();
     registerRoadmapHandlers();
     registerMemoryHandlers();
-
-    // Future handler registrations:
-    // registerMcpHandlers();
+    registerMcpHandlers();
 
     isRegistered = true;
     logger.info('IPC handlers registered successfully.');
@@ -92,8 +91,7 @@ export function unregisterIPCHandlers(): void {
     unregisterWorktreeHandlers();
     unregisterRoadmapHandlers();
     unregisterMemoryHandlers();
-
-    // Future handler unregistrations would go here
+    unregisterMcpHandlers();
 
     isRegistered = false;
     logger.info('IPC handlers unregistered successfully.');

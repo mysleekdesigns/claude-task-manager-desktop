@@ -678,6 +678,70 @@ export interface UpdateProjectInput {
 }
 
 // ============================================================================
+// MCP Types (Phase 11)
+// ============================================================================
+
+/**
+ * MCP configuration entity
+ */
+export interface McpConfig {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  config: Record<string, unknown> | null;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create MCP config input data
+ */
+export interface CreateMcpInput {
+  name: string;
+  type: string;
+  config?: Record<string, unknown>;
+  projectId: string;
+}
+
+/**
+ * Update MCP config input data
+ */
+export interface UpdateMcpInput {
+  name?: string;
+  config?: Record<string, unknown>;
+}
+
+/**
+ * Preset MCP server definition
+ */
+export interface PresetMcpServer {
+  name: string;
+  type: string;
+  description: string;
+  category: 'documentation' | 'knowledge' | 'integration' | 'browser' | 'builtin';
+  defaultConfig?: Record<string, unknown>;
+}
+
+/**
+ * MCP server configuration for Claude Desktop (Phase 11.5)
+ */
+export interface McpServerConfig {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/**
+ * Claude Desktop config file structure (Phase 11.5)
+ */
+export interface ClaudeDesktopConfig {
+  mcpServers: Record<string, McpServerConfig>;
+}
+
+// ============================================================================
 // IPC Channel Definitions
 // ============================================================================
 
@@ -812,6 +876,18 @@ export interface IpcChannels {
   'memories:get': (id: string) => Promise<Memory | null>;
   'memories:update': (id: string, data: UpdateMemoryInput) => Promise<Memory>;
   'memories:delete': (id: string) => Promise<void>;
+
+  // MCP channels (Phase 11)
+  'mcp:list': (projectId: string) => Promise<McpConfig[]>;
+  'mcp:create': (data: CreateMcpInput) => Promise<McpConfig>;
+  'mcp:get': (id: string) => Promise<McpConfig | null>;
+  'mcp:update': (id: string, data: UpdateMcpInput) => Promise<McpConfig>;
+  'mcp:toggle': (id: string) => Promise<McpConfig>;
+  'mcp:delete': (id: string) => Promise<void>;
+  'mcp:presets': () => Promise<PresetMcpServer[]>;
+  'mcp:generateConfig': (projectId: string) => Promise<ClaudeDesktopConfig>;
+  'mcp:writeConfig': (projectId: string) => Promise<void>;
+  'mcp:readConfig': () => Promise<ClaudeDesktopConfig | null>;
 }
 
 /**
@@ -994,6 +1070,16 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'memories:get',
   'memories:update',
   'memories:delete',
+  'mcp:list',
+  'mcp:create',
+  'mcp:get',
+  'mcp:update',
+  'mcp:toggle',
+  'mcp:delete',
+  'mcp:presets',
+  'mcp:generateConfig',
+  'mcp:writeConfig',
+  'mcp:readConfig',
 ] as const;
 
 /**

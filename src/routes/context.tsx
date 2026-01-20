@@ -56,8 +56,9 @@ export function ContextPage() {
   } = useMemoryManager(currentProject?.id || '');
 
   // Filter memories by search and type
+  const memoriesArray = memories ?? [];
   const filteredMemories = useMemo(() => {
-    let filtered = memories;
+    let filtered = memoriesArray;
 
     // Filter by type
     if (selectedTypeFilter !== 'all') {
@@ -75,12 +76,12 @@ export function ContextPage() {
     }
 
     return filtered;
-  }, [memories, selectedTypeFilter, searchQuery]);
+  }, [memoriesArray, selectedTypeFilter, searchQuery]);
 
   // Count memories by type
   const memoryCounts = useMemo(() => {
     const counts: Record<string, number> = {
-      all: memories.length,
+      all: memoriesArray.length,
       session: 0,
       pr_review: 0,
       codebase: 0,
@@ -88,12 +89,12 @@ export function ContextPage() {
       gotcha: 0,
     };
 
-    memories.forEach((m) => {
+    memoriesArray.forEach((m) => {
       counts[m.type] = (counts[m.type] || 0) + 1;
     });
 
     return counts;
-  }, [memories]);
+  }, [memoriesArray]);
 
   // Handle create memory
   const handleCreateMemory = useCallback(
@@ -229,7 +230,7 @@ export function ContextPage() {
                 {/* Memory Count */}
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">
-                    Showing {filteredMemories.length} of {memories.length} memories
+                    Showing {filteredMemories.length} of {memoriesArray.length} memories
                   </span>
                 </div>
               </div>
@@ -239,16 +240,16 @@ export function ContextPage() {
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold mb-2">
-                    {memories.length === 0
+                    {memoriesArray.length === 0
                       ? 'No memories yet'
                       : 'No memories match your filters'}
                   </h3>
                   <p className="text-muted-foreground max-w-md mb-4">
-                    {memories.length === 0
+                    {memoriesArray.length === 0
                       ? 'Start building your project knowledge base by adding important context, insights, and learnings.'
                       : 'Try adjusting your search query or filters to find what you are looking for.'}
                   </p>
-                  {memories.length === 0 && (
+                  {memoriesArray.length === 0 && (
                     <Button onClick={() => setIsAddModalOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Your First Memory
