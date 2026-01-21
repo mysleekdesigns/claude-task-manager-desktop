@@ -33,6 +33,8 @@ export interface ClaudeCodeOptions {
   allowedTools?: string[] | undefined;
   /** Custom system prompt to append */
   appendSystemPrompt?: string | undefined;
+  /** Skip permission prompts for programmatic execution (default: true) */
+  skipPermissions?: boolean | undefined;
 }
 
 /**
@@ -195,6 +197,7 @@ class ClaudeCodeService {
     const commandParts = [
       'claude',
       '-p', // Print mode (non-interactive)
+      '--dangerously-skip-permissions', // Skip permission prompts for programmatic execution
       '--output-format stream-json', // Streaming output
       `--resume ${this.escapeShellArgument(options.sessionId)}`, // Resume with session ID
     ];
@@ -366,6 +369,13 @@ class ClaudeCodeService {
 
     // Print mode (non-interactive) for programmatic use
     parts.push('-p');
+
+    // Skip permission prompts for programmatic execution (default: true)
+    // This is standard practice for programmatic Claude Code execution
+    // Requires user to have accepted terms once by running `claude --dangerously-skip-permissions` manually
+    if (options.skipPermissions !== false) {
+      parts.push('--dangerously-skip-permissions');
+    }
 
     // Streaming JSON output format (requires --verbose)
     parts.push('--output-format stream-json');
