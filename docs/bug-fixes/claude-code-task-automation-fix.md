@@ -159,9 +159,11 @@ const claudeStatusFromDB: ClaudeTaskStatus = getClaudeStatusFromTask(task);
 // Get actual runtime status (is terminal actually running?)
 const isTerminalRunning = statusData?.isRunning || false;
 
-// Detect state mismatch: database says RUNNING but terminal isn't running
+// Detect state mismatch: database says STARTING but terminal isn't running
+// We only check STARTING (not RUNNING) because by the time DB says RUNNING,
+// the IPC handler has already validated the spawn succeeded.
 const hasStateMismatch =
-  (claudeStatusFromDB === 'RUNNING' || claudeStatusFromDB === 'STARTING') &&
+  claudeStatusFromDB === 'STARTING' &&
   !isTerminalRunning &&
   statusData !== undefined;
 
