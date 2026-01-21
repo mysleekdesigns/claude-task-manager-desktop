@@ -57,7 +57,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
           }`}
         />
         <span
-          className={`text-xs font-mono truncate ${
+          className={`text-xs font-mono break-words whitespace-normal ${
             isError ? 'text-red-400' : 'text-zinc-300'
           }`}
           title={status}
