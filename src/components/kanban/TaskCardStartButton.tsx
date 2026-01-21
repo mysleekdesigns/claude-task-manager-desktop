@@ -92,9 +92,9 @@ export function TaskCardStartButton({
       onStart?.();
 
       // Refresh both status and tasks after starting
-      setTimeout(async () => {
+      setTimeout(() => {
         void refetchStatus();
-        await refetchTasks?.();
+        void refetchTasks?.();
       }, 500);
     } catch (err) {
       console.error('Failed to start Claude Code on task:', err);
@@ -103,9 +103,9 @@ export function TaskCardStartButton({
       toast.error(errorMessage);
 
       // Refresh status and tasks to show the actual state after error
-      setTimeout(async () => {
+      setTimeout(() => {
         void refetchStatus();
-        await refetchTasks?.();
+        void refetchTasks?.();
       }, 100);
     } finally {
       setIsStarting(false);
@@ -123,9 +123,9 @@ export function TaskCardStartButton({
       toast.success('Claude Code session paused');
 
       // Refresh status and tasks after pausing
-      setTimeout(async () => {
+      setTimeout(() => {
         void refetchStatus();
-        await refetchTasks?.();
+        void refetchTasks?.();
       }, 500);
     } catch (err) {
       console.error('Failed to pause Claude Code session:', err);
@@ -135,9 +135,9 @@ export function TaskCardStartButton({
 
       // If the error is because terminal doesn't exist, trigger a status and task refresh
       if (errorMessage.includes('not running') || errorMessage.includes('not found')) {
-        setTimeout(async () => {
+        setTimeout(() => {
           void refetchStatus();
-          await refetchTasks?.();
+          void refetchTasks?.();
         }, 100);
       }
     }
@@ -163,9 +163,9 @@ export function TaskCardStartButton({
       toast.success('Claude Code session resumed');
 
       // Refresh status and tasks after resuming
-      setTimeout(async () => {
+      setTimeout(() => {
         void refetchStatus();
-        await refetchTasks?.();
+        void refetchTasks?.();
       }, 500);
     } catch (err) {
       console.error('Failed to resume Claude Code session:', err);
@@ -175,9 +175,9 @@ export function TaskCardStartButton({
 
       // If the error is because terminal doesn't exist, trigger a status and task refresh
       if (errorMessage.includes('not paused') || errorMessage.includes('not found')) {
-        setTimeout(async () => {
+        setTimeout(() => {
           void refetchStatus();
-          await refetchTasks?.();
+          void refetchTasks?.();
         }, 100);
       }
     }
@@ -197,7 +197,7 @@ export function TaskCardStartButton({
           <Button
             size="sm"
             variant="outline"
-            onClick={handlePause}
+            onClick={(e) => { void handlePause(e); }}
             className="h-7 px-3 text-xs gap-1.5 border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-600 dark:text-amber-500 dark:hover:bg-amber-950"
           >
             <Pause className="h-3 w-3" />
@@ -219,7 +219,7 @@ export function TaskCardStartButton({
           <Button
             size="sm"
             variant="outline"
-            onClick={handleResume}
+            onClick={(e) => { void handleResume(e); }}
             className="h-7 px-3 text-xs gap-1.5 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 dark:border-green-600 dark:text-green-500 dark:hover:bg-green-950"
           >
             <Play className="h-3 w-3" />
@@ -263,7 +263,7 @@ export function TaskCardStartButton({
           <Button
             size="sm"
             variant="default"
-            onClick={handleStart}
+            onClick={(e) => { void handleStart(e); }}
             disabled={isStarting}
             className="h-7 px-3 text-xs gap-1.5 bg-primary hover:bg-primary/90"
           >

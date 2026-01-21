@@ -34,11 +34,11 @@ interface McpServerListProps {
 // Category Configuration
 // ============================================================================
 
-const CATEGORIES: Array<{
+const CATEGORIES: {
   id: string;
   label: string;
   icon: React.ReactNode;
-}> = [
+}[] = [
   { id: 'documentation', label: 'Documentation', icon: <BookOpen className="h-5 w-5" /> },
   { id: 'knowledge', label: 'Knowledge Graphs', icon: <Network className="h-5 w-5" /> },
   { id: 'integration', label: 'Integrations', icon: <Plug className="h-5 w-5" /> },
@@ -86,7 +86,7 @@ export function McpServerList({
 }: McpServerListProps) {
   // Group servers by category
   const serversByCategory = useMemo(() => {
-    const grouped: Record<string, Array<{ config: McpConfig; preset: PresetMcpServer | undefined }>> = {
+    const grouped: Record<string, { config: McpConfig; preset: PresetMcpServer | undefined }[]> = {
       documentation: [],
       knowledge: [],
       integration: [],

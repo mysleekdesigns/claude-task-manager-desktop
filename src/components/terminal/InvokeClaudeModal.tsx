@@ -152,7 +152,7 @@ export function InvokeClaudeModal({
               id="command"
               placeholder="Enter the command or prompt to send to Claude Code..."
               value={command}
-              onChange={(e) => setCommand(e.target.value)}
+              onChange={(e) => { setCommand(e.target.value); }}
               className="min-h-[100px] resize-none"
               disabled={isInvoking || hasExecutionResults}
             />
@@ -199,12 +199,12 @@ export function InvokeClaudeModal({
                       <div
                         key={terminal.id}
                         className="flex items-center space-x-3 p-2 rounded hover:bg-accent cursor-pointer"
-                        onClick={() => handleToggleTerminal(terminal.id)}
+                        onClick={() => { handleToggleTerminal(terminal.id); }}
                       >
                         <Checkbox
                           id={`terminal-${terminal.id}`}
                           checked={selectedTerminals.has(terminal.id)}
-                          onCheckedChange={() => handleToggleTerminal(terminal.id)}
+                          onCheckedChange={() => { handleToggleTerminal(terminal.id); }}
                           disabled={isInvoking}
                         />
                         <div className="flex-1 flex items-center gap-2">
@@ -274,7 +274,7 @@ export function InvokeClaudeModal({
             {hasExecutionResults ? 'Close' : 'Cancel'}
           </Button>
           {!hasExecutionResults && (
-            <Button onClick={handleInvoke} disabled={!canInvoke}>
+            <Button onClick={() => { void handleInvoke(); }} disabled={!canInvoke}>
               {isInvoking ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />

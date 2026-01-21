@@ -223,7 +223,7 @@ async function initializeApp(): Promise<void> {
 
     // Step 2: Run database migrations to ensure schema is up to date
     logger.info('Running database migrations...');
-    await databaseService.runMigrations();
+    databaseService.runMigrations();
     logger.info('Database migrations completed successfully');
 
     // Step 3: Create main window (needed for terminal IPC handlers)
@@ -239,7 +239,7 @@ async function initializeApp(): Promise<void> {
 
     // Show error dialog to user
     const { dialog } = await import('electron');
-    await dialog.showErrorBox(
+    dialog.showErrorBox(
       'Initialization Error',
       `Failed to start Claude Tasks: ${error instanceof Error ? error.message : 'Unknown error'}\n\nThe application will now exit.`
     );
@@ -255,7 +255,7 @@ app.on('ready', () => {
 });
 
 // Handle before-quit (set quitting flag to allow window close and cleanup)
-app.on('before-quit', async () => {
+app.on('before-quit', () => {
   trayService.setQuitting(true);
 
   // Kill all active terminal processes

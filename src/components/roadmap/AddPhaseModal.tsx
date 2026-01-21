@@ -88,7 +88,7 @@ export function AddPhaseModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Name Input */}
             <div className="space-y-2">
@@ -99,7 +99,7 @@ export function AddPhaseModal({
                 id="phase-name"
                 placeholder="e.g., Foundation, Core Features, Polish"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); }}
                 required
                 autoFocus
               />
@@ -112,7 +112,7 @@ export function AddPhaseModal({
                 id="phase-description"
                 placeholder="Describe what this phase will accomplish..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); }}
                 rows={4}
               />
             </div>

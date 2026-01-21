@@ -21,11 +21,11 @@ import type { MemoryType, CreateMemoryInput, Memory } from '@/types/ipc';
 // Constants
 // ============================================================================
 
-const MEMORY_TYPE_FILTERS: Array<{
+const MEMORY_TYPE_FILTERS: {
   value: MemoryType | 'all';
   label: string;
   count?: number;
-}> = [
+}[] = [
   { value: 'all', label: 'All' },
   { value: 'session', label: 'Sessions' },
   { value: 'pr_review', label: 'PR Reviews' },
@@ -148,7 +148,7 @@ export function ContextPage() {
               Project knowledge base and session insights
             </p>
           </div>
-          <Button onClick={() => setIsAddModalOpen(true)}>
+          <Button onClick={() => { setIsAddModalOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             Add Memory
           </Button>
@@ -202,7 +202,7 @@ export function ContextPage() {
                   <Input
                     placeholder="Search memories..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setSearchQuery(e.target.value); }}
                     className="pl-9"
                   />
                 </div>
@@ -217,7 +217,7 @@ export function ContextPage() {
                         selectedTypeFilter === filter.value ? 'default' : 'outline'
                       }
                       className="cursor-pointer transition-colors"
-                      onClick={() => setSelectedTypeFilter(filter.value)}
+                      onClick={() => { setSelectedTypeFilter(filter.value); }}
                     >
                       {filter.label}
                       <span className="ml-1.5 text-xs">
@@ -250,7 +250,7 @@ export function ContextPage() {
                       : 'Try adjusting your search query or filters to find what you are looking for.'}
                   </p>
                   {memoriesArray.length === 0 && (
-                    <Button onClick={() => setIsAddModalOpen(true)}>
+                    <Button onClick={() => { setIsAddModalOpen(true); }}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Your First Memory
                     </Button>
@@ -275,7 +275,7 @@ export function ContextPage() {
       {/* Add Memory Modal */}
       <AddMemoryModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => { setIsAddModalOpen(false); }}
         onSubmit={handleCreateMemory}
       />
     </div>

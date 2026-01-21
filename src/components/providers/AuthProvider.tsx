@@ -47,17 +47,17 @@ const initialState: AuthContextValue = {
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  login: async () => {
-    throw new Error('AuthProvider not initialized');
+  login: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
   },
-  register: async () => {
-    throw new Error('AuthProvider not initialized');
+  register: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
   },
-  logout: async () => {
-    throw new Error('AuthProvider not initialized');
+  logout: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
   },
-  updateProfile: async () => {
-    throw new Error('AuthProvider not initialized');
+  updateProfile: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
   },
 };
 
@@ -150,7 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Token is managed by main process - no need to store it here
 
           toast.success('Login successful', {
-            description: `Welcome back, ${response.user.name || response.user.email}!`,
+            description: `Welcome back, ${response.user.name ?? response.user.email}!`,
           });
         }
       } catch (error) {
@@ -182,7 +182,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Token is managed by main process - no need to store it here
 
           toast.success('Registration successful', {
-            description: `Welcome, ${response.user.name || response.user.email}!`,
+            description: `Welcome, ${response.user.name ?? response.user.email}!`,
           });
         }
       } catch (error) {

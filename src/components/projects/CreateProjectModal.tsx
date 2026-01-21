@@ -154,7 +154,7 @@ export function CreateProjectModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Project Name */}
             <div className="space-y-2">
@@ -187,7 +187,7 @@ export function CreateProjectModal({
                 id="description"
                 placeholder="Describe your project..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); }}
                 disabled={isLoading}
                 rows={3}
               />
@@ -202,14 +202,14 @@ export function CreateProjectModal({
                     id="targetPath"
                     placeholder="No directory selected"
                     value={targetPath}
-                    onChange={(e) => setTargetPath(e.target.value)}
+                    onChange={(e) => { setTargetPath(e.target.value); }}
                     disabled={isLoading}
                     className="pr-8"
                   />
                   {targetPath && (
                     <button
                       type="button"
-                      onClick={() => setTargetPath('')}
+                      onClick={() => { setTargetPath(''); }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       disabled={isLoading}
                     >
@@ -220,7 +220,7 @@ export function CreateProjectModal({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleBrowseDirectory}
+                  onClick={() => { void handleBrowseDirectory(); }}
                   disabled={isLoading}
                 >
                   <Folder className="h-4 w-4 mr-2" />
@@ -255,7 +255,7 @@ export function CreateProjectModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => { handleOpenChange(false); }}
               disabled={isLoading}
             >
               Cancel

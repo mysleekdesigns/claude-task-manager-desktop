@@ -237,7 +237,7 @@ export function ProjectSettingsPage() {
               id="name"
               placeholder="Enter project name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); }}
             />
           </div>
           <div className="space-y-2">
@@ -246,7 +246,7 @@ export function ProjectSettingsPage() {
               id="description"
               placeholder="Enter project description (optional)"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => { setDescription(e.target.value); }}
               rows={4}
             />
           </div>
@@ -305,7 +305,7 @@ export function ProjectSettingsPage() {
               id="githubRepo"
               placeholder="https://github.com/username/repository"
               value={githubRepo}
-              onChange={(e) => setGithubRepo(e.target.value)}
+              onChange={(e) => { setGithubRepo(e.target.value); }}
             />
             <p className="text-xs text-muted-foreground">
               Enter the full URL to your GitHub repository
@@ -339,7 +339,7 @@ export function ProjectSettingsPage() {
             </div>
             <Button
               variant="destructive"
-              onClick={() => setDeleteDialogOpen(true)}
+              onClick={() => { setDeleteDialogOpen(true); }}
             >
               Delete Project
             </Button>
@@ -361,7 +361,7 @@ export function ProjectSettingsPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={() => { setDeleteDialogOpen(false); }}
               disabled={deleteProject.loading}
             >
               Cancel

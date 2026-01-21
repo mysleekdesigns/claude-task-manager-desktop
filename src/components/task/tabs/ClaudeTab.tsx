@@ -95,7 +95,7 @@ export function ClaudeTab({ task, onStatusChange }: ClaudeTabProps) {
       const project = await invoke('projects:get', task.projectId);
       console.log('[ClaudeTab] Fetched project:', project);
 
-      if (!project || !project.targetPath || project.targetPath.trim() === '') {
+      if (!project?.targetPath || project.targetPath.trim() === '') {
         toast.error('Project path not configured');
         return;
       }

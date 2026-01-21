@@ -42,7 +42,7 @@ export interface ClaudeStatus {
  * ```
  */
 export function useClaudeStatus(taskId: string) {
-  return useIPCQuery('claude:getTaskStatus', [{ taskId }] as any, {
+  return useIPCQuery('claude:getTaskStatus', [{ taskId }], {
     enabled: Boolean(taskId),
     refetchOnArgsChange: true,
   });

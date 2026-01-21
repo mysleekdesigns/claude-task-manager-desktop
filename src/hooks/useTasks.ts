@@ -41,7 +41,7 @@ import type {
  * ```
  */
 export function useTasks(projectId: string, filters?: TaskListFilters) {
-  return useIPCQuery('tasks:list', [projectId, filters] as any, {
+  return useIPCQuery('tasks:list', [projectId, filters], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });

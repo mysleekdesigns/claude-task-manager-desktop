@@ -76,7 +76,7 @@ async function handleListMemories(
   // Parse metadata for each memory
   return memories.map((memory) => ({
     ...memory,
-    metadata: JSON.parse(memory.metadata || '{}'),
+    metadata: JSON.parse(memory.metadata || '{}') as Record<string, unknown>,
   }));
 }
 
@@ -134,7 +134,7 @@ async function handleGetMemory(
 
   return {
     ...memory,
-    metadata: JSON.parse(memory.metadata || '{}'),
+    metadata: JSON.parse(memory.metadata || '{}') as Record<string, unknown>,
   };
 }
 
@@ -181,10 +181,10 @@ async function handleSearchMemories(
   const where: {
     projectId: string;
     type?: string;
-    OR?: Array<{
+    OR?: {
       title?: { contains: string; mode: 'insensitive' };
       content?: { contains: string; mode: 'insensitive' };
-    }>;
+    }[];
   } = {
     projectId: input.projectId,
   };
@@ -208,7 +208,7 @@ async function handleSearchMemories(
   // Parse metadata for each memory
   return memories.map((memory) => ({
     ...memory,
-    metadata: JSON.parse(memory.metadata || '{}'),
+    metadata: JSON.parse(memory.metadata || '{}') as Record<string, unknown>,
   }));
 }
 

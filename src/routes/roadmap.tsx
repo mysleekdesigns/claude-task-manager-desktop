@@ -223,11 +223,11 @@ export function RoadmapPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => setIsFeatureModalOpen(true)} variant="outline">
+            <Button onClick={() => { setIsFeatureModalOpen(true); }} variant="outline">
               <Plus className="mr-2 h-4 w-4" />
               Add Feature
             </Button>
-            <Button onClick={() => setIsPhaseModalOpen(true)}>
+            <Button onClick={() => { setIsPhaseModalOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               Add Phase
             </Button>
@@ -296,7 +296,7 @@ export function RoadmapPage() {
                   <p className="text-muted-foreground mb-4">
                     Create your first phase to start planning your roadmap.
                   </p>
-                  <Button onClick={() => setIsPhaseModalOpen(true)}>
+                  <Button onClick={() => { setIsPhaseModalOpen(true); }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Phase
                   </Button>
@@ -344,7 +344,7 @@ export function RoadmapPage() {
                   <p className="text-muted-foreground mb-4">
                     Add features to start planning your product.
                   </p>
-                  <Button onClick={() => setIsFeatureModalOpen(true)}>
+                  <Button onClick={() => { setIsFeatureModalOpen(true); }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Feature
                   </Button>
@@ -402,7 +402,7 @@ export function RoadmapPage() {
       {/* Modals */}
       <AddPhaseModal
         isOpen={isPhaseModalOpen}
-        onClose={() => setIsPhaseModalOpen(false)}
+        onClose={() => { setIsPhaseModalOpen(false); }}
         onSubmit={handleAddPhase}
         nextOrder={sortedPhases.length + 1}
       />

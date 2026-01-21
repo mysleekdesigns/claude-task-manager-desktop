@@ -23,12 +23,12 @@ export async function initializeDatabase(runMigrations = false): Promise<void> {
     // Run migrations if requested (production mode)
     if (runMigrations) {
       console.log('[Database] Running migrations...');
-      await databaseService.runMigrations();
+      databaseService.runMigrations();
       console.log('[Database] Migrations completed');
     }
 
     // Log database stats
-    const stats = await databaseService.getStats();
+    const stats = databaseService.getStats();
     console.log(`[Database] Ready at: ${stats.path}`);
     console.log(`[Database] Size: ${stats.sizeFormatted}`);
   } catch (error) {

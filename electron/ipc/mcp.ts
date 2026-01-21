@@ -221,9 +221,9 @@ export interface PresetMcpServer {
 /**
  * Get list of preset MCP servers
  */
-async function handleGetPresetServers(
+function handleGetPresetServers(
   _event: IpcMainInvokeEvent
-): Promise<PresetMcpServer[]> {
+): PresetMcpServer[] {
   const PRESET_SERVERS: PresetMcpServer[] = [
     // Documentation
     {
@@ -350,11 +350,11 @@ async function handleWriteConfig(
 /**
  * Read the current Claude Desktop config file
  */
-async function handleReadConfig(
+function handleReadConfig(
   _event: IpcMainInvokeEvent
-): Promise<ClaudeDesktopConfig | null> {
+): ClaudeDesktopConfig | null {
   try {
-    const config = await mcpConfigService.readCurrentConfig();
+    const config = mcpConfigService.readCurrentConfig();
     return config;
   } catch (error) {
     throw new Error(

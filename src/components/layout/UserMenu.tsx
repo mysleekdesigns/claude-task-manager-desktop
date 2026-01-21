@@ -47,7 +47,7 @@ export function UserMenu() {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      void navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -98,7 +98,7 @@ export function UserMenu() {
           <span>Settings</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} variant="destructive">
+        <DropdownMenuItem onClick={() => { void handleLogout(); }} variant="destructive">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Logout</span>
         </DropdownMenuItem>

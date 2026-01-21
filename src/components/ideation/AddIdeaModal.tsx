@@ -63,7 +63,7 @@ export function AddIdeaModal({ isOpen, onClose, onSubmit }: AddIdeaModalProps) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
-        error.issues.forEach((err: z.ZodIssue) => {
+        error.issues.forEach((err) => {
           if (err.path[0]) {
             newErrors[err.path[0].toString()] = err.message;
           }
@@ -126,7 +126,7 @@ export function AddIdeaModal({ isOpen, onClose, onSubmit }: AddIdeaModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           {/* Title Input */}
           <div className="space-y-2">
             <Label htmlFor="title">

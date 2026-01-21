@@ -38,7 +38,8 @@ interface ShortcutSection {
   }[];
 }
 
-const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+// @ts-expect-error navigator.platform is deprecated but still works
+const isMac = (navigator.platform?.toUpperCase().includes('MAC') ?? navigator.userAgent.toUpperCase().includes('MAC'));
 const modKey = isMac ? '⌘' : 'Ctrl';
 
 const shortcutSections: ShortcutSection[] = [

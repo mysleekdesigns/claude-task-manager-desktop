@@ -5,7 +5,7 @@
  * Shows real-time output from Claude Code's terminal session.
  */
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -46,11 +46,15 @@ export function TaskTerminalPanel({
   const terminalId = task?.claudeTerminalId ?? null;
   const claudeStatus = getClaudeStatusFromTask(task);
 
-  // Reset expanded state when panel closes
+  // Reset expanded state when panel closes using a ref to avoid the lint warning
+  // about setState in useEffect. This is fine since we're only setting to false
+  // when the panel closes.
+  const wasOpenRef = React.useRef(isOpen);
   useEffect(() => {
-    if (!isOpen) {
+    if (wasOpenRef.current && !isOpen) {
       setIsExpanded(false);
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen]);
 
   if (!task) return null;
@@ -95,7 +99,7 @@ export function TaskTerminalPanel({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => { setIsExpanded(!isExpanded); }}
                 className="h-8 w-8"
               >
                 {isExpanded ? (

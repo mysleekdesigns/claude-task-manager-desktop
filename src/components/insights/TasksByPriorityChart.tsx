@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import type { Priority } from '@/types/ipc';
 
 interface TasksByPriorityChartProps {
-  data: Array<{
+  data: {
     priority: Priority;
     count: number;
-  }>;
+  }[];
 }
 
 const PRIORITY_COLORS: Record<Priority, string> = {
@@ -58,7 +58,7 @@ export function TasksByPriorityChart({ data }: TasksByPriorityChartProps) {
                 <div className="h-8 bg-muted rounded-md overflow-hidden">
                   <div
                     className={`h-full ${PRIORITY_COLORS[item.priority]} transition-all duration-500 flex items-center justify-end pr-2`}
-                    style={{ width: `${barWidth}%` }}
+                    style={{ width: `${String(barWidth)}%` }}
                   >
                     {item.count > 0 && (
                       <span className="text-xs font-semibold text-white drop-shadow-md">

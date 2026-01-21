@@ -160,7 +160,7 @@ export function ChangelogPage() {
               onExport={handleExport}
               disabled={(entries?.length ?? 0) === 0 || exportChangelog.isPending}
             />
-            <Button onClick={() => setIsAddModalOpen(true)}>
+            <Button onClick={() => { setIsAddModalOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               Add Entry
             </Button>
@@ -224,7 +224,7 @@ export function ChangelogPage() {
                   <p className="text-muted-foreground mb-4">
                     Start documenting your project's changes by adding your first entry.
                   </p>
-                  <Button onClick={() => setIsAddModalOpen(true)}>
+                  <Button onClick={() => { setIsAddModalOpen(true); }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add First Entry
                   </Button>
@@ -253,7 +253,7 @@ export function ChangelogPage() {
                   <p className="text-muted-foreground mb-4">
                     Start documenting your project's changes by adding your first entry.
                   </p>
-                  <Button onClick={() => setIsAddModalOpen(true)}>
+                  <Button onClick={() => { setIsAddModalOpen(true); }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add First Entry
                   </Button>
@@ -298,7 +298,7 @@ export function ChangelogPage() {
       {/* Add Changelog Modal */}
       <AddChangelogModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => { setIsAddModalOpen(false); }}
         onSubmit={handleCreateEntry}
       />
     </div>

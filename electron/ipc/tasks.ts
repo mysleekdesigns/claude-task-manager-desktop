@@ -136,7 +136,7 @@ async function handleListTasks(
   // Transform tags from JSON string to array
   return tasks.map((task) => ({
     ...task,
-    tags: JSON.parse(task.tags || '[]'),
+    tags: JSON.parse(task.tags || '[]') as string[],
   }));
 }
 
@@ -226,7 +226,7 @@ async function handleGetTask(
 
   return {
     ...task,
-    tags: JSON.parse(task.tags || '[]'),
+    tags: JSON.parse(task.tags || '[]') as string[],
   };
 }
 
@@ -271,7 +271,7 @@ async function handleUpdateTask(
 
     return {
       ...task,
-      tags: JSON.parse(task.tags || '[]'),
+      tags: JSON.parse(task.tags || '[]') as string[],
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'P2025') {
@@ -314,7 +314,7 @@ async function handleUpdateTaskStatus(
 
     return {
       ...task,
-      tags: JSON.parse(task.tags || '[]'),
+      tags: JSON.parse(task.tags || '[]') as string[],
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'P2025') {
@@ -456,7 +456,7 @@ async function handleGetSubtasks(
 
   return subtasks.map((task) => ({
     ...task,
-    tags: JSON.parse(task.tags || '[]'),
+    tags: JSON.parse(task.tags || '[]') as string[],
   }));
 }
 

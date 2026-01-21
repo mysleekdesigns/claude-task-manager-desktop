@@ -52,6 +52,23 @@ export function ApiKeysSection() {
   // Handlers
   // ============================================================================
 
+  const handleValidateClaudeKey = useCallback(async () => {
+    try {
+      const result = await validateKeyMutation.mutate();
+      setValidationResult(result);
+
+      if (result.valid) {
+        toast.success(`API key validated successfully`);
+      } else {
+        toast.error(result.error ?? 'API key validation failed');
+      }
+    } catch (error) {
+      console.error('Failed to validate API key:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to validate API key');
+      setValidationResult({ valid: false, error: 'Validation failed' });
+    }
+  }, [validateKeyMutation]);
+
   const handleSaveClaudeKey = useCallback(async () => {
     if (!claudeApiKey.trim()) {
       toast.error('Please enter an API key');
@@ -77,24 +94,7 @@ export function ApiKeysSection() {
       console.error('Failed to save API key:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save API key');
     }
-  }, [claudeApiKey, saveKeyMutation, refetchHasKey]);
-
-  const handleValidateClaudeKey = useCallback(async () => {
-    try {
-      const result = await validateKeyMutation.mutate();
-      setValidationResult(result);
-
-      if (result.valid) {
-        toast.success(`API key validated successfully`);
-      } else {
-        toast.error(result.error || 'API key validation failed');
-      }
-    } catch (error) {
-      console.error('Failed to validate API key:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to validate API key');
-      setValidationResult({ valid: false, error: 'Validation failed' });
-    }
-  }, [validateKeyMutation]);
+  }, [claudeApiKey, saveKeyMutation, refetchHasKey, handleValidateClaudeKey]);
 
   const handleDeleteClaudeKey = useCallback(async () => {
     try {
@@ -192,13 +192,13 @@ export function ApiKeysSection() {
                     type={showClaudeKey ? 'text' : 'password'}
                     placeholder={hasClaudeKey ? '••••••••••••••••••••••••••••' : 'sk-ant-api03-...'}
                     value={claudeApiKey}
-                    onChange={(e) => setClaudeApiKey(e.target.value)}
+                    onChange={(e) => { setClaudeApiKey(e.target.value); }}
                     disabled={saveKeyMutation.loading}
                     className="pr-10"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowClaudeKey(!showClaudeKey)}
+                    onClick={() => { setShowClaudeKey(!showClaudeKey); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     tabIndex={-1}
                   >
@@ -210,7 +210,7 @@ export function ApiKeysSection() {
                   </button>
                 </div>
                 <Button
-                  onClick={handleSaveClaudeKey}
+                  onClick={() => { void handleSaveClaudeKey(); }}
                   disabled={!claudeApiKey.trim() || saveKeyMutation.loading}
                   className="whitespace-nowrap"
                 >
@@ -239,7 +239,7 @@ export function ApiKeysSection() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  onClick={handleValidateClaudeKey}
+                  onClick={() => { void handleValidateClaudeKey(); }}
                   disabled={validateKeyMutation.loading}
                 >
                   {validateKeyMutation.loading && (
@@ -249,7 +249,7 @@ export function ApiKeysSection() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={handleDeleteClaudeKey}
+                  onClick={() => { void handleDeleteClaudeKey(); }}
                   disabled={deleteKeyMutation.loading}
                   className="text-destructive hover:text-destructive"
                 >

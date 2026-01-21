@@ -84,7 +84,7 @@ export function KanbanColumn({
         <div className="flex items-center gap-2 flex-1">
           {collapsible && (
             <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={() => { setIsCollapsed(!isCollapsed); }}
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label={isCollapsed ? 'Expand column' : 'Collapse column'}
             >
@@ -110,7 +110,7 @@ export function KanbanColumn({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={() => onAddTask(id)}
+              onClick={() => { onAddTask(id); }}
               aria-label="Add task"
             >
               <Plus className="h-4 w-4" />
@@ -135,7 +135,7 @@ export function KanbanColumn({
                   <TaskCard
                     key={task.id}
                     task={task}
-                    onClick={onTaskClick ? () => onTaskClick(task) : undefined}
+                    onClick={onTaskClick ? () => { onTaskClick(task); } : undefined}
                     onEdit={onTaskEdit}
                     onDelete={onTaskDelete}
                     onViewTerminal={onViewTerminal}
@@ -154,7 +154,7 @@ export function KanbanColumn({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onAddTask(id)}
+                      onClick={() => { onAddTask(id); }}
                       className="mt-2"
                     >
                       <Plus className="mr-2 h-4 w-4" />
@@ -172,7 +172,7 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onAddTask(id)}
+                onClick={() => { onAddTask(id); }}
                 className="w-full justify-start text-muted-foreground hover:text-foreground"
               >
                 <Plus className="mr-2 h-4 w-4" />

@@ -24,7 +24,7 @@ import type {
  * @returns Query result with memories data
  */
 export function useMemories(projectId: string, filters?: MemoryListFilters) {
-  return useIPCQuery('memories:list', [projectId, filters] as any, {
+  return useIPCQuery('memories:list', [projectId, filters], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -37,7 +37,7 @@ export function useMemories(projectId: string, filters?: MemoryListFilters) {
  * @returns Query result with memory data
  */
 export function useMemory(memoryId: string) {
-  return useIPCQuery('memories:get', [memoryId] as any, {
+  return useIPCQuery('memories:get', [memoryId], {
     enabled: Boolean(memoryId),
   });
 }
@@ -81,7 +81,7 @@ export function useDeleteMemory() {
  * @returns Object with memories data and mutation functions
  */
 export function useMemoryManager(projectId: string, filters?: MemoryListFilters) {
-  const { data: memories = [], loading, error, refetch } = useMemories(projectId, filters);
+  const { data: memories, loading, error, refetch } = useMemories(projectId, filters);
   const createMemory = useCreateMemory();
   const updateMemory = useUpdateMemory();
   const deleteMemory = useDeleteMemory();

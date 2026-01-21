@@ -73,7 +73,7 @@ export function TerminalsPage() {
 
   // Fetch terminals for the current project
   const {
-    data: terminals = [],
+    data: terminals,
     loading,
     error,
     refetch,
@@ -209,7 +209,7 @@ export function TerminalsPage() {
 
   const handleTerminalExit = useCallback(
     (terminalId: string, exitCode: number) => {
-      console.log(`Terminal ${terminalId} exited with code ${exitCode}`);
+      console.log(`Terminal ${terminalId} exited with code ${String(exitCode)}`);
       // Update local status to 'exited'
       setTerminalStatuses((prev) => ({
         ...prev,
@@ -242,7 +242,7 @@ export function TerminalsPage() {
 
         // Note: In the future, we could add a terminal:update IPC handler to
         // persist the worktreeId association in the database
-        console.log(`Terminal ${terminalId} changed to worktree ${worktreeId || 'default'}`);
+        console.log(`Terminal ${terminalId} changed to worktree ${worktreeId ?? 'default'}`);
       } catch (err) {
         console.error('Failed to change worktree:', err);
         alert('Failed to change worktree. Please try again.');
@@ -280,7 +280,7 @@ export function TerminalsPage() {
                 No Terminals Open
               </h3>
               <p className="text-sm text-muted-foreground">
-                Click "New Terminal" to get started
+                Click &quot;New Terminal&quot; to get started
               </p>
             </div>
           </div>
@@ -309,15 +309,15 @@ export function TerminalsPage() {
             }}
             projectId={currentProject.id}
             isExpanded={true}
-            onClose={handleCloseTerminal}
+            onClose={(id: string) => { void handleCloseTerminal(id); }}
             onExpand={handleExpandTerminal}
             onCollapse={handleCollapseExpanded}
-            onLaunchClaude={handleLaunchClaude}
-            onWorktreeChange={handleWorktreeChange}
+            onLaunchClaude={(id: string) => { void handleLaunchClaude(id); }}
+            onWorktreeChange={(terminalId: string, worktreeId: string | null, path: string) => { void handleWorktreeChange(terminalId, worktreeId, path); }}
           >
             <XTermWrapper
               terminalId={expandedTerminal.id}
-              onExit={(exitCode) => handleTerminalExit(expandedTerminal.id, exitCode)}
+              onExit={(exitCode) => { handleTerminalExit(expandedTerminal.id, exitCode); }}
             />
           </TerminalPane>
         </div>
@@ -344,15 +344,15 @@ export function TerminalsPage() {
               }}
               projectId={currentProject.id}
               isExpanded={false}
-              onClose={handleCloseTerminal}
+              onClose={(id: string) => { void handleCloseTerminal(id); }}
               onExpand={handleExpandTerminal}
               onCollapse={handleCollapseExpanded}
-              onLaunchClaude={handleLaunchClaude}
-              onWorktreeChange={handleWorktreeChange}
+              onLaunchClaude={(id: string) => { void handleLaunchClaude(id); }}
+              onWorktreeChange={(terminalId: string, worktreeId: string | null, path: string) => { void handleWorktreeChange(terminalId, worktreeId, path); }}
             >
               <XTermWrapper
                 terminalId={terminal.id}
-                onExit={(exitCode) => handleTerminalExit(terminal.id, exitCode)}
+                onExit={(exitCode) => { handleTerminalExit(terminal.id, exitCode); }}
               />
             </TerminalPane>
           </div>
@@ -391,7 +391,7 @@ export function TerminalsPage() {
       <TerminalToolbar
         terminalCount={activeTerminals.length}
         maxTerminals={MAX_TERMINALS}
-        onNewTerminal={handleCreateTerminal}
+        onNewTerminal={() => { void handleCreateTerminal(); }}
         onInvokeClaudeAll={handleInvokeClaudeAll}
       />
 
@@ -422,7 +422,7 @@ export function TerminalsPage() {
       {/* Invoke Claude All Modal */}
       <InvokeClaudeModal
         open={showInvokeClaudeModal}
-        onClose={() => setShowInvokeClaudeModal(false)}
+        onClose={() => { setShowInvokeClaudeModal(false); }}
         terminals={activeTerminals.map((t) => ({
           id: t.id,
           name: t.name,

@@ -94,7 +94,7 @@ class ClaudeCodeService {
     try {
       // Build the task prompt FIRST
       const taskPrompt = this.buildTaskPrompt(options);
-      console.log(`[ClaudeCodeService] Built task prompt (${taskPrompt.length} chars)`);
+      console.log(`[ClaudeCodeService] Built task prompt (${String(taskPrompt.length)} chars)`);
       console.log(`[ClaudeCodeService] Task prompt preview: ${taskPrompt.substring(0, 200)}...`);
 
       // Build the Claude Code command with the prompt included as an argument
@@ -108,17 +108,17 @@ class ClaudeCodeService {
         onData: (data: string) => {
           // Debug: log received data
           const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
-          console.log(`[ClaudeCodeService] onData received ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+          console.log(`[ClaudeCodeService] onData received ${String(data.length)} bytes, preview: ${JSON.stringify(preview)}`);
 
           // Stream output to renderer
           mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
         },
-        onExit: async (code: number) => {
+        onExit: (code: number) => {
           // Debug: log exit event
-          console.log(`[ClaudeCodeService] onExit called with exit code: ${code}`);
+          console.log(`[ClaudeCodeService] onExit called with exit code: ${String(code)}`);
 
           // Update task status based on exit code
-          await this.handleTaskExit(options.taskId, code, mainWindow);
+          void this.handleTaskExit(options.taskId, code, mainWindow);
 
           // Notify renderer of process exit
           mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
@@ -214,9 +214,9 @@ class ClaudeCodeService {
         // Stream output to renderer
         mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
       },
-      onExit: async (code: number) => {
+      onExit: (code: number) => {
         // Update task status based on exit code
-        await this.handleTaskExit(options.taskId, code, mainWindow);
+        void this.handleTaskExit(options.taskId, code, mainWindow);
 
         // Notify renderer of process exit
         mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
@@ -373,12 +373,12 @@ class ClaudeCodeService {
 
     // Max turns
     if (options.maxTurns !== undefined) {
-      parts.push(`--max-turns ${options.maxTurns}`);
+      parts.push(`--max-turns ${String(options.maxTurns)}`);
     }
 
     // Max budget
     if (options.maxBudget !== undefined) {
-      parts.push(`--max-budget ${options.maxBudget}`);
+      parts.push(`--max-budget ${String(options.maxBudget)}`);
     }
 
     // Allowed tools
@@ -501,7 +501,7 @@ class ClaudeCodeService {
       // This happens when the terminal is killed after pausing
       if (task?.claudeStatus === 'PAUSED') {
         console.log(
-          `[ClaudeCodeService] Task ${taskId} is PAUSED, not updating status on exit (exit code: ${exitCode})`
+          `[ClaudeCodeService] Task ${taskId} is PAUSED, not updating status on exit (exit code: ${String(exitCode)})`
         );
 
         // Still clear the terminal ID since the process has exited
@@ -534,7 +534,7 @@ class ClaudeCodeService {
         data: {
           taskId,
           type: exitCode === 0 ? 'success' : 'error',
-          message: `Claude Code ${claudeStatus.toLowerCase()} with exit code ${exitCode}`,
+          message: `Claude Code ${claudeStatus.toLowerCase()} with exit code ${String(exitCode)}`,
           metadata: JSON.stringify({ exitCode }),
         },
       });
@@ -547,7 +547,7 @@ class ClaudeCodeService {
       });
 
       console.log(
-        `[ClaudeCodeService] Task ${taskId} completed with status ${claudeStatus} (exit code: ${exitCode})`
+        `[ClaudeCodeService] Task ${taskId} completed with status ${claudeStatus} (exit code: ${String(exitCode)})`
       );
     } catch (error) {
       console.error(

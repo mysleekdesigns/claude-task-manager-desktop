@@ -55,7 +55,7 @@ export function ClaudeCodeSection() {
   useEffect(() => {
     if (preferences) {
       // Load auto-launch from main preferences
-      setAutoLaunchClaude(preferences.autoLaunchClaude || false);
+      setAutoLaunchClaude(preferences.autoLaunchClaude ?? false);
 
       // Parse Claude Code settings from keyboardShortcuts field
       // (using this field as a temporary storage until a proper field is added)
@@ -279,7 +279,7 @@ export function ClaudeCodeSection() {
               min="1"
               max="500"
               value={defaultMaxTurns}
-              onChange={(e) => handleMaxTurnsChange(e.target.value)}
+              onChange={(e) => { handleMaxTurnsChange(e.target.value); }}
               className="w-32"
             />
             <span className="text-sm text-muted-foreground">
@@ -319,7 +319,7 @@ export function ClaudeCodeSection() {
                 max="100"
                 step="0.5"
                 value={defaultMaxBudget}
-                onChange={(e) => handleMaxBudgetChange(e.target.value)}
+                onChange={(e) => { handleMaxBudgetChange(e.target.value); }}
                 className="w-32 pl-7"
               />
             </div>
@@ -354,7 +354,7 @@ export function ClaudeCodeSection() {
             id="auto-approve"
             placeholder="e.g., Read, Edit, Bash:git:*, Write"
             value={autoApproveTools}
-            onChange={(e) => setAutoApproveTools(e.target.value)}
+            onChange={(e) => { setAutoApproveTools(e.target.value); }}
           />
           <p className="text-xs text-muted-foreground">
             Leave empty to manually approve all tool usage. Common tools: Read, Edit, Write, Bash
@@ -383,7 +383,7 @@ export function ClaudeCodeSection() {
             id="custom-prompt"
             placeholder="e.g., Follow React best practices. Use TypeScript strict mode. Add comprehensive tests."
             value={customSystemPrompt}
-            onChange={(e) => setCustomSystemPrompt(e.target.value)}
+            onChange={(e) => { setCustomSystemPrompt(e.target.value); }}
             rows={4}
             className="resize-none"
           />
@@ -412,7 +412,7 @@ export function ClaudeCodeSection() {
         {/* Save Button */}
         <div className="flex justify-end pt-4 border-t">
           <Button
-            onClick={handleSaveSettings}
+            onClick={() => { void handleSaveSettings(); }}
             disabled={!hasChanges() || savePreferencesMutation.loading}
           >
             {savePreferencesMutation.loading && (

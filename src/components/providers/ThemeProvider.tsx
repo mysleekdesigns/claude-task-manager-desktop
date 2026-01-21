@@ -11,14 +11,14 @@ interface ThemeProviderProps {
 
 interface ThemeProviderState {
   theme: Theme;
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Theme) => Promise<void>;
   resolvedTheme: 'dark' | 'light';
   systemTheme: 'dark' | 'light';
 }
 
 const initialState: ThemeProviderState = {
   theme: 'system',
-  setTheme: () => null,
+  setTheme: async () => { /* noop */ },
   resolvedTheme: 'dark',
   systemTheme: 'dark',
 };
@@ -100,7 +100,7 @@ export function ThemeProvider({
     }
 
     if (!isInitialized) {
-      loadThemeFromDatabase();
+      void loadThemeFromDatabase();
     }
   }, [user?.id, storageKey, isInitialized]);
 

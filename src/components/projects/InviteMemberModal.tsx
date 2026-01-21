@@ -277,7 +277,7 @@ export function InviteMemberModal({
             <Label htmlFor="role">Role</Label>
             <Select
               value={role}
-              onValueChange={(value) => setRole(value as ProjectRole)}
+              onValueChange={(value) => { setRole(value as ProjectRole); }}
               disabled={isLoading}
             >
               <SelectTrigger id="role">
@@ -316,7 +316,7 @@ export function InviteMemberModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleClose(false)}
+              onClick={() => { handleClose(false); }}
               disabled={isLoading}
             >
               Cancel

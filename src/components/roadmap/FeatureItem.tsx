@@ -122,7 +122,7 @@ export function FeatureItem({
 
         {/* Actions Menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuTrigger asChild onClick={(e) => { e.stopPropagation(); }}>
             <Button
               variant="ghost"
               size="icon"
@@ -132,11 +132,11 @@ export function FeatureItem({
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuContent align="end" onClick={(e) => { e.stopPropagation(); }}>
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {onEdit && (
-              <DropdownMenuItem onClick={() => onEdit(feature)}>
+              <DropdownMenuItem onClick={() => { onEdit(feature); }}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
@@ -145,7 +145,7 @@ export function FeatureItem({
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => onDelete(feature)}
+                  onClick={() => { onDelete(feature); }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

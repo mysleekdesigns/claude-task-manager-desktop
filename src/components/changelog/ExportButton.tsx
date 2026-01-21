@@ -37,7 +37,7 @@ export function ExportButton({ onExport, disabled }: ExportButtonProps) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `changelog-${new Date().toISOString().split('T')[0]}.md`;
+      link.download = `changelog-${new Date().toISOString().split('T')[0] ?? 'export'}.md`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -45,7 +45,7 @@ export function ExportButton({ onExport, disabled }: ExportButtonProps) {
 
       // Show success
       setIsSuccess(true);
-      setTimeout(() => setIsSuccess(false), 2000);
+      setTimeout(() => { setIsSuccess(false); }, 2000);
     } catch (error) {
       console.error('Failed to export changelog:', error);
       alert('Failed to export changelog. Please try again.');
@@ -56,7 +56,7 @@ export function ExportButton({ onExport, disabled }: ExportButtonProps) {
 
   return (
     <Button
-      onClick={handleExport}
+      onClick={() => { void handleExport(); }}
       disabled={disabled || isExporting}
       variant="outline"
       className="gap-2"

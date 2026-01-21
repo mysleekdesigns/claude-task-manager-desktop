@@ -90,7 +90,7 @@ export function TeamManagementSection({
             <Button
               variant="default"
               size="sm"
-              onClick={() => setInviteModalOpen(true)}
+              onClick={() => { setInviteModalOpen(true); }}
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Invite Member

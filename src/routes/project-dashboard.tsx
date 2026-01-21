@@ -103,13 +103,13 @@ export function ProjectDashboard() {
   }
 
   // Calculate stats
-  const memberCount = project.members?.length || 0;
+  const memberCount = project.members?.length ?? 0;
   const tasksCount = 0; // Placeholder - will be real data later
   const completedTasksCount = 0; // Placeholder
   const activeTerminalsCount = 0; // Placeholder
 
   // Get team members to display (max 5)
-  const displayMembers = project.members?.slice(0, 5) || [];
+  const displayMembers = project.members?.slice(0, 5) ?? [];
   const hasMoreMembers = memberCount > 5;
 
   return (

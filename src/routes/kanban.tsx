@@ -174,7 +174,7 @@ export function KanbanPage() {
               {currentProject.name} - Manage your tasks with drag-and-drop workflow
             </p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Button onClick={() => { setIsCreateModalOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             New Task
           </Button>

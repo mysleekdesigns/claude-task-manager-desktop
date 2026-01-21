@@ -129,7 +129,7 @@ export function useClaudeCode() {
   const getTaskStatus = useCallback((task: Task): ClaudeCodeStatus => {
     return {
       taskId: task.id,
-      status: task.claudeStatus || 'IDLE',
+      status: task.claudeStatus ?? 'IDLE',
       sessionId: task.claudeSessionId || null,
       sessionName: task.claudeSessionName || null,
       startedAt: task.claudeStartedAt || null,

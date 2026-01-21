@@ -68,7 +68,7 @@ async function handleCreateTerminal(
   }
 
   // Generate terminal name if not provided
-  const terminalName = data.name || `Terminal ${Date.now()}`;
+  const terminalName = data.name ?? `Terminal ${String(Date.now())}`;
 
   // Create database record first
   const terminal = await prisma.terminal.create({
@@ -101,7 +101,7 @@ async function handleCreateTerminal(
           .deleteMany({
             where: { id: terminal.id },
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             // Log any unexpected errors (deleteMany doesn't throw P2025)
             console.error(
               `[Terminal IPC] Failed to delete terminal on exit:`,
@@ -126,7 +126,7 @@ async function handleCreateTerminal(
     // Clean up database record if terminal spawn failed
     await prisma.terminal.deleteMany({
       where: { id: terminal.id },
-    }).catch((deleteError) => {
+    }).catch((deleteError: unknown) => {
       console.error(
         `[Terminal IPC] Failed to clean up terminal record:`,
         deleteError
@@ -415,10 +415,10 @@ async function handleResumeTerminal(
  * Get buffered output for a terminal
  * This is used to retrieve any output that was sent before the renderer started listening
  */
-async function handleGetBuffer(
+function handleGetBuffer(
   _event: IpcMainInvokeEvent,
   terminalId: string
-): Promise<string[]> {
+): string[] {
   if (!terminalId) {
     throw IPCErrors.invalidArguments('Terminal ID is required');
   }
@@ -431,10 +431,10 @@ async function handleGetBuffer(
  * Clear buffered output for a terminal
  * This is used to prevent duplicate output after the renderer has read the buffer
  */
-async function handleClearOutputBuffer(
+function handleClearOutputBuffer(
   _event: IpcMainInvokeEvent,
   terminalId: string
-): Promise<void> {
+): void {
   if (!terminalId) {
     throw IPCErrors.invalidArguments('Terminal ID is required');
   }

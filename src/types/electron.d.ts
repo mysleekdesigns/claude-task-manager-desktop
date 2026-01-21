@@ -8,7 +8,7 @@
  * or the useIPC hooks from @/hooks/useIPC.
  */
 
-import type { IpcChannelName, IpcEventChannelName, AllEventChannels } from './ipc';
+import type { IpcChannelName, AllEventChannels } from './ipc';
 
 /**
  * Electron API exposed to renderer process via contextBridge

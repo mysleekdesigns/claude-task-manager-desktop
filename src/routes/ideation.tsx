@@ -172,7 +172,7 @@ export function IdeationPage() {
               {currentProject.name} - Capture and organize your development ideas
             </p>
           </div>
-          <Button onClick={() => setIsAddModalOpen(true)}>
+          <Button onClick={() => { setIsAddModalOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             Add Idea
           </Button>
@@ -221,7 +221,7 @@ export function IdeationPage() {
                     : 'Try adjusting your filters to find what you are looking for.'}
                 </p>
                 {(!ideas || ideas.length === 0) && (
-                  <Button onClick={() => setIsAddModalOpen(true)}>
+                  <Button onClick={() => { setIsAddModalOpen(true); }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Your First Idea
                   </Button>
@@ -259,7 +259,7 @@ export function IdeationPage() {
       {/* Add Idea Modal */}
       <AddIdeaModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => { setIsAddModalOpen(false); }}
         onSubmit={handleCreateIdea}
       />
     </div>

@@ -22,7 +22,7 @@ import type {
  * @returns Query result with MCP configurations data
  */
 export function useMcpConfigs(projectId: string) {
-  return useIPCQuery('mcp:list', [projectId] as any, {
+  return useIPCQuery('mcp:list', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -35,7 +35,7 @@ export function useMcpConfigs(projectId: string) {
  * @returns Query result with configuration data
  */
 export function useMcpConfig(configId: string) {
-  return useIPCQuery('mcp:get', [configId] as any, {
+  return useIPCQuery('mcp:get', [configId], {
     enabled: Boolean(configId),
   });
 }
@@ -46,7 +46,7 @@ export function useMcpConfig(configId: string) {
  * @returns Query result with preset servers
  */
 export function useMcpPresets() {
-  return useIPCQuery('mcp:presets', [] as any);
+  return useIPCQuery('mcp:presets', []);
 }
 
 /**
@@ -96,8 +96,8 @@ export function useDeleteMcp() {
  * @returns Object with MCP configurations data and mutation functions
  */
 export function useMcpManager(projectId: string) {
-  const { data: configs = [], loading, error, refetch } = useMcpConfigs(projectId);
-  const { data: presets = [] } = useMcpPresets();
+  const { data: configs, loading, error, refetch } = useMcpConfigs(projectId);
+  const { data: presets } = useMcpPresets();
   const createMcp = useCreateMcp();
   const updateMcp = useUpdateMcp();
   const toggleMcp = useToggleMcp();

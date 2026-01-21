@@ -45,10 +45,10 @@ export function PreferencesSection() {
   // Load preferences on mount
   useEffect(() => {
     if (preferences) {
-      setTheme((preferences.theme as Theme) || 'system');
-      setDefaultTerminalCount(preferences.defaultTerminalCount || 4);
-      setAutoLaunchClaude(preferences.autoLaunchClaude || false);
-      setMinimizeToTray(preferences.minimizeToTray !== false); // Default to true
+      setTheme((preferences.theme as Theme) ?? 'system');
+      setDefaultTerminalCount(preferences.defaultTerminalCount ?? 4);
+      setAutoLaunchClaude(preferences.autoLaunchClaude ?? false);
+      setMinimizeToTray(preferences.minimizeToTray); // Default to true
     }
   }, [preferences]);
 
@@ -106,9 +106,9 @@ export function PreferencesSection() {
 
   // Check if preferences have changed
   const hasChanges =
-    theme !== (preferences?.theme || 'system') ||
-    defaultTerminalCount !== (preferences?.defaultTerminalCount || 4) ||
-    autoLaunchClaude !== (preferences?.autoLaunchClaude || false) ||
+    theme !== (preferences?.theme ?? 'system') ||
+    defaultTerminalCount !== (preferences?.defaultTerminalCount ?? 4) ||
+    autoLaunchClaude !== (preferences?.autoLaunchClaude ?? false) ||
     minimizeToTray !== (preferences?.minimizeToTray !== false);
 
   // ============================================================================
@@ -167,7 +167,7 @@ export function PreferencesSection() {
               min="1"
               max="12"
               value={defaultTerminalCount}
-              onChange={(e) => handleTerminalCountChange(e.target.value)}
+              onChange={(e) => { handleTerminalCountChange(e.target.value); }}
               className="w-24"
             />
             <span className="text-sm text-muted-foreground">
@@ -216,7 +216,7 @@ export function PreferencesSection() {
         {/* Save Button */}
         <div className="flex justify-end pt-4 border-t">
           <Button
-            onClick={handleSavePreferences}
+            onClick={() => { void handleSavePreferences(); }}
             disabled={!hasChanges || savePreferencesMutation.loading}
           >
             {savePreferencesMutation.loading && (

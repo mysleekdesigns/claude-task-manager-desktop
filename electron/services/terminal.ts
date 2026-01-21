@@ -50,16 +50,16 @@ interface ManagedTerminal {
  * - Line-based output buffering to prevent race conditions (last 100 lines per terminal)
  */
 class TerminalManager {
-  private terminals: Map<string, ManagedTerminal> = new Map();
+  private terminals = new Map<string, ManagedTerminal>();
 
   /** Maximum buffer size per terminal (100KB) */
   private readonly MAX_BUFFER_SIZE = 100 * 1024;
 
   /** Line-based output buffers for race condition prevention */
-  private outputBuffers: Map<string, string[]> = new Map();
+  private outputBuffers = new Map<string, string[]>();
 
   /** Incomplete line fragments from previous chunks */
-  private incompleteLines: Map<string, string> = new Map();
+  private incompleteLines = new Map<string, string>();
 
   /** Maximum number of lines to buffer per terminal */
   private readonly MAX_BUFFER_LINES = 100;
@@ -131,7 +131,7 @@ class TerminalManager {
         try {
           // Debug: log PTY data received
           const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
-          console.log(`[TerminalManager] PTY onData for ${id}: ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+          console.log(`[TerminalManager] PTY onData for ${id}: ${String(data.length)} bytes, preview: ${JSON.stringify(preview)}`);
 
           // Add to buffer for session capture
           this.addToBuffer(id, data);
@@ -178,7 +178,7 @@ class TerminalManager {
       this.terminals.set(id, managedTerminal);
 
       console.log(
-        `[TerminalManager] Spawned terminal "${name}" (${id}) with PID ${ptyProcess.pid}`
+        `[TerminalManager] Spawned terminal "${name}" (${id}) with PID ${String(ptyProcess.pid)}`
       );
       console.log(`[TerminalManager] Terminal spawned with shell: ${shell}, cwd: ${cwd}`);
 
@@ -211,7 +211,7 @@ class TerminalManager {
     try {
       // Debug: log what's being written to the terminal
       const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
-      console.log(`[TerminalManager] Writing to terminal ${id}: ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+      console.log(`[TerminalManager] Writing to terminal ${id}: ${String(data.length)} bytes, preview: ${JSON.stringify(preview)}`);
 
       terminal.pty.write(data);
     } catch (error) {
@@ -242,7 +242,7 @@ class TerminalManager {
     try {
       terminal.pty.resize(cols, rows);
       console.log(
-        `[TerminalManager] Resized terminal ${id} to ${cols}x${rows}`
+        `[TerminalManager] Resized terminal ${id} to ${String(cols)}x${String(rows)}`
       );
       return true;
     } catch (error) {
@@ -309,7 +309,7 @@ class TerminalManager {
    */
   killAll(): void {
     console.log(
-      `[TerminalManager] Killing all terminals (${this.terminals.size} active)`
+      `[TerminalManager] Killing all terminals (${String(this.terminals.size)} active)`
     );
 
     for (const [id, terminal] of this.terminals.entries()) {
@@ -476,7 +476,7 @@ class TerminalManager {
     try {
       // Send SIGSTOP to pause the process
       process.kill(terminal.pty.pid, 'SIGSTOP');
-      console.log(`[TerminalManager] Paused terminal ${id} (PID ${terminal.pty.pid})`);
+      console.log(`[TerminalManager] Paused terminal ${id} (PID ${String(terminal.pty.pid)})`);
       return true;
     } catch (error) {
       console.error(`[TerminalManager] Failed to pause terminal ${id}:`, error);
@@ -501,7 +501,7 @@ class TerminalManager {
     try {
       // Send SIGCONT to resume the process
       process.kill(terminal.pty.pid, 'SIGCONT');
-      console.log(`[TerminalManager] Resumed terminal ${id} (PID ${terminal.pty.pid})`);
+      console.log(`[TerminalManager] Resumed terminal ${id} (PID ${String(terminal.pty.pid)})`);
       return true;
     } catch (error) {
       console.error(`[TerminalManager] Failed to resume terminal ${id}:`, error);

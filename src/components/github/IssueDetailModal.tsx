@@ -66,12 +66,12 @@ export function IssueDetailModal({
   };
 
   // Handle create task
-  const handleCreateTask = async () => {
+  const handleCreateTask = () => {
     if (!onCreateTask) return;
 
     setCreatingTask(true);
     try {
-      await onCreateTask(issue);
+      onCreateTask(issue);
       onClose();
     } catch (error) {
       console.error('Failed to create task from issue:', error);
@@ -209,7 +209,7 @@ export function IssueDetailModal({
             <TabsList className="w-full justify-start">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="comments">
-                Comments {issue.comments > 0 && `(${issue.comments})`}
+                Comments {issue.comments > 0 && `(${String(issue.comments)})`}
               </TabsTrigger>
             </TabsList>
 

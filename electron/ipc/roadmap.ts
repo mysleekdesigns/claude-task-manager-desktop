@@ -432,11 +432,24 @@ async function handleToggleMilestone(
 /**
  * Create a task from a feature (creates task, updates feature status)
  */
+interface TaskFromFeatureResult {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  tags: string[];
+  projectId: string;
+  assigneeId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 async function handleCreateTaskFromFeature(
   _event: IpcMainInvokeEvent,
   featureId: string,
   assigneeId?: string
-): Promise<{ task: any; feature: FeatureWithRelations }> {
+): Promise<{ task: TaskFromFeatureResult; feature: FeatureWithRelations }> {
   if (!featureId) {
     throw IPCErrors.invalidArguments('Feature ID is required');
   }
@@ -489,7 +502,7 @@ async function handleCreateTaskFromFeature(
       return {
         task: {
           ...task,
-          tags: JSON.parse(task.tags || '[]'),
+          tags: JSON.parse(task.tags || '[]') as string[],
         },
         feature: updatedFeature,
       };

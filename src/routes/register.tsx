@@ -93,7 +93,7 @@ export function RegisterPage() {
             Get started with Claude Tasks Desktop
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <CardContent className="space-y-4">
             {error && (
               <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm border border-destructive/20">
@@ -108,7 +108,7 @@ export function RegisterPage() {
                 type="text"
                 placeholder="John Doe"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="name"
                 autoFocus
@@ -122,7 +122,7 @@ export function RegisterPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="email"
               />
@@ -135,7 +135,7 @@ export function RegisterPage() {
                 type="password"
                 placeholder="Create a password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="new-password"
               />
@@ -170,7 +170,7 @@ export function RegisterPage() {
                 type="password"
                 placeholder="Confirm your password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => { setConfirmPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="new-password"
               />

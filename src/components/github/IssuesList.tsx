@@ -130,7 +130,7 @@ export function IssuesList({ issues, loading = false, onIssueClick }: IssuesList
           <Input
             placeholder="Search issues by title, number, or body..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); }}
             className="pl-10"
           />
         </div>
@@ -187,7 +187,7 @@ export function IssuesList({ issues, loading = false, onIssueClick }: IssuesList
                 key={label}
                 variant={selectedLabel === label ? 'default' : 'outline'}
                 className="cursor-pointer text-xs"
-                onClick={() => setSelectedLabel(selectedLabel === label ? null : label)}
+                onClick={() => { setSelectedLabel(selectedLabel === label ? null : label); }}
               >
                 {label}
               </Badge>
@@ -244,7 +244,7 @@ export function IssuesList({ issues, loading = false, onIssueClick }: IssuesList
             <IssueCard
               key={issue.id}
               issue={issue}
-              onClick={() => onIssueClick(issue)}
+              onClick={() => { onIssueClick(issue); }}
             />
           ))}
         </div>

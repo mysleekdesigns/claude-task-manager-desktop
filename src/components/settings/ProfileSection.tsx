@@ -164,7 +164,7 @@ export function ProfileSection() {
     return email.slice(0, 2).toUpperCase();
   };
 
-  const hasProfileChanges = name !== (user?.name || '') || avatar !== user?.avatar;
+  const hasProfileChanges = name !== (user?.name ?? '') || avatar !== user?.avatar;
 
   // ============================================================================
   // Render
@@ -203,12 +203,12 @@ export function ProfileSection() {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={handleAvatarUpload}
+              onChange={() => { void handleAvatarUpload(); }}
             />
             <Button
               variant="outline"
               size="sm"
-              onClick={handleAvatarUpload}
+              onClick={() => { void handleAvatarUpload(); }}
               disabled={updateProfileMutation.loading}
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -228,7 +228,7 @@ export function ProfileSection() {
             type="text"
             placeholder="Your name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); }}
             disabled={updateProfileMutation.loading}
           />
         </div>
@@ -251,7 +251,7 @@ export function ProfileSection() {
         {/* Save Button */}
         <div className="flex justify-end">
           <Button
-            onClick={handleSaveProfile}
+            onClick={() => { void handleSaveProfile(); }}
             disabled={!hasProfileChanges || updateProfileMutation.loading}
           >
             {updateProfileMutation.loading && (
@@ -280,13 +280,13 @@ export function ProfileSection() {
                   type={showCurrentPassword ? 'text' : 'password'}
                   placeholder="Enter current password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => { setCurrentPassword(e.target.value); }}
                   disabled={changePasswordMutation.loading}
                   className="pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  onClick={() => { setShowCurrentPassword(!showCurrentPassword); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
@@ -308,13 +308,13 @@ export function ProfileSection() {
                   type={showNewPassword ? 'text' : 'password'}
                   placeholder="Enter new password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => { setNewPassword(e.target.value); }}
                   disabled={changePasswordMutation.loading}
                   className="pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  onClick={() => { setShowNewPassword(!showNewPassword); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
@@ -339,13 +339,13 @@ export function ProfileSection() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Confirm new password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => { setConfirmPassword(e.target.value); }}
                   disabled={changePasswordMutation.loading}
                   className="pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onClick={() => { setShowConfirmPassword(!showConfirmPassword); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
@@ -361,7 +361,7 @@ export function ProfileSection() {
             {/* Change Password Button */}
             <div className="flex justify-end">
               <Button
-                onClick={handleChangePassword}
+                onClick={() => { void handleChangePassword(); }}
                 disabled={
                   !currentPassword ||
                   !newPassword ||

@@ -69,7 +69,7 @@ export function Sidebar({ onNewTask }: SidebarProps) {
 
         if (item) {
           e.preventDefault();
-          navigate(item.path);
+          void navigate(item.path);
         }
       }
 
@@ -87,11 +87,11 @@ export function Sidebar({ onNewTask }: SidebarProps) {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => { window.removeEventListener('keydown', handleKeyDown); };
   }, [navigate, onNewTask]);
 
   const handleNavigate = (path: string) => {
-    navigate(path);
+    void navigate(path);
   };
 
   const handleClaudeCodeClick = () => {
@@ -172,7 +172,7 @@ export function Sidebar({ onNewTask }: SidebarProps) {
                           isActive && 'bg-accent text-accent-foreground',
                           collapsed && 'justify-center px-0'
                         )}
-                        onClick={() => handleNavigate(item.path)}
+                        onClick={() => { handleNavigate(item.path); }}
                       >
                         <Icon className={cn('size-4', !collapsed && 'mr-3')} />
                         {!collapsed && (
@@ -233,7 +233,7 @@ export function Sidebar({ onNewTask }: SidebarProps) {
                   collapsed && 'justify-center px-0',
                   location.pathname === '/settings' && 'bg-accent text-accent-foreground'
                 )}
-                onClick={() => handleNavigate('/settings')}
+                onClick={() => { handleNavigate('/settings'); }}
               >
                 <Settings className={cn('size-4', !collapsed && 'mr-3')} />
                 {!collapsed && <span className="flex-1 text-left">Settings</span>}

@@ -120,7 +120,7 @@ export function PrList({ prs, loading = false, onPrClick }: PrListProps) {
           <Input
             placeholder="Search pull requests..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); }}
             className="pl-9"
           />
         </div>
@@ -128,7 +128,7 @@ export function PrList({ prs, loading = false, onPrClick }: PrListProps) {
         {/* State Filter */}
         <Select
           value={stateFilter}
-          onValueChange={(value) => setStateFilter(value as StateFilter)}
+          onValueChange={(value) => { setStateFilter(value as StateFilter); }}
         >
           <SelectTrigger className="w-full sm:w-[180px]">
             <Filter className="h-4 w-4 mr-2" />
@@ -149,7 +149,7 @@ export function PrList({ prs, loading = false, onPrClick }: PrListProps) {
         {/* Sort By */}
         <Select
           value={sortBy}
-          onValueChange={(value) => setSortBy(value as SortOption)}
+          onValueChange={(value) => { setSortBy(value as SortOption); }}
         >
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Sort by" />

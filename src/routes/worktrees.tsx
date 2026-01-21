@@ -29,7 +29,7 @@ export function WorktreesPage() {
 
   // Fetch worktrees for the current project
   const {
-    data: worktrees = [],
+    data: worktrees,
     loading: worktreesLoading,
     error: worktreesError,
     refetch: refetchWorktrees,
@@ -82,7 +82,7 @@ export function WorktreesPage() {
 
       if (result.added > 0 || result.removed > 0) {
         toast.success(
-          `Synced worktrees: ${result.added} added, ${result.removed} removed`
+          `Synced worktrees: ${String(result.added)} added, ${String(result.removed)} removed`
         );
       } else {
         toast.info('Worktrees are already in sync');
@@ -110,9 +110,9 @@ export function WorktreesPage() {
   // ============================================================================
 
   const renderStats = () => {
-    const totalWorktrees = worktrees?.length || 0;
+    const totalWorktrees = worktrees?.length ?? 0;
     const mainWorktree = worktrees?.find((w) => w.isMain);
-    const activeTerminals = worktrees?.reduce((sum, w) => sum + (w._count?.terminals || 0), 0) || 0;
+    const activeTerminals = worktrees?.reduce((sum, w) => sum + (w._count?.terminals ?? 0), 0) ?? 0;
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -137,7 +137,7 @@ export function WorktreesPage() {
             <div className="flex items-center gap-2">
               <GitBranch className="h-4 w-4 text-muted-foreground" />
               <span className="font-mono text-sm">
-                {mainWorktree?.branch || 'N/A'}
+                {mainWorktree?.branch ?? 'N/A'}
               </span>
             </div>
           </CardContent>
@@ -215,7 +215,7 @@ export function WorktreesPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={handleSyncWorktrees}
+            onClick={() => { void handleSyncWorktrees(); }}
             disabled={syncWorktreesMutation.loading}
           >
             <RefreshCw
@@ -243,11 +243,11 @@ export function WorktreesPage() {
 
       {/* Worktree List */}
       <WorktreeList
-        worktrees={worktrees || []}
+        worktrees={worktrees ?? []}
         loading={worktreesLoading}
-        onDelete={handleDeleteWorktree}
+        onDelete={(id: string, force: boolean) => { void handleDeleteWorktree(id, force); }}
         onOpenTerminal={handleOpenTerminal}
-        onRefresh={refetchWorktrees}
+        onRefresh={() => { void refetchWorktrees(); }}
       />
 
       {/* Create Worktree Modal */}
@@ -256,7 +256,7 @@ export function WorktreesPage() {
         onOpenChange={setCreateModalOpen}
         projectId={currentProject.id}
         projectTargetPath={currentProject.targetPath}
-        onSuccess={refetchWorktrees}
+        onSuccess={() => { void refetchWorktrees(); }}
       />
     </div>
   );

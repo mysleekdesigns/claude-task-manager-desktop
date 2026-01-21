@@ -8,20 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface TimePerPhaseChartProps {
-  data: Array<{
+  data: {
     phaseName: string;
     averageMinutes: number;
     taskCount: number;
-  }>;
+  }[];
 }
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) {
-    return `${Math.round(minutes)}m`;
+    return `${String(Math.round(minutes))}m`;
   }
   const hours = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  return mins > 0 ? `${String(hours)}h ${String(mins)}m` : `${String(hours)}h`;
 }
 
 export function TimePerPhaseChart({ data }: TimePerPhaseChartProps) {
@@ -45,7 +45,7 @@ export function TimePerPhaseChart({ data }: TimePerPhaseChartProps) {
             ][index % 5];
 
             return (
-              <div key={item.phaseName} className="space-y-1">
+              <div key={item.phaseName ?? `phase-${String(index)}`} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{item.phaseName}</span>
                   <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ export function TimePerPhaseChart({ data }: TimePerPhaseChartProps) {
                 <div className="h-8 bg-muted rounded-md overflow-hidden">
                   <div
                     className={`h-full ${colorClass} transition-all duration-500 flex items-center justify-end pr-2`}
-                    style={{ width: `${barWidth}%` }}
+                    style={{ width: `${String(barWidth)}%` }}
                   >
                     {item.averageMinutes > 0 && (
                       <span className="text-xs font-semibold text-white drop-shadow-md">

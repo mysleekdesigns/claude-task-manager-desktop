@@ -198,7 +198,7 @@ export function GitHubIssuesPage() {
               {currentProject.githubRepo} - Browse and manage issues
             </p>
           </div>
-          <Button onClick={handleRefresh} disabled={loading}>
+          <Button onClick={() => { void handleRefresh(); }} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -229,7 +229,7 @@ export function GitHubIssuesPage() {
         issue={selectedIssue}
         isOpen={!!selectedIssue}
         onClose={handleCloseModal}
-        onCreateTask={handleCreateTask}
+        onCreateTask={(issue: GitHubIssue) => { void handleCreateTask(issue); }}
       />
     </div>
   );

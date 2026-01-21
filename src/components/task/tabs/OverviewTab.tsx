@@ -78,7 +78,7 @@ export function OverviewTab({ task, onUpdate, isUpdating }: OverviewTabProps) {
           id="description"
           placeholder="Add a description for this task..."
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => { setDescription(e.target.value); }}
           onBlur={handleDescriptionBlur}
           disabled={isUpdating}
           rows={6}
@@ -157,7 +157,7 @@ export function OverviewTab({ task, onUpdate, isUpdating }: OverviewTabProps) {
                 {tag}
                 <button
                   type="button"
-                  onClick={() => handleTagRemove(tag)}
+                  onClick={() => { handleTagRemove(tag); }}
                   disabled={isUpdating}
                   className="hover:bg-destructive/20 rounded-full p-0.5"
                 >
@@ -173,7 +173,7 @@ export function OverviewTab({ task, onUpdate, isUpdating }: OverviewTabProps) {
           id="tags"
           placeholder="Type a tag and press Enter..."
           value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
+          onChange={(e) => { setTagInput(e.target.value); }}
           onKeyDown={handleTagAdd}
           disabled={isUpdating}
         />

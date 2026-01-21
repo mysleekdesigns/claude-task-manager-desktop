@@ -128,7 +128,7 @@ export function IdeaCard({
               {canConvert && (
                 <>
                   <DropdownMenuItem
-                    onClick={handleConvert}
+                    onClick={() => { void handleConvert(); }}
                     disabled={!!isConverting}
                     className="cursor-pointer"
                   >
@@ -140,7 +140,7 @@ export function IdeaCard({
               )}
               {canDelete && (
                 <DropdownMenuItem
-                  onClick={handleDelete}
+                  onClick={() => { void handleDelete(); }}
                   disabled={!!isDeleting}
                   className="text-destructive cursor-pointer"
                 >
@@ -169,7 +169,7 @@ export function IdeaCard({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleVote(1)}
+            onClick={() => { void handleVote(1); }}
             disabled={isVoting}
             className={votingDirection === 'up' ? 'bg-green-50 dark:bg-green-950' : ''}
           >
@@ -179,7 +179,7 @@ export function IdeaCard({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleVote(-1)}
+            onClick={() => { void handleVote(-1); }}
             disabled={isVoting}
             className={votingDirection === 'down' ? 'bg-red-50 dark:bg-red-950' : ''}
           >

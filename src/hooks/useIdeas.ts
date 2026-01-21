@@ -24,7 +24,7 @@ import type {
  * @returns Query result with ideas data
  */
 export function useIdeas(projectId: string, filters?: IdeaListFilters) {
-  return useIPCQuery('ideas:list', [projectId, filters] as any, {
+  return useIPCQuery('ideas:list', [projectId, filters], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -37,7 +37,7 @@ export function useIdeas(projectId: string, filters?: IdeaListFilters) {
  * @returns Query result with idea data
  */
 export function useIdea(ideaId: string) {
-  return useIPCQuery('ideas:get', [ideaId] as any, {
+  return useIPCQuery('ideas:get', [ideaId], {
     enabled: Boolean(ideaId),
   });
 }
@@ -120,7 +120,7 @@ export function useConvertIdeaToFeature() {
  * ```
  */
 export function useIdeaManager(projectId: string, filters?: IdeaListFilters) {
-  const { data: ideas = [], loading, error, refetch } = useIdeas(projectId, filters);
+  const { data: ideas, loading, error, refetch } = useIdeas(projectId, filters);
   const createIdea = useCreateIdea();
   const updateIdea = useUpdateIdea();
   const deleteIdea = useDeleteIdea();
@@ -165,7 +165,7 @@ export function useIdeaManager(projectId: string, filters?: IdeaListFilters) {
 
   const handleConvert = useCallback(
     async (ideaId: string) => {
-      const result = await convertToFeature.mutate(ideaId as any);
+      const result = await convertToFeature.mutate(ideaId);
       await refetch();
       return result;
     },

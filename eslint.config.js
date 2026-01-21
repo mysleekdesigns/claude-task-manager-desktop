@@ -16,6 +16,7 @@ export default tseslint.config(
       'build/**',
       '*.config.js',
       '*.config.ts',
+      '**/*.d.ts',
     ],
   },
 

@@ -177,52 +177,48 @@ async function handleLogin(
 
   const prisma = databaseService.getClient();
 
-  try {
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
+  // Find user by email
+  const user = await prisma.user.findUnique({
+    where: { email: data.email },
+  });
 
-    if (!user) {
-      throw new Error('Invalid email or password');
-    }
-
-    // Verify password
-    const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      throw new Error('Invalid email or password');
-    }
-
-    // Create new session
-    const token = generateSessionToken();
-    const expiresAt = calculateSessionExpiry();
-
-    await prisma.session.create({
-      data: {
-        token,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
-    // Store session token
-    setSessionToken(token);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-      token,
-    };
-  } catch (error) {
-    throw error;
+  if (!user) {
+    throw new Error('Invalid email or password');
   }
+
+  // Verify password
+  const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
+
+  if (!isPasswordValid) {
+    throw new Error('Invalid email or password');
+  }
+
+  // Create new session
+  const token = generateSessionToken();
+  const expiresAt = calculateSessionExpiry();
+
+  await prisma.session.create({
+    data: {
+      token,
+      userId: user.id,
+      expiresAt,
+    },
+  });
+
+  // Store session token
+  setSessionToken(token);
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    },
+    token,
+  };
 }
 
 /**
@@ -301,7 +297,7 @@ async function handleGetCurrentUser(
       createdAt: session.user.createdAt,
       updatedAt: session.user.updatedAt,
     };
-  } catch (error) {
+  } catch {
     clearSessionToken();
     return null;
   }
@@ -431,7 +427,7 @@ function wrapWithLogging<TArgs extends unknown[], TReturn>(
     const sanitizedArgs = args.map((arg) => {
       if (channel === 'auth:register' || channel === 'auth:login') {
         if (typeof arg === 'object' && arg !== null && 'password' in arg) {
-          const { password, ...rest } = arg as Record<string, unknown>;
+          const { password: _password, ...rest } = arg as Record<string, unknown>;
           return { ...rest, password: '[REDACTED]' };
         }
       }

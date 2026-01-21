@@ -157,7 +157,7 @@ export function registerInsightsHandlers() {
    */
   ipcMain.handle(
     'insights:getProductivityTrends',
-    async (_, projectId: string, days: number = 30): Promise<ProductivityTrend[]> => {
+    async (_, projectId: string, days = 30): Promise<ProductivityTrend[]> => {
       const now = new Date();
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -172,7 +172,7 @@ export function registerInsightsHandlers() {
       // Initialize all dates with zero counts
       for (let i = 0; i < days; i++) {
         const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0]!;
+        const dateStr = date.toISOString().split('T')[0] ?? '';
         trendMap.set(dateStr, { completedCount: 0, createdCount: 0 });
       }
 
@@ -181,7 +181,7 @@ export function registerInsightsHandlers() {
         // Count created tasks
         const createdDate = new Date(task.createdAt);
         if (createdDate >= startDate) {
-          const dateStr = createdDate.toISOString().split('T')[0]!;
+          const dateStr = createdDate.toISOString().split('T')[0] ?? '';
           const existing = trendMap.get(dateStr);
           if (existing) {
             existing.createdCount++;
@@ -192,7 +192,7 @@ export function registerInsightsHandlers() {
         if (task.status === 'COMPLETED') {
           const completedDate = new Date(task.updatedAt);
           if (completedDate >= startDate) {
-            const dateStr = completedDate.toISOString().split('T')[0]!;
+            const dateStr = completedDate.toISOString().split('T')[0] ?? '';
             const existing = trendMap.get(dateStr);
             if (existing) {
               existing.completedCount++;

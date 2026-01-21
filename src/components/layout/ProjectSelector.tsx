@@ -38,7 +38,7 @@ export function ProjectSelector() {
   // Fetch projects when component mounts or user changes
   useEffect(() => {
     if (user?.id) {
-      fetchProjects(user.id);
+      void fetchProjects(user.id);
     }
   }, [user?.id, fetchProjects]);
 
@@ -119,7 +119,7 @@ export function ProjectSelector() {
         {projects.map((project) => (
           <DropdownMenuItem
             key={project.id}
-            onClick={() => handleProjectSelect(project.id)}
+            onClick={() => { handleProjectSelect(project.id); }}
             className="cursor-pointer"
           >
             <div className="flex items-center justify-between w-full">
@@ -150,7 +150,7 @@ export function ProjectSelector() {
     <CreateProjectModal
       open={createModalOpen}
       onOpenChange={setCreateModalOpen}
-      onSuccess={handleProjectCreated}
+      onSuccess={(project: Project) => { void handleProjectCreated(project); }}
     />
   </>
   );

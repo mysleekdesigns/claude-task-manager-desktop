@@ -25,7 +25,7 @@ import type {
  * @returns Query result with phases data
  */
 export function usePhases(projectId: string) {
-  return useIPCQuery('phases:list', [projectId] as any, {
+  return useIPCQuery('phases:list', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -78,7 +78,7 @@ export function useReorderPhases() {
  * @returns Query result with features data
  */
 export function useFeatures(projectId: string) {
-  return useIPCQuery('features:list', [projectId] as any, {
+  return useIPCQuery('features:list', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -198,7 +198,7 @@ export function useRoadmapManager(projectId: string) {
   );
 
   const handleReorderPhases = useCallback(
-    async (updates: Array<{ phaseId: string; order: number }>) => {
+    async (updates: { phaseId: string; order: number }[]) => {
       await reorderPhases.mutate(updates);
       await phasesQuery.refetch();
     },

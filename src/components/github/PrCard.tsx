@@ -83,11 +83,11 @@ export function PrCard({ pr, onClick }: PrCardProps) {
     if (diffMins < 1) {
       return 'just now';
     } else if (diffMins < 60) {
-      return `${diffMins} min ago`;
+      return `${String(diffMins)} min ago`;
     } else if (diffHours < 24) {
-      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      return `${String(diffHours)} hour${diffHours > 1 ? 's' : ''} ago`;
     } else {
-      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      return `${String(diffDays)} day${diffDays > 1 ? 's' : ''} ago`;
     }
   };
 

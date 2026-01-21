@@ -28,11 +28,10 @@ interface TaskOutputPreviewProps {
  */
 function stripAnsiCodes(text: string): string {
   // eslint-disable-next-line no-control-regex
+  const ansiRegex = /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]|\x1b\[\?[0-9;]*[hl]/g;
+
   return text
-    .replace(
-      /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]|\x1b\[\?[0-9;]*[hl]/g,
-      ''
-    )
+    .replace(ansiRegex, '')
     // Remove shell continuation prompts (quote>, dquote>, >, $, %)
     .replace(/^(quote>|dquote>|>|\$|%)\s*/gm, '');
 }
@@ -106,7 +105,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
       }
 
       // DEBUG: Log processing results
-      console.log(`[TaskOutputPreview] Processed: ${parts.length} complete lines, partial=${partialLineRef.current.length} bytes, buffer=${bufferRef.current.length} lines`);
+      console.log(`[TaskOutputPreview] Processed: ${String(parts.length)} complete lines, partial=${String(partialLineRef.current.length)} bytes, buffer=${String(bufferRef.current.length)} lines`);
 
       // Calculate time elapsed since component mount
       const elapsedTime = Date.now() - startTimeRef.current;
@@ -116,13 +115,13 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
       // After initial period: throttle updates to 500ms
       if (isInitialPeriod) {
         setOutputLines([...bufferRef.current]);
-        console.log(`[TaskOutputPreview] Updated UI immediately with ${bufferRef.current.length} lines`);
+        console.log(`[TaskOutputPreview] Updated UI immediately with ${String(bufferRef.current.length)} lines`);
       } else {
         // Throttle UI updates to once per 500ms
         if (!throttleTimerRef.current) {
           throttleTimerRef.current = setTimeout(() => {
             setOutputLines([...bufferRef.current]);
-            console.log(`[TaskOutputPreview] Throttled UI update with ${bufferRef.current.length} lines`);
+            console.log(`[TaskOutputPreview] Throttled UI update with ${String(bufferRef.current.length)} lines`);
             throttleTimerRef.current = null;
           }, 500);
         }
@@ -135,7 +134,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
    * This ensures the SAME function reference is used for both registration and removal
    */
   const stableHandler = useCallback((...args: unknown[]) => {
-    console.log(`[TaskOutputPreview] Received IPC event with ${(args[0] as string)?.length || 0} bytes`);
+    console.log(`[TaskOutputPreview] Received IPC event with ${String((args[0] as string)?.length ?? 0)} bytes`);
     handleOutputRef.current?.(...args);
   }, []); // Empty deps = stable reference across renders
 
@@ -168,7 +167,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
         if (!isMounted) return;
 
         if (buffer && buffer.length > 0) {
-          console.log(`[TaskOutputPreview] Received buffer with ${buffer.length} lines`);
+          console.log(`[TaskOutputPreview] Received buffer with ${String(buffer.length)} lines`);
           // Buffer is already split into lines, just clean ANSI codes and filter
           const cleanedLines = buffer.map((line: string) => stripAnsiCodes(line));
           const filtered = cleanedLines.filter((line: string) => line.trim().length > 0);
@@ -208,7 +207,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
           // The buffer may have duplicate data, but deduplication handles that
         }
       })
-      .catch(err => {
+      .catch((err: unknown) => {
         console.error('Failed to fetch terminal buffer:', err);
         setError('Failed to load initial output');
         // Live subscription is already active, so we'll still receive output
@@ -247,7 +246,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
       hash = ((hash << 5) - hash) + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
-    return `${terminalId}-${index}-${hash}`;
+    return `${terminalId}-${String(index)}-${String(hash)}`;
   };
 
   return (

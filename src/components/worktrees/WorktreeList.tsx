@@ -215,7 +215,7 @@ export function WorktreeList({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => handleOpenTerminal(worktree.id)}
+                            onClick={() => { handleOpenTerminal(worktree.id); }}
                             disabled={!onOpenTerminal}
                           >
                             <Terminal className="mr-2 h-4 w-4" />
@@ -223,7 +223,7 @@ export function WorktreeList({
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleDeleteClick(worktree)}
+                            onClick={() => { handleDeleteClick(worktree); }}
                             disabled={isMainWorktree}
                             className="text-destructive focus:text-destructive"
                           >
@@ -253,7 +253,7 @@ export function WorktreeList({
               <span className="font-mono text-xs text-muted-foreground">
                 {selectedWorktree?.path}
               </span>
-              {selectedWorktree && selectedWorktree._count?.terminals ? (
+              {selectedWorktree?._count?.terminals ? (
                 <div className="mt-4 p-3 bg-muted rounded-md">
                   <p className="text-sm font-medium text-warning">
                     This worktree has {selectedWorktree._count.terminals} active{' '}
@@ -269,7 +269,7 @@ export function WorktreeList({
                   type="checkbox"
                   id="force-delete"
                   checked={forceDelete}
-                  onChange={(e) => setForceDelete(e.target.checked)}
+                  onChange={(e) => { setForceDelete(e.target.checked); }}
                   className="mt-1"
                 />
                 <label htmlFor="force-delete" className="text-sm">
@@ -279,7 +279,7 @@ export function WorktreeList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>
+            <AlertDialogCancel onClick={() => { setDeleteDialogOpen(false); }}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

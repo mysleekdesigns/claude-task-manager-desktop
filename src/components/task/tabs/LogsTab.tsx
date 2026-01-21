@@ -129,7 +129,7 @@ export function LogsTab({ task }: LogsTabProps) {
             <div key={phase.id} className="border rounded-lg overflow-hidden">
               {/* Phase Header */}
               <button
-                onClick={() => togglePhase(phase.id)}
+                onClick={() => { togglePhase(phase.id); }}
                 className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors"
               >
                 {isExpanded ? (

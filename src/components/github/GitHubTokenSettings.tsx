@@ -48,37 +48,9 @@ export function GitHubTokenSettings() {
   const validateTokenMutation = useIPCMutation('github:validateToken');
   const deleteTokenMutation = useIPCMutation('github:deleteToken');
 
-  // Check validation on mount if token exists
-  useEffect(() => {
-    if (hasToken && !validationResult) {
-      void handleValidate();
-    }
-  }, [hasToken]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ============================================================================
   // Handlers
   // ============================================================================
-
-  const handleSaveToken = useCallback(async () => {
-    if (!token.trim()) {
-      toast.error('Please enter a token');
-      return;
-    }
-
-    try {
-      await saveTokenMutation.mutate(token);
-      toast.success('Token saved successfully');
-      setToken('');
-      setShowToken(false);
-
-      // Automatically validate after saving
-      await refetchHasToken();
-      await handleValidate();
-    } catch (error) {
-      console.error('Failed to save token:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to save token');
-    }
-  }, [token, saveTokenMutation, refetchHasToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleValidate = useCallback(async () => {
     try {
@@ -86,9 +58,9 @@ export function GitHubTokenSettings() {
       setValidationResult(result);
 
       if (result.valid) {
-        toast.success(`Token validated for ${result.username}`);
+        toast.success(`Token validated for ${result.username ?? 'user'}`);
       } else {
-        toast.error(result.error || 'Token validation failed');
+        toast.error(result.error ?? 'Token validation failed');
       }
     } catch (error) {
       console.error('Failed to validate token:', error);
@@ -109,6 +81,35 @@ export function GitHubTokenSettings() {
       toast.error(error instanceof Error ? error.message : 'Failed to delete token');
     }
   }, [deleteTokenMutation, refetchHasToken]);
+
+  const handleSaveToken = useCallback(async () => {
+    if (!token.trim()) {
+      toast.error('Please enter a token');
+      return;
+    }
+
+    try {
+      await saveTokenMutation.mutate(token);
+      toast.success('Token saved successfully');
+      setToken('');
+      setShowToken(false);
+
+      // Automatically validate after saving
+      await refetchHasToken();
+      await handleValidate();
+    } catch (error) {
+      console.error('Failed to save token:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save token');
+    }
+  }, [token, saveTokenMutation, refetchHasToken, handleValidate]);
+
+  // Check validation on mount if token exists
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (hasToken && !validationResult) {
+      void handleValidate();
+    }
+  }, [hasToken, validationResult, handleValidate]);
 
   // ============================================================================
   // Render Status
@@ -191,13 +192,13 @@ export function GitHubTokenSettings() {
                   type={showToken ? 'text' : 'password'}
                   placeholder={hasToken ? '••••••••••••••••' : 'ghp_xxxxxxxxxxxxxxxxxxxx'}
                   value={token}
-                  onChange={(e) => setToken(e.target.value)}
+                  onChange={(e) => { setToken(e.target.value); }}
                   disabled={saveTokenMutation.loading}
                   className="pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowToken(!showToken)}
+                  onClick={() => { setShowToken(!showToken); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
@@ -209,7 +210,7 @@ export function GitHubTokenSettings() {
                 </button>
               </div>
               <Button
-                onClick={handleSaveToken}
+                onClick={() => { void handleSaveToken(); }}
                 disabled={!token.trim() || saveTokenMutation.loading}
                 className="whitespace-nowrap"
               >
@@ -238,7 +239,7 @@ export function GitHubTokenSettings() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={handleValidate}
+                onClick={() => { void handleValidate(); }}
                 disabled={validateTokenMutation.loading}
               >
                 {validateTokenMutation.loading && (
@@ -248,7 +249,7 @@ export function GitHubTokenSettings() {
               </Button>
               <Button
                 variant="outline"
-                onClick={handleDeleteToken}
+                onClick={() => { void handleDeleteToken(); }}
                 disabled={deleteTokenMutation.loading}
                 className="text-destructive hover:text-destructive"
               >

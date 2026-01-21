@@ -45,11 +45,11 @@ interface AddMemoryModalProps {
 // Memory Type Configuration
 // ============================================================================
 
-const MEMORY_TYPES: Array<{
+const MEMORY_TYPES: {
   value: MemoryType;
   label: string;
   description: string;
-}> = [
+}[] = [
   {
     value: 'session',
     label: 'Session',
@@ -182,11 +182,11 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           {/* Type Selector */}
           <div className="space-y-2">
             <Label htmlFor="type">Type</Label>
-            <Select value={type} onValueChange={(value) => setType(value as MemoryType)}>
+            <Select value={type} onValueChange={(value) => { setType(value as MemoryType); }}>
               <SelectTrigger id="type">
                 <SelectValue />
               </SelectTrigger>
@@ -214,7 +214,7 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
               id="title"
               placeholder="Enter a descriptive title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); }}
               required
             />
           </div>
@@ -228,7 +228,7 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
               id="content"
               placeholder="Enter the memory content..."
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => { setContent(e.target.value); }}
               rows={8}
               required
             />
@@ -241,7 +241,7 @@ export function AddMemoryModal({ isOpen, onClose, onSubmit }: AddMemoryModalProp
               id="metadata"
               placeholder='{"key": "value", "tags": ["tag1", "tag2"]}'
               value={metadataJson}
-              onChange={(e) => handleMetadataChange(e.target.value)}
+              onChange={(e) => { handleMetadataChange(e.target.value); }}
               rows={3}
               className={metadataError ? 'border-destructive' : ''}
             />

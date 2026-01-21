@@ -47,7 +47,7 @@ export function WorktreeSelector({
 
   // Fetch worktrees for this project
   const {
-    data: worktrees = [],
+    data: worktrees,
     loading,
     error,
   } = useIPCQuery('worktrees:list', [projectId], {

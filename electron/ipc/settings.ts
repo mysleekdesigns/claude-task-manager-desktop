@@ -140,8 +140,8 @@ async function handleGetSettings(
     }
 
     // Parse keyboard shortcuts JSON
-    const keyboardShortcuts = settings.keyboardShortcuts
-      ? JSON.parse(settings.keyboardShortcuts)
+    const keyboardShortcuts: Record<string, string> | null = settings.keyboardShortcuts
+      ? (JSON.parse(settings.keyboardShortcuts) as Record<string, string>)
       : null;
 
     // Check if API keys exist in secure store
@@ -230,8 +230,8 @@ async function handleUpdateSettings(
     });
 
     // Parse keyboard shortcuts JSON
-    const keyboardShortcuts = settings.keyboardShortcuts
-      ? JSON.parse(settings.keyboardShortcuts)
+    const keyboardShortcuts: Record<string, string> | null = settings.keyboardShortcuts
+      ? (JSON.parse(settings.keyboardShortcuts) as Record<string, string>)
       : null;
 
     // Check if API keys exist in secure store

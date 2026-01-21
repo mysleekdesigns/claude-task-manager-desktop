@@ -16,24 +16,24 @@ export interface TaskMetrics {
   completedThisWeek: number;
   completedThisMonth: number;
   completedTotal: number;
-  byStatus: Array<{
+  byStatus: {
     status: TaskStatus;
     count: number;
-  }>;
-  byPriority: Array<{
+  }[];
+  byPriority: {
     priority: Priority;
     count: number;
-  }>;
+  }[];
 }
 
 export interface TimeMetrics {
   averageDurationMinutes: number;
   totalTimeMinutes: number;
-  phaseBreakdown: Array<{
+  phaseBreakdown: {
     phaseName: string;
     averageMinutes: number;
     taskCount: number;
-  }>;
+  }[];
 }
 
 export interface ProductivityTrend {
@@ -50,7 +50,7 @@ export interface ProductivityTrend {
  * Hook for fetching task metrics
  */
 export function useTaskMetrics(projectId: string) {
-  return useIPCQuery('insights:getTaskMetrics', [projectId] as any, {
+  return useIPCQuery('insights:getTaskMetrics', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -60,7 +60,7 @@ export function useTaskMetrics(projectId: string) {
  * Hook for fetching time metrics
  */
 export function useTimeMetrics(projectId: string) {
-  return useIPCQuery('insights:getTimeMetrics', [projectId] as any, {
+  return useIPCQuery('insights:getTimeMetrics', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -69,8 +69,8 @@ export function useTimeMetrics(projectId: string) {
 /**
  * Hook for fetching productivity trends
  */
-export function useProductivityTrends(projectId: string, days: number = 30) {
-  return useIPCQuery('insights:getProductivityTrends', [projectId, days] as any, {
+export function useProductivityTrends(projectId: string, days = 30) {
+  return useIPCQuery('insights:getProductivityTrends', [projectId, days], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });

@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useMemo } from 'react';
 
 interface CompletionTrendChartProps {
-  data: Array<{
+  data: {
     date: string;
     count: number;
-  }>;
+  }[];
 }
 
 export function CompletionTrendChart({ data }: CompletionTrendChartProps) {
@@ -34,15 +34,15 @@ export function CompletionTrendChart({ data }: CompletionTrendChartProps) {
   const linePath = useMemo(() => {
     if (points.length === 0) return '';
     return points
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${String(p.x)} ${String(p.y)}`)
       .join(' ');
   }, [points]);
 
   // Generate SVG path for filled area
   const areaPath = useMemo(() => {
     if (points.length === 0) return '';
-    const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    return `${path} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`;
+    const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${String(p.x)} ${String(p.y)}`).join(' ');
+    return `${path} L ${String(chartWidth)} ${String(chartHeight)} L 0 ${String(chartHeight)} Z`;
   }, [points, chartWidth, chartHeight]);
 
   return (
@@ -55,7 +55,7 @@ export function CompletionTrendChart({ data }: CompletionTrendChartProps) {
           {/* SVG Chart */}
           <div className="w-full h-48 bg-muted/30 rounded-lg p-4">
             <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              viewBox={`0 0 ${String(chartWidth)} ${String(chartHeight)}`}
               preserveAspectRatio="none"
               className="w-full h-full"
             >

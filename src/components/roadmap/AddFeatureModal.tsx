@@ -116,7 +116,7 @@ export function AddFeatureModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Title Input */}
             <div className="space-y-2">
@@ -127,7 +127,7 @@ export function AddFeatureModal({
                 id="feature-title"
                 placeholder="Enter feature title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); }}
                 required
                 autoFocus
               />
@@ -140,7 +140,7 @@ export function AddFeatureModal({
                 id="feature-description"
                 placeholder="Describe the feature..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); }}
                 rows={4}
               />
             </div>
@@ -152,7 +152,7 @@ export function AddFeatureModal({
               </Label>
               <Select
                 value={priority}
-                onValueChange={(value) => setPriority(value as MoscowPriority)}
+                onValueChange={(value) => { setPriority(value as MoscowPriority); }}
               >
                 <SelectTrigger id="feature-priority">
                   <SelectValue placeholder="Select priority" />
@@ -161,7 +161,7 @@ export function AddFeatureModal({
                   <SelectItem value="MUST">Must Have</SelectItem>
                   <SelectItem value="SHOULD">Should Have</SelectItem>
                   <SelectItem value="COULD">Could Have</SelectItem>
-                  <SelectItem value="WONT">Won't Have</SelectItem>
+                  <SelectItem value="WONT">Won&apos;t Have</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
@@ -177,7 +177,7 @@ export function AddFeatureModal({
               <Label htmlFor="feature-phase">Phase (Optional)</Label>
               <Select
                 value={phaseId || 'none'}
-                onValueChange={(value) => setPhaseId(value === 'none' ? undefined : value)}
+                onValueChange={(value) => { setPhaseId(value === 'none' ? undefined : value); }}
               >
                 <SelectTrigger id="feature-phase">
                   <SelectValue placeholder="Select phase" />

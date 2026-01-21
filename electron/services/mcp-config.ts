@@ -70,7 +70,7 @@ class McpConfigService {
   /**
    * Read the current Claude Desktop config file
    */
-  async readCurrentConfig(): Promise<ClaudeDesktopConfig | null> {
+  readCurrentConfig(): ClaudeDesktopConfig | null {
     try {
       if (!fs.existsSync(this.configPath)) {
         return null;
@@ -159,7 +159,7 @@ class McpConfigService {
   /**
    * Create a backup of the existing config file
    */
-  private async backupExistingConfig(): Promise<string | null> {
+  private backupExistingConfig(): string | null {
     try {
       if (!fs.existsSync(this.configPath)) {
         return null;
@@ -201,6 +201,7 @@ class McpConfigService {
 
     // Remove servers that are managed by this app
     for (const serverName of managedServerNames) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete mergedServers[serverName];
     }
 
@@ -224,7 +225,7 @@ class McpConfigService {
       ensureDirectory(this.configDir);
 
       // Read existing config
-      const existingConfig = await this.readCurrentConfig();
+      const existingConfig = this.readCurrentConfig();
 
       // Generate new config from database
       const newConfig = await generateConfig(projectId);
@@ -239,7 +240,7 @@ class McpConfigService {
 
       // Create backup of existing config
       if (existingConfig) {
-        await this.backupExistingConfig();
+        this.backupExistingConfig();
       }
 
       // Merge configs to preserve non-managed servers

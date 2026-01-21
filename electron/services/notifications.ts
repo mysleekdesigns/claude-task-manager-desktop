@@ -20,7 +20,7 @@ export interface NotificationOptions {
 }
 
 export class NotificationService {
-  private isSupported: boolean = false;
+  private isSupported = false;
 
   constructor() {
     // Check if notifications are supported
@@ -147,7 +147,7 @@ export class NotificationService {
    * Request notification permission (mainly for Linux)
    * Windows and macOS grant permission by default
    */
-  async requestPermission(): Promise<boolean> {
+  requestPermission(): boolean {
     if (!this.isSupported) {
       return false;
     }

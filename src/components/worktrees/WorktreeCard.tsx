@@ -179,7 +179,7 @@ export function WorktreeCard({ worktree, onDelete, onOpenTerminal }: WorktreeCar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(worktree.id)}
+                onClick={() => { onDelete(worktree.id); }}
                 disabled={isMainWorktree}
                 className="text-destructive focus:text-destructive"
               >

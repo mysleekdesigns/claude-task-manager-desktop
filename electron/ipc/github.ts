@@ -158,10 +158,10 @@ export interface CreatePullRequestInput {
 /**
  * Save GitHub personal access token
  */
-async function handleSaveToken(
+function handleSaveToken(
   _event: IpcMainInvokeEvent,
   token: string
-): Promise<void> {
+): void {
   if (!token || typeof token !== 'string') {
     throw IPCErrors.invalidArguments('Token is required');
   }
@@ -191,7 +191,7 @@ async function handleValidateToken(
     // Get authenticated user info and scopes
     const response = await octokit.request('GET /user');
     const user = response.data;
-    const scopes = (response.headers['x-oauth-scopes'] as string)?.split(', ') || [];
+    const scopes = (response.headers['x-oauth-scopes'])?.split(', ') || [];
 
     return {
       valid: true,
@@ -216,14 +216,14 @@ async function handleValidateToken(
 /**
  * Delete stored GitHub token
  */
-async function handleDeleteToken(_event: IpcMainInvokeEvent): Promise<void> {
+function handleDeleteToken(_event: IpcMainInvokeEvent): void {
   secureStore.delete('githubToken');
 }
 
 /**
  * Get token status (not the actual token for security)
  */
-async function handleGetToken(_event: IpcMainInvokeEvent): Promise<{ hasToken: boolean }> {
+function handleGetToken(_event: IpcMainInvokeEvent): { hasToken: boolean } {
   const token = secureStore.get('githubToken');
   return { hasToken: !!token };
 }
@@ -257,7 +257,7 @@ async function handleGetIssues(
       page: data.page || 1,
     });
 
-    logger.info(`Retrieved ${issues.length} issues for ${data.owner}/${data.repo}`);
+    logger.info(`Retrieved ${String(issues.length)} issues for ${data.owner}/${data.repo}`);
     return issues;
   } catch (error) {
     logger.error('Failed to list issues:', error);
@@ -285,7 +285,7 @@ async function handleGetIssue(
       issue_number: data.issue_number,
     });
 
-    logger.info(`Retrieved issue #${data.issue_number} from ${data.owner}/${data.repo}`);
+    logger.info(`Retrieved issue #${String(data.issue_number)} from ${data.owner}/${data.repo}`);
     return issue;
   } catch (error) {
     logger.error('Failed to get issue:', error);
@@ -317,7 +317,7 @@ async function handleCreateIssue(
       ...(data.milestone !== undefined && { milestone: data.milestone }),
     });
 
-    logger.info(`Created issue #${issue.number}: ${issue.title}`);
+    logger.info(`Created issue #${String(issue.number)}: ${issue.title}`);
     return issue;
   } catch (error) {
     logger.error('Failed to create issue:', error);
@@ -353,7 +353,7 @@ async function handleGetPRs(
       page: data.page || 1,
     });
 
-    logger.info(`Retrieved ${pullRequests.length} PRs for ${data.owner}/${data.repo}`);
+    logger.info(`Retrieved ${String(pullRequests.length)} PRs for ${data.owner}/${data.repo}`);
     return pullRequests;
   } catch (error) {
     logger.error('Failed to list pull requests:', error);
@@ -381,7 +381,7 @@ async function handleGetPR(
       pull_number: data.pull_number,
     });
 
-    logger.info(`Retrieved PR #${data.pull_number} from ${data.owner}/${data.repo}`);
+    logger.info(`Retrieved PR #${String(data.pull_number)} from ${data.owner}/${data.repo}`);
     return pullRequest;
   } catch (error) {
     logger.error('Failed to get pull request:', error);
@@ -415,7 +415,7 @@ async function handleCreatePR(
       ...(data.draft !== undefined && { draft: data.draft }),
     });
 
-    logger.info(`Created PR #${pullRequest.number}: ${pullRequest.title}`);
+    logger.info(`Created PR #${String(pullRequest.number)}: ${pullRequest.title}`);
     return pullRequest;
   } catch (error) {
     logger.error('Failed to create pull request:', error);

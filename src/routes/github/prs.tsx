@@ -36,7 +36,7 @@ export function GitHubPRsPage() {
     setIsLoading(true);
     // TODO: Call IPC handler to fetch PRs from GitHub
     // Example: const prs = await invoke('github:listPrs', projectId);
-    setTimeout(() => setIsLoading(false), 1000);
+    setTimeout(() => { setIsLoading(false); }, 1000);
   };
 
   return (
@@ -50,7 +50,7 @@ export function GitHubPRsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleRefresh}
+                onClick={() => { void handleRefresh(); }}
                 disabled={isLoading}
               >
                 <RefreshCw

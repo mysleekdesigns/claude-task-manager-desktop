@@ -163,7 +163,7 @@ export function PhaseCard({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onAddMilestone(phase.id)}
+            onClick={() => { onAddMilestone(phase.id); }}
             className="w-full text-xs"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -196,7 +196,7 @@ export function PhaseCard({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowAllFeatures(true)}
+                onClick={() => { setShowAllFeatures(true); }}
                 className="w-full text-xs"
               >
                 Show {phaseFeatures.length - 3} more features
@@ -206,7 +206,7 @@ export function PhaseCard({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowAllFeatures(false)}
+                onClick={() => { setShowAllFeatures(false); }}
                 className="w-full text-xs"
               >
                 Show less
@@ -220,7 +220,7 @@ export function PhaseCard({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onAddFeature(phase.id)}
+            onClick={() => { onAddFeature(phase.id); }}
             className="w-full text-xs"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />

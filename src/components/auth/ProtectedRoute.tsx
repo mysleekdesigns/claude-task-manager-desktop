@@ -27,7 +27,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     // Redirect to login if not authenticated
     if (!isLoading && !isAuthenticated) {
-      navigate('/login', { replace: true });
+      void navigate('/login', { replace: true });
     }
   }, [isLoading, isAuthenticated, navigate]);
 

@@ -117,7 +117,7 @@ export function AddChangelogModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Title Input */}
             <div className="space-y-2">
@@ -128,7 +128,7 @@ export function AddChangelogModal({
                 id="changelog-title"
                 placeholder="Enter entry title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); }}
                 required
                 autoFocus
               />
@@ -141,7 +141,7 @@ export function AddChangelogModal({
                 id="changelog-description"
                 placeholder="Describe the change..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); }}
                 rows={4}
               />
             </div>
@@ -153,7 +153,7 @@ export function AddChangelogModal({
               </Label>
               <Select
                 value={type}
-                onValueChange={(value) => setType(value as ChangelogEntryType)}
+                onValueChange={(value) => { setType(value as ChangelogEntryType); }}
               >
                 <SelectTrigger id="changelog-type">
                   <SelectValue placeholder="Select type" />
@@ -180,7 +180,7 @@ export function AddChangelogModal({
                 id="changelog-version"
                 placeholder="e.g., 1.0.0"
                 value={version}
-                onChange={(e) => setVersion(e.target.value)}
+                onChange={(e) => { setVersion(e.target.value); }}
               />
               <p className="text-xs text-muted-foreground">
                 Leave empty to group by date

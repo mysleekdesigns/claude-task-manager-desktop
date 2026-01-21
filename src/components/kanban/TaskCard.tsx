@@ -84,11 +84,11 @@ export function TaskCard({
     if (diffMins < 1) {
       return 'just now';
     } else if (diffMins < 60) {
-      return `${diffMins} min ago`;
+      return `${String(diffMins)} min ago`;
     } else if (diffHours < 24) {
-      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      return `${String(diffHours)} hour${diffHours > 1 ? 's' : ''} ago`;
     } else {
-      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      return `${String(diffDays)} day${diffDays > 1 ? 's' : ''} ago`;
     }
   };
 
@@ -189,7 +189,7 @@ export function TaskCard({
 
             {/* Actions Menu */}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuTrigger asChild onClick={(e) => { e.stopPropagation(); }}>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -199,11 +199,11 @@ export function TaskCard({
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuContent align="end" onClick={(e) => { e.stopPropagation(); }}>
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {onEdit && (
-                  <DropdownMenuItem onClick={() => onEdit(task)}>
+                  <DropdownMenuItem onClick={() => { onEdit(task); }}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
@@ -212,7 +212,7 @@ export function TaskCard({
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={() => onDelete(task)}
+                      onClick={() => { onDelete(task); }}
                       className="text-destructive focus:text-destructive"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />

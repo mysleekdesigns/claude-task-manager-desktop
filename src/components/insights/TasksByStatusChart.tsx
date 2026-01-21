@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import type { TaskStatus } from '@/types/ipc';
 
 interface TasksByStatusChartProps {
-  data: Array<{
+  data: {
     status: TaskStatus;
     count: number;
-  }>;
+  }[];
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -64,7 +64,7 @@ export function TasksByStatusChart({ data }: TasksByStatusChartProps) {
                 <div className="h-8 bg-muted rounded-md overflow-hidden">
                   <div
                     className={`h-full ${STATUS_COLORS[item.status]} transition-all duration-500 flex items-center justify-end pr-2`}
-                    style={{ width: `${barWidth}%` }}
+                    style={{ width: `${String(barWidth)}%` }}
                   >
                     {item.count > 0 && (
                       <span className="text-xs font-semibold text-white drop-shadow-md">

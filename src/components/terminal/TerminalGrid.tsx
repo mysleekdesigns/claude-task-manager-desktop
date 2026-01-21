@@ -14,11 +14,11 @@ import { TerminalPane } from './TerminalPane';
 
 export interface TerminalGridProps {
   projectId: string;
-  terminals: Array<{
+  terminals: {
     id: string;
     name: string;
     status: 'idle' | 'running' | 'exited';
-  }>;
+  }[];
   expandedTerminalId?: string | null;
   onTerminalClose: (id: string) => void;
   onTerminalExpand: (id: string) => void;
@@ -69,7 +69,7 @@ function getGridRows(count: number): string {
 export function TerminalGrid({
   projectId,
   terminals,
-  expandedTerminalId = null,
+  expandedTerminalId,
   onTerminalClose,
   onTerminalExpand,
   onCollapseExpanded,

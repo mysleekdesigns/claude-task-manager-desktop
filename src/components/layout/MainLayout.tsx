@@ -65,7 +65,7 @@ export function MainLayout() {
                 id="task-title"
                 placeholder="Enter task title..."
                 value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
+                onChange={(e) => { setTaskTitle(e.target.value); }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && taskTitle.trim()) {
                     handleCreateTask();
@@ -77,7 +77,7 @@ export function MainLayout() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setNewTaskDialogOpen(false)}
+              onClick={() => { setNewTaskDialogOpen(false); }}
             >
               Cancel
             </Button>

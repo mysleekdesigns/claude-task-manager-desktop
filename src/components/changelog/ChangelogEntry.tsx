@@ -91,14 +91,14 @@ export function ChangelogEntryComponent({ entry, onEdit, onDelete }: ChangelogEn
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {onEdit && (
-                  <DropdownMenuItem onClick={() => onEdit(entry)}>
+                  <DropdownMenuItem onClick={() => { onEdit(entry); }}>
                     Edit
                   </DropdownMenuItem>
                 )}
                 {onEdit && onDelete && <DropdownMenuSeparator />}
                 {onDelete && (
                   <DropdownMenuItem
-                    onClick={() => onDelete(entry)}
+                    onClick={() => { onDelete(entry); }}
                     className="text-destructive"
                   >
                     Delete

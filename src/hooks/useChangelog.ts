@@ -22,7 +22,7 @@ import type {
  * @returns Query result with changelog entries data
  */
 export function useChangelogEntries(projectId: string) {
-  return useIPCQuery('changelog:list', [projectId] as any, {
+  return useIPCQuery('changelog:list', [projectId], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });
@@ -75,7 +75,7 @@ export function useExportChangelog() {
  * @returns Object with changelog entries data and mutation functions
  */
 export function useChangelogManager(projectId: string) {
-  const { data: entries = [], loading, error, refetch } = useChangelogEntries(projectId);
+  const { data: entries, loading, error, refetch } = useChangelogEntries(projectId);
   const createEntry = useCreateChangelogEntry();
   const updateEntry = useUpdateChangelogEntry();
   const deleteEntry = useDeleteChangelogEntry();

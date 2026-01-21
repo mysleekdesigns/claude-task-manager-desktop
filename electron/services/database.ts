@@ -16,7 +16,7 @@ import { getDatabasePath, getBackupsPath, ensureDirectory } from '../utils/paths
  */
 class DatabaseService {
   private prisma: PrismaClientType | null = null;
-  private databaseUrl: string = '';
+  private databaseUrl = '';
 
   /**
    * Get the database file path in the user data directory.
@@ -73,9 +73,9 @@ class DatabaseService {
       const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
       console.log('[Database] Using Prisma 7 adapter pattern');
 
-      const clientConfig = { log: logLevels, adapter };
+      const clientConfig = { log: logLevels, adapter } as Parameters<typeof PrismaClient>[0];
 
-      this.prisma = new PrismaClient(clientConfig as any) as PrismaClientType;
+      this.prisma = new PrismaClient(clientConfig);
 
       // Test the connection
       await this.prisma.$connect();
@@ -114,7 +114,7 @@ class DatabaseService {
    *
    * @throws Error if migrations fail
    */
-  async runMigrations(): Promise<void> {
+  runMigrations(): void {
     try {
       console.log('[Database] Running migrations...');
 
@@ -236,12 +236,12 @@ class DatabaseService {
    *
    * @returns Database stats including size and table counts
    */
-  async getStats(): Promise<{
+  getStats(): {
     path: string;
     size: number;
     sizeFormatted: string;
     exists: boolean;
-  }> {
+  } {
     const dbPath = this.getDatabasePath();
     const exists = fs.existsSync(dbPath);
 
@@ -269,7 +269,7 @@ class DatabaseService {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    return String(Math.round((bytes / Math.pow(k, i)) * 100) / 100) + ' ' + (sizes[i] ?? 'B');
   }
 
   /**

@@ -136,7 +136,7 @@ class GitService {
   ): Promise<void> {
     try {
       logger.info(
-        `Adding worktree: branch=${branch}, path=${worktreePath}, createBranch=${createBranch}`
+        `Adding worktree: branch=${branch}, path=${worktreePath}, createBranch=${String(createBranch)}`
       );
 
       // Validate worktree path doesn't already exist
@@ -185,7 +185,7 @@ class GitService {
     force = false
   ): Promise<void> {
     try {
-      logger.info(`Removing worktree: ${worktreePath}, force=${force}`);
+      logger.info(`Removing worktree: ${worktreePath}, force=${String(force)}`);
 
       // Validate worktree path exists
       if (!fs.existsSync(worktreePath)) {
@@ -231,16 +231,16 @@ class GitService {
 
       // Process local branches
       for (const [name, branchObj] of Object.entries(branches.branches)) {
-        const commit =
+        const commitStr =
           branchObj && typeof branchObj === 'object' && 'commit' in branchObj
-            ? (branchObj as any).commit?.substring(0, 7)
+            ? ((branchObj as { commit?: string }).commit ?? '').substring(0, 7)
             : undefined;
 
         branchList.push({
           name,
           current: branches.current === name,
           isRemote: false,
-          commit,
+          commit: commitStr || undefined,
         });
       }
 
@@ -298,7 +298,7 @@ class GitService {
         behind: status.behind || 0,
         staged: status.staged || [],
         modified: status.modified || [],
-        untracked: (status as any).untracked || [],
+        untracked: (status as { untracked?: string[] }).untracked ?? [],
       };
     } catch (error) {
       logger.error('Failed to get repository status:', error);
@@ -358,33 +358,38 @@ class GitService {
 
     for (const block of blocks) {
       const lines = block.split('\n').filter(line => line.length > 0);
-      const worktree: any = {};
+      const worktreeData: {
+        path?: string;
+        branch?: string;
+        detached?: boolean;
+        commit?: string;
+      } = {};
 
       for (const line of lines) {
         if (line.startsWith('worktree ')) {
-          worktree.path = line.substring('worktree '.length);
+          worktreeData.path = line.substring('worktree '.length);
         } else if (line.startsWith('branch ')) {
           const branchRef = line.substring('branch '.length);
           // Extract branch name from refs/heads/branchname
-          worktree.branch = branchRef.replace('refs/heads/', '');
+          worktreeData.branch = branchRef.replace('refs/heads/', '');
         } else if (line.startsWith('detached')) {
-          worktree.detached = true;
+          worktreeData.detached = true;
         } else if (line.startsWith('HEAD ')) {
           const headRef = line.substring('HEAD '.length);
-          worktree.commit = headRef.substring(0, 7);
+          worktreeData.commit = headRef.substring(0, 7);
         }
       }
 
       // Only add if we have a path
-      if (worktree.path) {
+      if (worktreeData.path) {
         // Determine if this is the main worktree (typically the repository root)
-        const isMain = worktree.branch === 'main' || worktree.branch === 'master';
+        const isMain = worktreeData.branch === 'main' || worktreeData.branch === 'master';
 
         worktrees.push({
-          path: worktree.path,
-          branch: worktree.branch || 'HEAD',
+          path: worktreeData.path,
+          branch: worktreeData.branch ?? 'HEAD',
           isMain,
-          commit: worktree.commit,
+          commit: worktreeData.commit,
         });
       }
     }

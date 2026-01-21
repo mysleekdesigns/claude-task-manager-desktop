@@ -129,7 +129,7 @@ export function McpPage() {
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
-                    onClick={handleSyncToClaudeDesktop}
+                    onClick={() => { void handleSyncToClaudeDesktop(); }}
                     disabled={isSyncing}
                   >
                     <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -141,7 +141,7 @@ export function McpPage() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button onClick={() => setIsAddModalOpen(true)}>
+            <Button onClick={() => { setIsAddModalOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               Add Server
             </Button>
@@ -187,8 +187,8 @@ export function McpPage() {
           <McpServerList
             configs={configsArray}
             presets={presetsArray}
-            onToggle={handleToggleMcp}
-            onDelete={handleDeleteMcp}
+            onToggle={(id: string) => { void handleToggleMcp(id); }}
+            onDelete={(id: string) => { void handleDeleteMcp(id); }}
             isToggling={toggleMcp.isPending}
           />
         )}
@@ -197,8 +197,8 @@ export function McpPage() {
       {/* Add Custom Server Modal */}
       <AddCustomServerModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleCreateMcp}
+        onClose={() => { setIsAddModalOpen(false); }}
+        onSubmit={(data: Omit<CreateMcpInput, 'projectId'>) => { void handleCreateMcp(data); }}
       />
     </div>
   );

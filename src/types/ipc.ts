@@ -421,7 +421,7 @@ export interface ToggleMilestoneInput {
  */
 export interface ReorderPhasesInput {
   projectId: string;
-  phaseOrders: Array<{ id: string; order: number }>;
+  phaseOrders: { id: string; order: number }[];
 }
 
 /**
@@ -833,14 +833,14 @@ export interface TaskMetrics {
   completedThisWeek: number;
   completedThisMonth: number;
   completedTotal: number;
-  byStatus: Array<{
+  byStatus: {
     status: TaskStatus;
     count: number;
-  }>;
-  byPriority: Array<{
+  }[];
+  byPriority: {
     priority: Priority;
     count: number;
-  }>;
+  }[];
 }
 
 /**
@@ -849,11 +849,11 @@ export interface TaskMetrics {
 export interface TimeMetrics {
   averageDurationMinutes: number;
   totalTimeMinutes: number;
-  phaseBreakdown: Array<{
+  phaseBreakdown: {
     phaseName: string;
     averageMinutes: number;
     taskCount: number;
-  }>;
+  }[];
 }
 
 /**
@@ -1144,11 +1144,11 @@ export interface OpenFileOptions {
   title?: string;
   defaultPath?: string;
   buttonLabel?: string;
-  filters?: Array<{
+  filters?: {
     name: string;
     extensions: string[];
-  }>;
-  properties?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles'>;
+  }[];
+  properties?: ('openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles')[];
 }
 
 /**
@@ -1235,7 +1235,7 @@ export interface IpcChannels {
   'phases:create': (data: CreatePhaseInput) => Promise<Phase>;
   'phases:update': (id: string, data: UpdatePhaseInput) => Promise<Phase>;
   'phases:delete': (id: string) => Promise<void>;
-  'phases:reorder': (updates: Array<{ phaseId: string; order: number }>) => Promise<void>;
+  'phases:reorder': (updates: { phaseId: string; order: number }[]) => Promise<void>;
   'features:list': (filters?: FeatureListFilters) => Promise<Feature[]>;
   'features:create': (data: CreateFeatureInput) => Promise<Feature>;
   'features:update': (id: string, data: UpdateFeatureInput) => Promise<Feature>;

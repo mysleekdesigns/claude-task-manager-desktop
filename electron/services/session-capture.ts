@@ -11,6 +11,7 @@ import { databaseService } from './database.js';
 /**
  * ANSI escape code regex for stripping terminal formatting
  */
+// eslint-disable-next-line no-control-regex -- intentionally matching ANSI escape sequences
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]/g;
 
 /**
@@ -56,9 +57,9 @@ function extractCommands(output: string): string[] {
     if (
       trimmed.startsWith('$ ') ||
       trimmed.startsWith('% ') ||
-      trimmed.match(/^PS\s.*>\s/)
+      (/^PS\s.*>\s/.exec(trimmed))
     ) {
-      let command = trimmed.replace(/^[$%]\s/, '').replace(/^PS\s.*>\s/, '');
+      const command = trimmed.replace(/^[$%]\s/, '').replace(/^PS\s.*>\s/, '');
       if (command && command.length > 0) {
         commands.push(command);
       }
@@ -81,8 +82,8 @@ function extractFilePaths(output: string): string[] {
 
   for (const line of lines) {
     // Git modified files (M, A, D, etc.)
-    const gitMatch = line.match(/^\s*[MAD]\s+(.+)$/);
-    if (gitMatch && gitMatch[1]) {
+    const gitMatch = /^\s*[MAD]\s+(.+)$/.exec(line);
+    if (gitMatch?.[1]) {
       files.add(gitMatch[1].trim());
       continue;
     }
@@ -96,8 +97,8 @@ function extractFilePaths(output: string): string[] {
     }
 
     // npm/yarn/pnpm install messages
-    const packageMatch = line.match(/(?:added|updated|removed)\s+(.+)/);
-    if (packageMatch && packageMatch[1]) {
+    const packageMatch = /(?:added|updated|removed)\s+(.+)/.exec(line);
+    if (packageMatch?.[1]) {
       files.add(packageMatch[1].trim());
     }
   }
@@ -121,10 +122,10 @@ function extractErrors(output: string): string[] {
 
     // Common error patterns
     if (
-      trimmed.match(/^error:/i) ||
-      trimmed.match(/^fatal:/i) ||
-      trimmed.match(/Error:/i) ||
-      trimmed.match(/Exception:/i) ||
+      (/^error:/i.exec(trimmed)) ||
+      (/^fatal:/i.exec(trimmed)) ||
+      (/Error:/i.exec(trimmed)) ||
+      (/Exception:/i.exec(trimmed)) ||
       trimmed.includes('FAILED') ||
       trimmed.includes('[ERROR]') ||
       trimmed.includes('✖') ||
@@ -147,7 +148,7 @@ function extractErrors(output: string): string[] {
 function generateTitle(commands: string[], errors: string[]): string {
   if (errors.length > 0) {
     const firstCmd = commands[0];
-    const cmdName = firstCmd ? firstCmd.split(' ')[0] : 'terminal activity';
+    const cmdName = firstCmd ? firstCmd.split(' ')[0] ?? 'terminal activity' : 'terminal activity';
     return `Session with errors: ${cmdName}`;
   }
 

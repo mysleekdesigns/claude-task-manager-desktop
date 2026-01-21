@@ -93,7 +93,7 @@ export function KanbanBoard({
     };
 
     tasks.forEach((task) => {
-      const status = task.status as TaskStatus;
+      const status = task.status;
       if (grouped[status]) {
         grouped[status].push(task);
       }
@@ -168,7 +168,7 @@ export function KanbanBoard({
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      onDragEnd={(event) => { void handleDragEnd(event); }}
       onDragOver={handleDragOver}
     >
       <div className="flex gap-4 h-full overflow-x-auto pb-4">

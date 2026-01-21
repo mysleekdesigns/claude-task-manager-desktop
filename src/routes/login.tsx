@@ -59,7 +59,7 @@ export function LoginPage() {
             Sign in to your Claude Tasks Desktop account
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <CardContent className="space-y-4">
             {error && (
               <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm border border-destructive/20">
@@ -74,7 +74,7 @@ export function LoginPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="email"
                 autoFocus
@@ -88,7 +88,7 @@ export function LoginPage() {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="current-password"
               />
@@ -98,7 +98,7 @@ export function LoginPage() {
               <Checkbox
                 id="rememberMe"
                 checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                onCheckedChange={(checked) => { setRememberMe(checked === true); }}
                 disabled={isLoading}
               />
               <Label

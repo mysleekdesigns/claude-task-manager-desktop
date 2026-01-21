@@ -134,20 +134,20 @@ export function InsightsPage() {
                 <MetricCard
                   icon={ListTodo}
                   label="Total Tasks"
-                  value={taskMetrics.data?.total || 0}
+                  value={taskMetrics.data?.total ?? 0}
                   description="All tasks in project"
                 />
                 <MetricCard
                   icon={CheckCircle2}
                   label="Completed This Week"
-                  value={taskMetrics.data?.completedThisWeek || 0}
+                  value={taskMetrics.data?.completedThisWeek ?? 0}
                   trend={completionTrend || undefined}
                   description="Tasks completed in last 7 days"
                 />
                 <MetricCard
                   icon={CheckCircle2}
                   label="Completed This Month"
-                  value={taskMetrics.data?.completedThisMonth || 0}
+                  value={taskMetrics.data?.completedThisMonth ?? 0}
                   description="Tasks completed in last 30 days"
                 />
                 <MetricCard
@@ -161,10 +161,10 @@ export function InsightsPage() {
               {/* Charts Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TasksByStatusChart
-                  data={taskMetrics.data?.byStatus || []}
+                  data={taskMetrics.data?.byStatus ?? []}
                 />
                 <TasksByPriorityChart
-                  data={taskMetrics.data?.byPriority || []}
+                  data={taskMetrics.data?.byPriority ?? []}
                 />
               </div>
             </TabsContent>
@@ -196,7 +196,7 @@ export function InsightsPage() {
                     timeMetrics.data?.phaseBreakdown.reduce(
                       (sum, p) => sum + p.taskCount,
                       0
-                    ) || 0
+                    ) ?? 0
                   }
                   description="Tasks with tracked phases"
                 />
@@ -204,7 +204,7 @@ export function InsightsPage() {
 
               {/* Phase Breakdown */}
               <TimePerPhaseChart
-                data={timeMetrics.data?.phaseBreakdown || []}
+                data={timeMetrics.data?.phaseBreakdown ?? []}
               />
             </TabsContent>
 
@@ -227,7 +227,7 @@ export function InsightsPage() {
                 <MetricCard
                   icon={CheckCircle2}
                   label="Total Completed"
-                  value={taskMetrics.data?.completedTotal || 0}
+                  value={taskMetrics.data?.completedTotal ?? 0}
                   description="All-time completed tasks"
                 />
               </div>

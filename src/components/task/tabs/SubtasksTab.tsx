@@ -100,7 +100,7 @@ export function SubtasksTab({ taskId, projectId }: SubtasksTabProps) {
         <Input
           placeholder="Add a subtask..."
           value={newSubtaskTitle}
-          onChange={(e) => setNewSubtaskTitle(e.target.value)}
+          onChange={(e) => { setNewSubtaskTitle(e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               handleCreateSubtask();

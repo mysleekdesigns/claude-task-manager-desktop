@@ -84,7 +84,7 @@ export function CreateTaskModal({
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
-        error.issues.forEach((err: z.ZodIssue) => {
+        error.issues.forEach((err) => {
           if (err.path[0]) {
             newErrors[err.path[0].toString()] = err.message;
           }
@@ -199,7 +199,7 @@ export function CreateTaskModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Title */}
             <div className="space-y-2">
@@ -232,7 +232,7 @@ export function CreateTaskModal({
                 id="description"
                 placeholder="Describe the task..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); }}
                 disabled={loading}
                 rows={4}
               />
@@ -243,7 +243,7 @@ export function CreateTaskModal({
               <Label htmlFor="priority">Priority</Label>
               <Select
                 value={priority}
-                onValueChange={(value) => setPriority(value as Priority)}
+                onValueChange={(value) => { setPriority(value as Priority); }}
                 disabled={loading}
               >
                 <SelectTrigger id="priority">
@@ -279,7 +279,7 @@ export function CreateTaskModal({
                     {tag}
                     <button
                       type="button"
-                      onClick={() => handleTagRemove(tag)}
+                      onClick={() => { handleTagRemove(tag); }}
                       disabled={loading}
                       className="hover:bg-destructive/20 rounded-full p-0.5"
                     >
@@ -292,7 +292,7 @@ export function CreateTaskModal({
                 id="tags"
                 placeholder="Type a tag and press Enter..."
                 value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
+                onChange={(e) => { setTagInput(e.target.value); }}
                 onKeyDown={handleTagAdd}
                 disabled={loading}
               />
@@ -308,7 +308,7 @@ export function CreateTaskModal({
                 id="branchName"
                 placeholder="e.g., feature/new-feature"
                 value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
+                onChange={(e) => { setBranchName(e.target.value); }}
                 disabled={loading}
                 className="font-mono text-sm"
               />
@@ -319,7 +319,7 @@ export function CreateTaskModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => { handleOpenChange(false); }}
               disabled={loading}
             >
               Cancel

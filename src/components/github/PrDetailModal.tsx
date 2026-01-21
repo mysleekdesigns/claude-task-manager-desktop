@@ -243,7 +243,7 @@ export function PrDetailModal({ pr, open, onOpenChange }: PrDetailModalProps) {
               <div className="space-y-2">
                 {pr.files && pr.files.length > 0 ? (
                   pr.files.map((file, index) => (
-                    <FileChangeItem key={`${file.filename}-${index}`} file={file} />
+                    <FileChangeItem key={`${file.filename}-${String(index)}`} file={file} />
                   ))
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
@@ -260,7 +260,7 @@ export function PrDetailModal({ pr, open, onOpenChange }: PrDetailModalProps) {
               <ScrollArea className="h-[450px] pr-4">
                 <div className="space-y-3">
                   {pr.reviews.map((review, index) => (
-                    <ReviewItem key={`${review.id}-${index}`} review={review} />
+                    <ReviewItem key={`${String(review.id)}-${String(index)}`} review={review} />
                   ))}
                 </div>
               </ScrollArea>

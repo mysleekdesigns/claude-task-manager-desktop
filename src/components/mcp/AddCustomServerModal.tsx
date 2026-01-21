@@ -40,11 +40,11 @@ interface AddCustomServerModalProps {
 // Server Type Configuration
 // ============================================================================
 
-const SERVER_TYPES: Array<{
+const SERVER_TYPES: {
   value: string;
   label: string;
   description: string;
-}> = [
+}[] = [
   {
     value: 'documentation',
     label: 'Documentation',
@@ -182,7 +182,7 @@ export function AddCustomServerModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           {/* Name Input */}
           <div className="space-y-2">
             <Label htmlFor="name">
@@ -192,7 +192,7 @@ export function AddCustomServerModal({
               id="name"
               placeholder="Enter server name (e.g., GitHub, Slack)"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); }}
               required
             />
           </div>
@@ -226,7 +226,7 @@ export function AddCustomServerModal({
               id="config"
               placeholder={'{\n  "apiKey": "your-api-key",\n  "baseUrl": "https://api.example.com"\n}'}
               value={configJson}
-              onChange={(e) => handleConfigChange(e.target.value)}
+              onChange={(e) => { handleConfigChange(e.target.value); }}
               rows={8}
               className={`font-mono text-sm ${configError ? 'border-destructive' : ''}`}
             />

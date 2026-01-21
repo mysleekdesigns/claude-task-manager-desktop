@@ -30,10 +30,10 @@ interface IdeaFiltersProps {
 // Status Filter Configuration
 // ============================================================================
 
-const STATUS_FILTERS: Array<{
+const STATUS_FILTERS: {
   value: IdeaStatus | 'ALL';
   label: string;
-}> = [
+}[] = [
   { value: 'ALL', label: 'All' },
   { value: 'PENDING', label: 'Pending' },
   { value: 'UNDER_REVIEW', label: 'Under Review' },
@@ -72,7 +72,7 @@ export function IdeaFilters({
             key={filter.value}
             variant={selectedStatus === filter.value ? 'default' : 'outline'}
             className="cursor-pointer transition-colors hover:bg-accent"
-            onClick={() => onStatusChange(filter.value)}
+            onClick={() => { onStatusChange(filter.value); }}
           >
             {filter.label}
             <span className="ml-1.5 text-xs">({counts[filter.value] || 0})</span>
@@ -83,7 +83,7 @@ export function IdeaFilters({
       {/* Sort Dropdown */}
       <div className="flex items-center gap-4">
         <span className="text-sm text-muted-foreground">Sort by:</span>
-        <Select value={sortBy} onValueChange={(value) => onSortChange(value as 'votes' | 'date')}>
+        <Select value={sortBy} onValueChange={(value) => { onSortChange(value as 'votes' | 'date'); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />
           </SelectTrigger>

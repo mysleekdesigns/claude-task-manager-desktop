@@ -142,7 +142,11 @@ async function handleCreateProject(
       },
     });
 
-    return projectWithMembers!;
+    if (!projectWithMembers) {
+      throw new Error('Failed to create project');
+    }
+
+    return projectWithMembers;
   });
 
   return result;

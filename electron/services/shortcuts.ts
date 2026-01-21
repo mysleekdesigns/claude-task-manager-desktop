@@ -19,7 +19,7 @@ export interface ShortcutConfig {
 
 export class ShortcutService {
   private mainWindow: BrowserWindow | null = null;
-  private registeredShortcuts: Map<string, string> = new Map();
+  private registeredShortcuts = new Map<string, string>();
 
   /**
    * Initialize the shortcut service with the main window
@@ -36,11 +36,11 @@ export class ShortcutService {
   private registerDefaultShortcuts(): void {
     // Show/hide app shortcut (Cmd/Ctrl+Shift+T)
     const toggleKey = process.platform === 'darwin' ? 'Command+Shift+T' : 'Control+Shift+T';
-    this.register(toggleKey, () => this.toggleWindow(), 'Toggle application window');
+    this.register(toggleKey, () => { this.toggleWindow(); }, 'Toggle application window');
 
     // New task shortcut (Cmd/Ctrl+Shift+N)
     const newTaskKey = process.platform === 'darwin' ? 'Command+Shift+N' : 'Control+Shift+N';
-    this.register(newTaskKey, () => this.openNewTaskDialog(), 'Create new task');
+    this.register(newTaskKey, () => { this.openNewTaskDialog(); }, 'Create new task');
   }
 
   /**
@@ -92,7 +92,7 @@ export class ShortcutService {
   /**
    * Get all registered shortcuts
    */
-  getRegisteredShortcuts(): Array<{ key: string; description: string }> {
+  getRegisteredShortcuts(): { key: string; description: string }[] {
     return Array.from(this.registeredShortcuts.entries()).map(([key, description]) => ({
       key,
       description,

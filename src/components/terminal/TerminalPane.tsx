@@ -169,7 +169,7 @@ export function TerminalPane({
               {isRenaming ? (
                 <Input
                   value={terminalName}
-                  onChange={(e) => setTerminalName(e.target.value)}
+                  onChange={(e) => { setTerminalName(e.target.value); }}
                   onBlur={handleRename}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -185,7 +185,7 @@ export function TerminalPane({
               ) : (
                 <h3
                   className="font-medium text-sm truncate cursor-pointer hover:text-primary"
-                  onClick={() => setIsRenaming(true)}
+                  onClick={() => { setIsRenaming(true); }}
                   title={terminal.name}
                 >
                   {terminal.name}
@@ -233,7 +233,7 @@ export function TerminalPane({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 gap-1"
-                  onClick={() => onLaunchClaude(terminal.id)}
+                  onClick={() => { onLaunchClaude(terminal.id); }}
                   title={
                     terminal.claudeStatus === 'inactive'
                       ? 'Launch Claude Code'
@@ -269,7 +269,7 @@ export function TerminalPane({
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Terminal Options</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsRenaming(true)}>
+                  <DropdownMenuItem onClick={() => { setIsRenaming(true); }}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Rename
                   </DropdownMenuItem>
@@ -289,7 +289,7 @@ export function TerminalPane({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={isExpanded ? onCollapse : () => onExpand(terminal.id)}
+                onClick={isExpanded ? onCollapse : () => { onExpand(terminal.id); }}
                 title={isExpanded ? 'Collapse' : 'Expand'}
               >
                 {isExpanded ? (
@@ -336,7 +336,7 @@ export function TerminalPane({
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowCloseConfirm(false)}
+              onClick={() => { setShowCloseConfirm(false); }}
             >
               Cancel
             </Button>

@@ -67,7 +67,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
   const handleUpdateTask = async (updates: Partial<Task>) => {
     try {
       // Filter out null values and convert to UpdateTaskInput
-      const updateData: Record<string, any> = {};
+      const updateData: Record<string, unknown> = {};
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
           updateData[key] = value;
@@ -76,7 +76,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
       const updatedTask = await updateTask(taskId, updateData);
       toast.success('Task updated');
-      refetch();
+      void refetch();
       if (onUpdate) {
         onUpdate(updatedTask);
       }
@@ -95,13 +95,13 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
     }
 
     if (title !== task?.title) {
-      handleUpdateTask({ title });
+      void handleUpdateTask({ title });
     }
     setIsEditingTitle(false);
   };
 
   const handleStatusChange = (status: TaskStatus) => {
-    handleUpdateTask({ status });
+    void handleUpdateTask({ status });
   };
 
   const getStatusBadge = (status: TaskStatus) => {
@@ -116,7 +116,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
     };
 
     return (
-      <Badge variant={variants[status] as any}>
+      <Badge variant={variants[status] as "default" | "secondary" | "outline" | "destructive"}>
         {status.replace('_', ' ')}
       </Badge>
     );
@@ -144,7 +144,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
                 <div className="flex items-center gap-2">
                   <Input
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => { setTitle(e.target.value); }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleTitleSave();
@@ -169,7 +169,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
                 </div>
               ) : (
                 <button
-                  onClick={() => setIsEditingTitle(true)}
+                  onClick={() => { setIsEditingTitle(true); }}
                   className="text-left group w-full"
                 >
                   <DialogTitle className="text-xl flex items-center gap-2">

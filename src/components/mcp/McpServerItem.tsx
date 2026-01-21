@@ -32,7 +32,7 @@ interface McpServerItemProps {
   description: string | undefined;
   category?: string;
   onToggle: (id: string) => Promise<void>;
-  onConfigure?: (server: McpConfig) => void | undefined;
+  onConfigure?: ((server: McpConfig) => void) | undefined;
   onDelete: (id: string) => Promise<void>;
   isToggling?: boolean;
 }
@@ -134,7 +134,7 @@ export function McpServerItem({
             <div className="flex items-center gap-2">
               <Switch
                 checked={server.enabled}
-                onCheckedChange={handleToggle}
+                onCheckedChange={() => { void handleToggle(); }}
                 disabled={isToggling}
                 aria-label={`Toggle ${server.name}`}
               />
@@ -174,7 +174,7 @@ export function McpServerItem({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Server Configuration</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the configuration for "{server.name}"? This action
+              Are you sure you want to delete the configuration for &quot;{server.name}&quot;? This action
               cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -183,7 +183,7 @@ export function McpServerItem({
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteConfirm}
+              onClick={() => { void handleDeleteConfirm(); }}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

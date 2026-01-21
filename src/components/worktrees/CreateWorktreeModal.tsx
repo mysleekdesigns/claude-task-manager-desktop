@@ -70,7 +70,7 @@ export function CreateWorktreeModal({
 
   // Fetch branches when modal opens
   const {
-    data: branches = [],
+    data: branches,
     loading: branchesLoading,
   } = useIPCQuery(
     'branches:list',
@@ -227,7 +227,7 @@ export function CreateWorktreeModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { void handleSubmit(e); }}>
           <div className="space-y-4 py-4">
             {/* Worktree Name */}
             <div className="space-y-2">
@@ -363,7 +363,7 @@ export function CreateWorktreeModal({
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={handleBrowseDirectory}
+                  onClick={() => { void handleBrowseDirectory(); }}
                   title="Browse directory"
                 >
                   <FolderOpen className="h-4 w-4" />
@@ -382,7 +382,7 @@ export function CreateWorktreeModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => { onOpenChange(false); }}
             >
               Cancel
             </Button>
