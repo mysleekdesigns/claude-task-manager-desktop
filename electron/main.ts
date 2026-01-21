@@ -268,14 +268,16 @@ app.on('before-quit', () => {
   }
 
   // Disconnect from database
-  try {
-    if (databaseService.isConnected()) {
-      logger.info('Disconnecting from database...');
-      await databaseService.disconnect();
-      logger.info('Database disconnected successfully');
-    }
-  } catch (error) {
-    logger.error('Error disconnecting from database:', error);
+  if (databaseService.isConnected()) {
+    logger.info('Disconnecting from database...');
+    databaseService
+      .disconnect()
+      .then(() => {
+        logger.info('Database disconnected successfully');
+      })
+      .catch((error) => {
+        logger.error('Error disconnecting from database:', error);
+      });
   }
 });
 

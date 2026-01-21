@@ -25,7 +25,6 @@ interface HeaderProps {
  * Get keyboard shortcut text based on platform
  */
 function getSearchShortcut(): string {
-  // @ts-expect-error navigator.platform is deprecated but still works for detecting platform
   const isMac = typeof navigator !== 'undefined' && (navigator.platform?.includes('Mac') ?? navigator.userAgent.includes('Mac'));
   return isMac ? '⌘K' : 'Ctrl+K';
 }

@@ -73,7 +73,7 @@ class DatabaseService {
       const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
       console.log('[Database] Using Prisma 7 adapter pattern');
 
-      const clientConfig = { log: logLevels, adapter } as Parameters<typeof PrismaClient>[0];
+      const clientConfig = { log: logLevels, adapter } as ConstructorParameters<typeof PrismaClient>[0];
 
       this.prisma = new PrismaClient(clientConfig);
 

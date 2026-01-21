@@ -78,7 +78,7 @@ export function useReorderPhases() {
  * @returns Query result with features data
  */
 export function useFeatures(projectId: string) {
-  return useIPCQuery('features:list', [projectId], {
+  return useIPCQuery('features:list', [{ projectId }], {
     enabled: Boolean(projectId),
     refetchOnArgsChange: true,
   });

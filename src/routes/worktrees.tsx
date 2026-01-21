@@ -245,7 +245,7 @@ export function WorktreesPage() {
       <WorktreeList
         worktrees={worktrees ?? []}
         loading={worktreesLoading}
-        onDelete={(id: string, force: boolean) => { void handleDeleteWorktree(id, force); }}
+        onDelete={async (id: string, force: boolean) => { await handleDeleteWorktree(id, force); }}
         onOpenTerminal={handleOpenTerminal}
         onRefresh={() => { void refetchWorktrees(); }}
       />

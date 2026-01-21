@@ -415,10 +415,10 @@ async function handleResumeTerminal(
  * Get buffered output for a terminal
  * This is used to retrieve any output that was sent before the renderer started listening
  */
-function handleGetBuffer(
+async function handleGetBuffer(
   _event: IpcMainInvokeEvent,
   terminalId: string
-): string[] {
+): Promise<string[]> {
   if (!terminalId) {
     throw IPCErrors.invalidArguments('Terminal ID is required');
   }
@@ -431,10 +431,10 @@ function handleGetBuffer(
  * Clear buffered output for a terminal
  * This is used to prevent duplicate output after the renderer has read the buffer
  */
-function handleClearOutputBuffer(
+async function handleClearOutputBuffer(
   _event: IpcMainInvokeEvent,
   terminalId: string
-): void {
+): Promise<void> {
   if (!terminalId) {
     throw IPCErrors.invalidArguments('Terminal ID is required');
   }

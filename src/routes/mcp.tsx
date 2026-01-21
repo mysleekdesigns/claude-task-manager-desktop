@@ -187,8 +187,8 @@ export function McpPage() {
           <McpServerList
             configs={configsArray}
             presets={presetsArray}
-            onToggle={(id: string) => { void handleToggleMcp(id); }}
-            onDelete={(id: string) => { void handleDeleteMcp(id); }}
+            onToggle={async (id: string) => { await handleToggleMcp(id); }}
+            onDelete={async (id: string) => { await handleDeleteMcp(id); }}
             isToggling={toggleMcp.isPending}
           />
         )}
@@ -198,7 +198,7 @@ export function McpPage() {
       <AddCustomServerModal
         isOpen={isAddModalOpen}
         onClose={() => { setIsAddModalOpen(false); }}
-        onSubmit={(data: Omit<CreateMcpInput, 'projectId'>) => { void handleCreateMcp(data); }}
+        onSubmit={async (data: Omit<CreateMcpInput, 'projectId'>) => { await handleCreateMcp(data); }}
       />
     </div>
   );

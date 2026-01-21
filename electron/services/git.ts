@@ -389,7 +389,7 @@ class GitService {
           path: worktreeData.path,
           branch: worktreeData.branch ?? 'HEAD',
           isMain,
-          commit: worktreeData.commit,
+          ...(worktreeData.commit !== undefined && { commit: worktreeData.commit }),
         });
       }
     }

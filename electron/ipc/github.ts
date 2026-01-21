@@ -158,10 +158,10 @@ export interface CreatePullRequestInput {
 /**
  * Save GitHub personal access token
  */
-function handleSaveToken(
+async function handleSaveToken(
   _event: IpcMainInvokeEvent,
   token: string
-): void {
+): Promise<void> {
   if (!token || typeof token !== 'string') {
     throw IPCErrors.invalidArguments('Token is required');
   }
@@ -216,14 +216,14 @@ async function handleValidateToken(
 /**
  * Delete stored GitHub token
  */
-function handleDeleteToken(_event: IpcMainInvokeEvent): void {
+async function handleDeleteToken(_event: IpcMainInvokeEvent): Promise<void> {
   secureStore.delete('githubToken');
 }
 
 /**
  * Get token status (not the actual token for security)
  */
-function handleGetToken(_event: IpcMainInvokeEvent): { hasToken: boolean } {
+async function handleGetToken(_event: IpcMainInvokeEvent): Promise<{ hasToken: boolean }> {
   const token = secureStore.get('githubToken');
   return { hasToken: !!token };
 }

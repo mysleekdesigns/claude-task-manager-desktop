@@ -44,28 +44,28 @@ export interface AssignmentNotificationInput {
 /**
  * Check if notifications are supported
  */
-function handleIsSupported(
+async function handleIsSupported(
   _event: IpcMainInvokeEvent
-): boolean {
+): Promise<boolean> {
   return notificationService.isAvailable();
 }
 
 /**
  * Request notification permission
  */
-function handleRequestPermission(
+async function handleRequestPermission(
   _event: IpcMainInvokeEvent
-): boolean {
+): Promise<boolean> {
   return notificationService.requestPermission();
 }
 
 /**
  * Show a generic notification
  */
-function handleShow(
+async function handleShow(
   _event: IpcMainInvokeEvent,
   data: ShowNotificationInput
-): void {
+): Promise<void> {
   if (!data.title || !data.body) {
     throw IPCErrors.invalidArguments('Title and body are required');
   }
@@ -79,10 +79,10 @@ function handleShow(
 /**
  * Show task completed notification
  */
-function handleTaskCompleted(
+async function handleTaskCompleted(
   _event: IpcMainInvokeEvent,
   data: TaskCompletedNotificationInput
-): void {
+): Promise<void> {
   if (!data.taskId || !data.taskTitle) {
     throw IPCErrors.invalidArguments('Task ID and title are required');
   }
@@ -97,10 +97,10 @@ function handleTaskCompleted(
 /**
  * Show terminal error notification
  */
-function handleTerminalError(
+async function handleTerminalError(
   _event: IpcMainInvokeEvent,
   data: TerminalErrorNotificationInput
-): void {
+): Promise<void> {
   if (!data.terminalName || !data.error) {
     throw IPCErrors.invalidArguments('Terminal name and error are required');
   }
@@ -111,10 +111,10 @@ function handleTerminalError(
 /**
  * Show assignment notification
  */
-function handleAssignment(
+async function handleAssignment(
   _event: IpcMainInvokeEvent,
   data: AssignmentNotificationInput
-): void {
+): Promise<void> {
   if (!data.taskId || !data.taskTitle || !data.assignerName) {
     throw IPCErrors.invalidArguments('Task ID, title, and assigner name are required');
   }

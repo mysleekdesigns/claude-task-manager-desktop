@@ -70,8 +70,9 @@ export interface AddFileInput {
 
 /**
  * Task with relations for API responses
+ * Note: Omit 'tags' from Prisma Task type since we deserialize it from JSON string to string[]
  */
-export type TaskWithRelations = Task & {
+export type TaskWithRelations = Omit<Task, 'tags'> & {
   tags: string[]; // Deserialized from JSON string
   assignee?: {
     id: string;
@@ -82,8 +83,8 @@ export type TaskWithRelations = Task & {
   phases?: TaskPhase[];
   logs?: TaskLog[];
   files?: TaskFile[];
-  subtasks?: Task[];
-  parent?: Task | null;
+  subtasks?: Omit<Task, 'tags'>[];
+  parent?: Omit<Task, 'tags'> | null;
 };
 
 /**
