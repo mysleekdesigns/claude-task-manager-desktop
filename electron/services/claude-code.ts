@@ -92,20 +92,31 @@ class ClaudeCodeService {
     const terminalId = `claude-${options.taskId}`;
 
     try {
-      // Build the Claude Code command
-      const command = this.buildClaudeCommand(options);
-
-      // Build the task prompt
+      // Build the task prompt FIRST
       const taskPrompt = this.buildTaskPrompt(options);
+      console.log(`[ClaudeCodeService] Built task prompt (${taskPrompt.length} chars)`);
+      console.log(`[ClaudeCodeService] Task prompt preview: ${taskPrompt.substring(0, 200)}...`);
+
+      // Build the Claude Code command with the prompt included as an argument
+      const command = this.buildClaudeCommand(options, taskPrompt);
+      console.log(`[ClaudeCodeService] Built command with embedded prompt`);
+      console.log(`[ClaudeCodeService] Full command: ${command}`);
 
       // Spawn terminal for Claude Code
       terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
         cwd: options.projectPath,
         onData: (data: string) => {
+          // Debug: log received data
+          const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
+          console.log(`[ClaudeCodeService] onData received ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+
           // Stream output to renderer
           mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
         },
         onExit: async (code: number) => {
+          // Debug: log exit event
+          console.log(`[ClaudeCodeService] onExit called with exit code: ${code}`);
+
           // Update task status based on exit code
           await this.handleTaskExit(options.taskId, code, mainWindow);
 
@@ -114,16 +125,24 @@ class ClaudeCodeService {
         },
       });
 
-      // Write the Claude Code command to start the task
+      // Display startup banner BEFORE executing the command
+      // Send banner directly to renderer via IPC instead of writing to terminal stdin
+      // Writing to stdin causes the shell to try to execute the banner as commands
+      const banner = this.buildStartupBanner(command, options);
+      console.log(`[ClaudeCodeService] Sending startup banner via IPC`);
+      mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+
+      // Disable shell echo to prevent command duplication in output
+      // Split into two writes with delay to avoid race condition
+      console.log(`[ClaudeCodeService] Disabling echo before command execution`);
+      terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
+
+      // Small delay to ensure echo is disabled before command runs
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Then write the complete Claude Code command (with prompt included)
+      console.log(`[ClaudeCodeService] Executing command with embedded prompt`);
       terminalManager.write(terminalId, `${command}\n`);
-
-      // Wait a moment for Claude to initialize
-      await this.sleep(1000);
-
-      // Send the task prompt
-      if (taskPrompt) {
-        terminalManager.write(terminalId, `${taskPrompt}\n`);
-      }
 
       console.log(
         `[ClaudeCodeService] Successfully started Claude Code for task ${options.taskId} (terminal: ${terminalId})`
@@ -138,11 +157,13 @@ class ClaudeCodeService {
         `[ClaudeCodeService] Failed to start Claude Code for task ${options.taskId}:`,
         error
       );
+      console.error(`[ClaudeCodeService] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
 
       // Clean up terminal if it was created
       if (terminalManager.has(terminalId)) {
         try {
           terminalManager.kill(terminalId);
+          console.log(`[ClaudeCodeService] Cleaned up terminal ${terminalId} after error`);
         } catch (killError) {
           console.error(
             `[ClaudeCodeService] Failed to clean up terminal ${terminalId}:`,
@@ -170,8 +191,21 @@ class ClaudeCodeService {
   ): Promise<ClaudeCodeResumeResult> {
     const terminalId = `claude-${options.taskId}`;
 
-    // Build the resume command
-    const command = `claude --resume --session-id "${options.sessionId}" --verbose`;
+    // Build the resume command with proper flags
+    const commandParts = [
+      'claude',
+      '-p', // Print mode (non-interactive)
+      '--output-format stream-json', // Streaming output
+      `--resume ${this.escapeShellArgument(options.sessionId)}`, // Resume with session ID
+    ];
+
+    // If a prompt is provided, include it as an argument
+    if (options.prompt) {
+      const escapedPrompt = this.escapeShellArgument(options.prompt);
+      commandParts.push(escapedPrompt);
+    }
+
+    const command = commandParts.join(' ');
 
     // Spawn terminal for Claude Code
     terminalManager.spawn(terminalId, `Claude Code (Resumed) - ${options.taskId}`, {
@@ -189,16 +223,16 @@ class ClaudeCodeService {
       },
     });
 
-    // Write the resume command
+    // Disable shell echo to prevent command duplication in output
+    console.log(`[ClaudeCodeService] Disabling echo before resume command`);
+    terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
+
+    // Small delay to ensure echo is disabled before command runs
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Write the complete resume command (with prompt if provided)
+    console.log(`[ClaudeCodeService] Resuming with command: ${command}`);
     terminalManager.write(terminalId, `${command}\n`);
-
-    // Wait a moment for Claude to initialize
-    await this.sleep(1000);
-
-    // Send additional prompt if provided
-    if (options.prompt) {
-      terminalManager.write(terminalId, `${options.prompt}\n`);
-    }
 
     return {
       terminalId,
@@ -240,18 +274,101 @@ class ClaudeCodeService {
   }
 
   /**
+   * Build a startup banner to display before executing Claude Code command.
+   * Shows the exact command, project path, and session ID clearly to the user.
+   *
+   * @param command - The Claude CLI command that will be executed
+   * @param options - Claude Code options containing context
+   * @returns Formatted banner string with terminal line endings
+   */
+  private buildStartupBanner(command: string, options: ClaudeCodeOptions): string {
+    const banner: string[] = [];
+
+    // Top border
+    banner.push('╔════════════════════════════════════════════════════════════════════╗\r\n');
+
+    // Title
+    banner.push('║ Starting Claude Code                                                ║\r\n');
+
+    // Separator
+    banner.push('╠════════════════════════════════════════════════════════════════════╣\r\n');
+
+    // Command (may need multiple lines if long)
+    const commandLines = this.wrapText(`Command: ${command}`, 66);
+    commandLines.forEach(line => {
+      banner.push(`║ ${line.padEnd(66, ' ')} ║\r\n`);
+    });
+
+    // Project path
+    const pathLines = this.wrapText(`Path: ${options.projectPath}`, 66);
+    pathLines.forEach(line => {
+      banner.push(`║ ${line.padEnd(66, ' ')} ║\r\n`);
+    });
+
+    // Session ID
+    banner.push(`║ Session: ${options.sessionId.padEnd(56, ' ')} ║\r\n`);
+
+    // Task ID
+    banner.push(`║ Task ID: ${options.taskId.padEnd(56, ' ')} ║\r\n`);
+
+    // Bottom border
+    banner.push('╚════════════════════════════════════════════════════════════════════╝\r\n');
+
+    // Add spacing
+    banner.push('\r\n');
+
+    return banner.join('');
+  }
+
+  /**
+   * Wrap text to fit within a specified width, breaking at word boundaries.
+   *
+   * @param text - Text to wrap
+   * @param maxWidth - Maximum width per line
+   * @returns Array of wrapped lines
+   */
+  private wrapText(text: string, maxWidth: number): string[] {
+    if (text.length <= maxWidth) {
+      return [text];
+    }
+
+    const lines: string[] = [];
+    let currentLine = '';
+
+    const words = text.split(' ');
+    for (const word of words) {
+      if (currentLine.length + word.length + 1 <= maxWidth) {
+        currentLine += (currentLine.length > 0 ? ' ' : '') + word;
+      } else {
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      }
+    }
+
+    if (currentLine.length > 0) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  }
+
+  /**
    * Build the Claude Code CLI command from options.
    *
    * @param options - Claude Code options
+   * @param taskPrompt - The task prompt to include as a command argument
    * @returns Complete Claude CLI command
    */
-  private buildClaudeCommand(options: ClaudeCodeOptions): string {
+  private buildClaudeCommand(options: ClaudeCodeOptions, taskPrompt: string): string {
     const parts = ['claude'];
 
-    // Session tracking
-    parts.push(`--session-id "${options.sessionId}"`);
+    // Print mode (non-interactive) for programmatic use
+    parts.push('-p');
 
-    // Verbose logging
+    // Streaming JSON output format (requires --verbose)
+    parts.push('--output-format stream-json');
     parts.push('--verbose');
 
     // Max turns
@@ -271,12 +388,53 @@ class ClaudeCodeService {
 
     // Custom system prompt
     if (options.appendSystemPrompt) {
-      // Escape quotes in the system prompt
-      const escapedPrompt = options.appendSystemPrompt.replace(/"/g, '\\"');
-      parts.push(`--append-system-prompt "${escapedPrompt}"`);
+      // Escape the system prompt using proper shell escaping
+      const escapedPrompt = this.escapeShellArgument(options.appendSystemPrompt);
+      parts.push(`--append-system-prompt ${escapedPrompt}`);
+    }
+
+    // Add the task prompt as the final argument
+    // Escape the prompt properly for shell execution
+    if (taskPrompt) {
+      const escapedPrompt = this.escapeShellArgument(taskPrompt);
+      parts.push(escapedPrompt);
     }
 
     return parts.join(' ');
+  }
+
+  /**
+   * Escape a string for use as a shell argument using POSIX $'...' quoting.
+   * This handles quotes, newlines, and special characters correctly.
+   *
+   * @param str - String to escape
+   * @returns Properly escaped string for shell
+   */
+  private escapeShellArgument(str: string): string {
+    // Use $'...' POSIX quoting which properly handles escape sequences
+    // Within $'...', we need to escape:
+    // - Backslashes as \\ (must be first to avoid double-escaping)
+    // - Single quotes as \'
+    // - Newlines as \n (literal newlines would be interpreted as command separators)
+    // - Carriage returns as \r
+    // - Tabs as \t
+
+    // Escape backslashes first (to avoid double-escaping subsequent replacements)
+    let escaped = str.replace(/\\/g, '\\\\');
+
+    // Escape single quotes
+    escaped = escaped.replace(/'/g, "\\'");
+
+    // Convert literal newlines to \n escape sequences
+    // This is critical - literal newlines in $'...' break the command into multiple lines
+    escaped = escaped.replace(/\n/g, '\\n');
+
+    // Also escape carriage returns and tabs for completeness
+    escaped = escaped.replace(/\r/g, '\\r');
+    escaped = escaped.replace(/\t/g, '\\t');
+
+    // Return with $'...' wrapper
+    return `$'${escaped}'`;
   }
 
   /**
@@ -399,14 +557,6 @@ class ClaudeCodeService {
     }
   }
 
-  /**
-   * Sleep utility for waiting.
-   *
-   * @param ms - Milliseconds to sleep
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 // Export singleton instance

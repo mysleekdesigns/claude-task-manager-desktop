@@ -116,6 +116,8 @@ const VALID_INVOKE_CHANNELS = [
   'terminal:list',
   'terminal:pause',
   'terminal:resume',
+  'terminal:getBuffer',
+  'terminal:clearOutputBuffer',
   // Worktrees
   'worktrees:list',
   'worktrees:create',
@@ -329,12 +331,23 @@ const electronAPI: ElectronAPI = {
       return;
     }
 
-    // Wrap the callback to strip the event object
+    // CRITICAL: Remove existing listener for this callback first to prevent duplicates
+    const existingWrapper = callbackMap.get(callback);
+    if (existingWrapper) {
+      ipcRenderer.removeListener(channel, existingWrapper);
+      callbackMap.delete(callback);
+    }
+
+    // Wrap the callback to strip the event object and handle errors
     const wrappedCallback = (
       _event: IpcRendererEvent,
       ...args: unknown[]
     ): void => {
-      callback(...args);
+      try {
+        callback(...args);
+      } catch (error) {
+        console.error(`[IPC] Error in ${channel} callback:`, error);
+      }
     };
 
     // Store the wrapper so we can remove it later

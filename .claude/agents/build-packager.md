@@ -1,7 +1,7 @@
 ---
 name: build-packager
 description: Handles Electron build configuration, packaging, code signing, and distribution with electron-builder. Use when configuring builds, troubleshooting packaging issues, or setting up CI/CD.
-model: haiku
+model: opus
 allowed-tools:
   - Read
   - Write

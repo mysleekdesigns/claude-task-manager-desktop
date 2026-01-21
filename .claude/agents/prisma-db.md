@@ -1,7 +1,7 @@
 ---
 name: prisma-db
 description: Handles Prisma schema design, migrations, and database operations for SQLite. Use when working on prisma/schema.prisma, creating migrations, or debugging database issues.
-model: haiku
+model: opus
 allowed-tools:
   - Read
   - Write

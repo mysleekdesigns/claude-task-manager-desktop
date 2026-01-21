@@ -47,12 +47,22 @@ interface ManagedTerminal {
  * - Input writing and terminal resizing
  * - Process cleanup and resource management
  * - Output buffering for session capture (limited to 100KB per terminal)
+ * - Line-based output buffering to prevent race conditions (last 100 lines per terminal)
  */
 class TerminalManager {
   private terminals: Map<string, ManagedTerminal> = new Map();
 
   /** Maximum buffer size per terminal (100KB) */
   private readonly MAX_BUFFER_SIZE = 100 * 1024;
+
+  /** Line-based output buffers for race condition prevention */
+  private outputBuffers: Map<string, string[]> = new Map();
+
+  /** Incomplete line fragments from previous chunks */
+  private incompleteLines: Map<string, string> = new Map();
+
+  /** Maximum number of lines to buffer per terminal */
+  private readonly MAX_BUFFER_LINES = 100;
 
   /**
    * Get the default shell based on the current platform.
@@ -112,11 +122,22 @@ class TerminalManager {
         env,
       });
 
+      // Initialize line buffer and incomplete line tracker for this terminal
+      this.outputBuffers.set(id, []);
+      this.incompleteLines.set(id, '');
+
       // Set up data handler
       ptyProcess.onData((data: string) => {
         try {
+          // Debug: log PTY data received
+          const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
+          console.log(`[TerminalManager] PTY onData for ${id}: ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+
           // Add to buffer for session capture
           this.addToBuffer(id, data);
+
+          // Add to line-based output buffer for race condition prevention
+          this.addToLineBuffer(id, data);
 
           // Forward to callback
           options.onData(data);
@@ -138,8 +159,10 @@ class TerminalManager {
             error
           );
         } finally {
-          // Clean up the terminal from our map
+          // Clean up the terminal from our maps
           this.terminals.delete(id);
+          this.outputBuffers.delete(id);
+          this.incompleteLines.delete(id);
         }
       });
 
@@ -157,6 +180,7 @@ class TerminalManager {
       console.log(
         `[TerminalManager] Spawned terminal "${name}" (${id}) with PID ${ptyProcess.pid}`
       );
+      console.log(`[TerminalManager] Terminal spawned with shell: ${shell}, cwd: ${cwd}`);
 
       return {
         id,
@@ -185,6 +209,10 @@ class TerminalManager {
     }
 
     try {
+      // Debug: log what's being written to the terminal
+      const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
+      console.log(`[TerminalManager] Writing to terminal ${id}: ${data.length} bytes, preview: ${JSON.stringify(preview)}`);
+
       terminal.pty.write(data);
     } catch (error) {
       console.error(`[TerminalManager] Failed to write to terminal ${id}:`, error);
@@ -241,11 +269,15 @@ class TerminalManager {
     try {
       terminal.pty.kill();
       this.terminals.delete(id);
+      this.outputBuffers.delete(id);
+      this.incompleteLines.delete(id);
       console.log(`[TerminalManager] Killed terminal ${id}`);
     } catch (error) {
       console.error(`[TerminalManager] Failed to kill terminal ${id}:`, error);
-      // Still remove from map even if kill fails
+      // Still remove from maps even if kill fails
       this.terminals.delete(id);
+      this.outputBuffers.delete(id);
+      this.incompleteLines.delete(id);
       throw new Error(
         `Failed to kill terminal: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -290,6 +322,8 @@ class TerminalManager {
     }
 
     this.terminals.clear();
+    this.outputBuffers.clear();
+    this.incompleteLines.clear();
   }
 
   /**
@@ -357,6 +391,72 @@ class TerminalManager {
     if (terminal) {
       terminal.outputBuffer = '';
     }
+  }
+
+  /**
+   * Add output data to the line-based buffer for race condition prevention.
+   * Keeps the last MAX_BUFFER_LINES lines.
+   *
+   * This handles terminal data that arrives in arbitrary chunks (e.g., "Hello\nWo", then "rld\n")
+   * by tracking incomplete lines across chunks and only pushing complete lines to the buffer.
+   *
+   * @param id - Terminal ID
+   * @param data - Output data to add
+   */
+  private addToLineBuffer(id: string, data: string): void {
+    const buffer = this.outputBuffers.get(id);
+
+    if (!buffer) {
+      return;
+    }
+
+    // Prepend any incomplete line from the previous chunk
+    const incomplete = this.incompleteLines.get(id) || '';
+    const fullData = incomplete + data;
+
+    // Split on newlines
+    const lines = fullData.split('\n');
+
+    // If data doesn't end with \n, the last element is incomplete
+    if (!fullData.endsWith('\n')) {
+      // Save the incomplete line for the next chunk
+      this.incompleteLines.set(id, lines.pop() || '');
+    } else {
+      // Data ended with \n, so all lines are complete
+      this.incompleteLines.set(id, '');
+    }
+
+    // Add complete lines to the buffer
+    for (const line of lines) {
+      buffer.push(line);
+
+      // Truncate buffer if it exceeds max lines
+      if (buffer.length > this.MAX_BUFFER_LINES) {
+        buffer.shift(); // Remove oldest line
+      }
+    }
+  }
+
+  /**
+   * Get the line-based output buffer for a terminal.
+   * Used to retrieve buffered output when the renderer starts listening.
+   *
+   * @param id - Terminal ID
+   * @returns Array of buffered output lines, or empty array if not found
+   */
+  getOutputBuffer(id: string): string[] {
+    return this.outputBuffers.get(id) || [];
+  }
+
+  /**
+   * Clear the line-based output buffer for a terminal.
+   * Used to prevent duplicate output when the renderer re-reads the buffer.
+   *
+   * @param id - Terminal ID
+   */
+  clearOutputBuffer(id: string): void {
+    this.outputBuffers.set(id, []);
+    this.incompleteLines.set(id, '');
   }
 
   /**

@@ -163,6 +163,13 @@ async function handleWriteTerminal(
     throw new Error(`Terminal is not running (status: ${terminal.status})`);
   }
 
+  // Verify terminal exists in the manager before writing
+  if (!terminalManager.has(data.id)) {
+    throw new Error(
+      `Terminal ${data.id} not found in manager (database record exists but process may have exited)`
+    );
+  }
+
   // Write to the terminal process
   terminalManager.write(data.id, data.data);
 }
@@ -405,6 +412,38 @@ async function handleResumeTerminal(
 }
 
 /**
+ * Get buffered output for a terminal
+ * This is used to retrieve any output that was sent before the renderer started listening
+ */
+async function handleGetBuffer(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<string[]> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  // No need to verify in database - terminal manager handles this
+  return terminalManager.getOutputBuffer(terminalId);
+}
+
+/**
+ * Clear buffered output for a terminal
+ * This is used to prevent duplicate output after the renderer has read the buffer
+ */
+async function handleClearOutputBuffer(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<void> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  // Clear the output buffer to prevent duplication
+  terminalManager.clearOutputBuffer(terminalId);
+}
+
+/**
  * Register all terminal-related IPC handlers.
  * Requires mainWindow reference for output streaming.
  *
@@ -460,6 +499,18 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     'terminal:resume',
     wrapWithLogging('terminal:resume', wrapHandler(handleResumeTerminal))
   );
+
+  // terminal:getBuffer - Get buffered output for a terminal
+  ipcMain.handle(
+    'terminal:getBuffer',
+    wrapWithLogging('terminal:getBuffer', wrapHandler(handleGetBuffer))
+  );
+
+  // terminal:clearOutputBuffer - Clear buffered output for a terminal
+  ipcMain.handle(
+    'terminal:clearOutputBuffer',
+    wrapWithLogging('terminal:clearOutputBuffer', wrapHandler(handleClearOutputBuffer))
+  );
 }
 
 /**
@@ -474,6 +525,8 @@ export function unregisterTerminalHandlers(): void {
   ipcMain.removeHandler('terminal:captureSession');
   ipcMain.removeHandler('terminal:pause');
   ipcMain.removeHandler('terminal:resume');
+  ipcMain.removeHandler('terminal:getBuffer');
+  ipcMain.removeHandler('terminal:clearOutputBuffer');
 }
 
 /**

@@ -1,7 +1,7 @@
 ---
 name: test-runner
 description: Runs tests, analyzes test output, and helps fix failing tests. Use after implementing features to verify correctness or when debugging test failures.
-model: haiku
+model: opus
 allowed-tools:
   - Read
   - Bash

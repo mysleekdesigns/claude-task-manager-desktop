@@ -21,11 +21,20 @@ interface TaskOutputPreviewProps {
 
 /**
  * Strip ANSI escape codes from terminal output
- * Regex pattern matches common ANSI escape sequences
+ * Comprehensive regex to handle:
+ * - CSI sequences including bracketed paste mode ([?2004h, [?2004l)
+ * - OSC sequences (title changes, etc.)
+ * - Other escape sequences
  */
 function stripAnsiCodes(text: string): string {
   // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  return text
+    .replace(
+      /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]|\x1b\[\?[0-9;]*[hl]/g,
+      ''
+    )
+    // Remove shell continuation prompts (quote>, dquote>, >, $, %)
+    .replace(/^(quote>|dquote>|>|\$|%)\s*/gm, '');
 }
 
 // ============================================================================
@@ -36,58 +45,179 @@ const MAX_LINES = 12;
 
 export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   const [outputLines, setOutputLines] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bufferRef = useRef<string[]>([]);
+  const partialLineRef = useRef<string>(''); // Track incomplete line chunks
   const throttleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number>(0); // Will be set on first output
+  const hasReceivedOutputRef = useRef<boolean>(false);
+
+  // Track seen lines for deduplication (sliding window approach)
+  const seenLinesRef = useRef<Set<string>>(new Set());
 
   /**
-   * Handle incoming terminal output with throttling
-   * Splits on newlines, strips ANSI codes, and maintains a rolling buffer
-   * Updates are throttled to once per 500ms to prevent excessive re-renders
+   * Create a ref to hold the latest handler implementation.
+   * This provides a STABLE function reference for IPC subscription,
+   * preventing duplicate listeners when the component re-renders.
    */
-  const handleOutput = useCallback((...args: unknown[]) => {
-    const data = args[0] as string;
-    const cleanedData = stripAnsiCodes(data);
-    const newLines = cleanedData.split('\n');
-
-    // Update buffer immediately (no delay for data capture)
-    const merged = [...bufferRef.current];
-
-    // If the last line in buffer is incomplete (no newline), append to it
-    if (merged.length > 0 && !data.startsWith('\n')) {
-      const lastLine = merged.pop() || '';
-      merged.push(lastLine + newLines[0]);
-      newLines.shift();
-    }
-
-    // Add remaining new lines
-    merged.push(...newLines);
-
-    // Keep only last MAX_LINES, filtering empty lines at the end
-    const trimmed = merged.slice(-MAX_LINES * 2).filter(line => line.trim().length > 0);
-    bufferRef.current = trimmed.slice(-MAX_LINES);
-
-    // Throttle UI updates to once per 500ms
-    if (!throttleTimerRef.current) {
-      throttleTimerRef.current = setTimeout(() => {
-        setOutputLines([...bufferRef.current]);
-        throttleTimerRef.current = null;
-      }, 500);
-    }
-  }, []);
+  const handleOutputRef = useRef<((...args: unknown[]) => void) | null>(null);
 
   /**
-   * Subscribe to terminal output events
+   * Update the ref's implementation whenever dependencies change.
+   * This doesn't trigger re-subscription because we don't pass this to useEffect deps.
    */
   useEffect(() => {
+    handleOutputRef.current = (...args: unknown[]) => {
+      const data = args[0] as string;
+      const cleanedData = stripAnsiCodes(data);
+
+      // Reset timer on first output (Issue 2: Reset timing on first output)
+      if (!hasReceivedOutputRef.current) {
+        hasReceivedOutputRef.current = true;
+        startTimeRef.current = Date.now(); // Reset timer on first output
+      }
+
+      // Prepend any incomplete line from previous chunk
+      const fullData = partialLineRef.current + cleanedData;
+
+      // Split by newlines
+      const parts = fullData.split('\n');
+
+      // The last element is either:
+      // - Empty string if data ended with \n (complete line)
+      // - Partial line if data didn't end with \n (incomplete)
+      const hasTrailingNewline = cleanedData.endsWith('\n');
+
+      // If no trailing newline, last part is incomplete - save for next chunk
+      if (!hasTrailingNewline && parts.length > 0) {
+        partialLineRef.current = parts.pop() || '';
+      } else {
+        partialLineRef.current = '';
+      }
+
+      // Add complete lines to buffer
+      if (parts.length > 0) {
+        bufferRef.current.push(...parts);
+
+        // Keep only last MAX_LINES, filtering empty lines
+        const nonEmptyLines = bufferRef.current.filter(line => line.trim().length > 0);
+        bufferRef.current = nonEmptyLines.slice(-MAX_LINES);
+      }
+
+      // DEBUG: Log processing results
+      console.log(`[TaskOutputPreview] Processed: ${parts.length} complete lines, partial=${partialLineRef.current.length} bytes, buffer=${bufferRef.current.length} lines`);
+
+      // Calculate time elapsed since component mount
+      const elapsedTime = Date.now() - startTimeRef.current;
+      const isInitialPeriod = elapsedTime < 2000; // First 2 seconds
+
+      // During initial period: update immediately (no throttle)
+      // After initial period: throttle updates to 500ms
+      if (isInitialPeriod) {
+        setOutputLines([...bufferRef.current]);
+        console.log(`[TaskOutputPreview] Updated UI immediately with ${bufferRef.current.length} lines`);
+      } else {
+        // Throttle UI updates to once per 500ms
+        if (!throttleTimerRef.current) {
+          throttleTimerRef.current = setTimeout(() => {
+            setOutputLines([...bufferRef.current]);
+            console.log(`[TaskOutputPreview] Throttled UI update with ${bufferRef.current.length} lines`);
+            throttleTimerRef.current = null;
+          }, 500);
+        }
+      }
+    };
+  }, []); // Empty deps - update ref's content, not the ref itself
+
+  /**
+   * FIX 1: Create a STABLE handler using useCallback with empty deps
+   * This ensures the SAME function reference is used for both registration and removal
+   */
+  const stableHandler = useCallback((...args: unknown[]) => {
+    console.log(`[TaskOutputPreview] Received IPC event with ${(args[0] as string)?.length || 0} bytes`);
+    handleOutputRef.current?.(...args);
+  }, []); // Empty deps = stable reference across renders
+
+  /**
+   * Subscribe to live events IMMEDIATELY, then fetch buffered output in parallel.
+   *
+   * FIX: Previous implementation subscribed AFTER the buffer fetch completed,
+   * causing a race condition where live data sent during the async gap was missed.
+   *
+   * New flow:
+   * 1. Subscribe to live events IMMEDIATELY on mount (synchronous)
+   * 2. Fetch initial buffer in parallel (async)
+   * 3. Live events are captured even during the buffer fetch
+   * 4. Buffer data is merged with any live data that arrived
+   */
+  useEffect(() => {
+    if (!terminalId) return;
+
+    let isMounted = true;
     const channel = `terminal:output:${terminalId}` as const;
 
-    // Subscribe to IPC events
-    window.electron.on(channel, handleOutput);
+    // SUBSCRIBE IMMEDIATELY - don't wait for buffer fetch
+    // This ensures we capture any live data sent during the async gap
+    console.log(`[TaskOutputPreview] Subscribing to channel: ${channel}`);
+    window.electron.on(channel, stableHandler);
 
-    // Cleanup on unmount or when terminalId/handleOutput changes
+    // THEN fetch initial buffer (runs in parallel with live subscription)
+    window.electron.invoke<string[]>('terminal:getBuffer', terminalId)
+      .then((buffer) => {
+        if (!isMounted) return;
+
+        if (buffer && buffer.length > 0) {
+          console.log(`[TaskOutputPreview] Received buffer with ${buffer.length} lines`);
+          // Buffer is already split into lines, just clean ANSI codes and filter
+          const cleanedLines = buffer.map((line: string) => stripAnsiCodes(line));
+          const filtered = cleanedLines.filter((line: string) => line.trim().length > 0);
+
+          // Merge with any live data that arrived during the fetch
+          // Buffer data goes first (it's older), then live data
+          const existingLines = bufferRef.current;
+          const mergedLines = [...filtered, ...existingLines];
+
+          // Issue 3: Improved deduplication using Set to handle non-adjacent duplicates
+          // This handles duplicates that occur during buffer/live overlap
+          const deduped: string[] = [];
+          const seen = new Set<string>();
+
+          for (const line of mergedLines) {
+            // Create a normalized key for comparison (trim whitespace)
+            const normalizedLine = line.trim();
+            if (normalizedLine && !seen.has(normalizedLine)) {
+              seen.add(normalizedLine);
+              deduped.push(line);
+            }
+          }
+
+          // Update the global seen lines set for future deduplication
+          seenLinesRef.current = seen;
+
+          bufferRef.current = deduped.slice(-MAX_LINES);
+          setOutputLines([...bufferRef.current]);
+
+          // Reset timer on first output from buffer
+          if (!hasReceivedOutputRef.current) {
+            hasReceivedOutputRef.current = true;
+            startTimeRef.current = Date.now();
+          }
+
+          // NOTE: Don't clear the main process buffer - we need it on remount
+          // The buffer may have duplicate data, but deduplication handles that
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch terminal buffer:', err);
+        setError('Failed to load initial output');
+        // Live subscription is already active, so we'll still receive output
+      });
+
+    // Cleanup removes the listener
     return () => {
-      window.electron.removeListener(channel, handleOutput);
+      isMounted = false;
+      window.electron.removeListener(channel, stableHandler);
 
       // Clear any pending throttle timer
       if (throttleTimerRef.current) {
@@ -95,7 +225,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
         throttleTimerRef.current = null;
       }
     };
-  }, [terminalId, handleOutput]);
+  }, [terminalId, stableHandler]);
 
   /**
    * Auto-scroll to bottom when new output arrives
@@ -106,14 +236,19 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
     }
   }, [outputLines]);
 
-  // Don't render if no output
-  if (outputLines.length === 0) {
-    return (
-      <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md">
-        <p className="text-xs text-zinc-500 font-mono">Waiting for output...</p>
-      </div>
-    );
-  }
+  /**
+   * Generate a simple hash for a string to create stable keys
+   */
+  const hashLine = (line: string, index: number): string => {
+    // Create a hash based on line content and position for uniqueness
+    let hash = 0;
+    for (let i = 0; i < line.length; i++) {
+      const char = line.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `${terminalId}-${index}-${hash}`;
+  };
 
   return (
     <div
@@ -121,14 +256,27 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
       className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md max-h-80 overflow-y-auto"
     >
       <div className="space-y-0.5">
-        {outputLines.map((line, index) => (
-          <div
-            key={`${terminalId}-${index}`}
-            className="text-xs font-mono text-zinc-300 leading-relaxed break-all"
-          >
-            {line || '\u00A0'} {/* Non-breaking space for empty lines */}
+        {/* Issue 5: Display error state if buffer fetch failed */}
+        {error && (
+          <div className="text-xs font-mono text-red-400">
+            {error}
           </div>
-        ))}
+        )}
+        {/* Issue 1: Show loading indicator when no output yet */}
+        {outputLines.length === 0 ? (
+          <div className="text-xs font-mono text-zinc-500 animate-pulse">
+            Starting Claude Code...
+          </div>
+        ) : (
+          outputLines.map((line, index) => (
+            <div
+              key={hashLine(line, index)} /* Issue 4: Use content hash for stable key */
+              className="text-xs font-mono text-zinc-300 leading-relaxed break-words whitespace-pre-wrap"
+            >
+              {line || '\u00A0'} {/* Non-breaking space for empty lines */}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 ---
 name: terminal-pty
 description: Handles terminal emulation with node-pty and xterm.js integration. Use when implementing terminal spawning, I/O streaming, resize handling, or Claude Code integration.
-model: sonnet
+model: opus
 allowed-tools:
   - Read
   - Write

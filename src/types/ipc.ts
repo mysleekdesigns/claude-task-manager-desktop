@@ -1253,6 +1253,8 @@ export interface IpcChannels {
   'terminal:list': (projectId: string) => Promise<Terminal[]>;
   'terminal:pause': (terminalId: string) => Promise<boolean>;
   'terminal:resume': (terminalId: string) => Promise<boolean>;
+  'terminal:getBuffer': (terminalId: string) => Promise<string[]>;
+  'terminal:clearOutputBuffer': (terminalId: string) => Promise<void>;
 
   // Worktree channels
   'worktrees:list': (projectId: string) => Promise<WorktreeWithStatus[]>;
@@ -1585,6 +1587,8 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'terminal:list',
   'terminal:pause',
   'terminal:resume',
+  'terminal:getBuffer',
+  'terminal:clearOutputBuffer',
   'worktrees:list',
   'worktrees:create',
   'worktrees:get',

@@ -1,7 +1,7 @@
 ---
 name: git-ops
 description: Handles git operations including worktree management, branch operations, and repository status using simple-git. Use when implementing git worktree features or repository management.
-model: haiku
+model: opus
 allowed-tools:
   - Read
   - Write

@@ -1,7 +1,7 @@
 ---
 name: electron-main
 description: Handles Electron main process development including IPC handlers, database services, terminal management with node-pty, and file system operations. Use when working on electron/ directory code, database operations, or main process services.
-model: sonnet
+model: opus
 allowed-tools:
   - Read
   - Write

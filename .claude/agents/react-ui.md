@@ -1,7 +1,7 @@
 ---
 name: react-ui
 description: Handles React renderer process development including UI components, hooks, routing, and state management with Zustand. Use when working on src/ directory code, React components, or UI implementation.
-model: sonnet
+model: opus
 allowed-tools:
   - Read
   - Write
