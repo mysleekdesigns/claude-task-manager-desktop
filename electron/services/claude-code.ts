@@ -205,12 +205,12 @@ class StreamJsonParser {
         if (msg.message?.content) {
           for (const item of msg.message.content) {
             if (item.type === 'tool_use' && item.name) {
-              // Found a tool use - generate status message
-              const statusMessage = StreamJsonParser.TOOL_DISPLAY[item.name] || `Using ${item.name}...`;
-              console.log(`[StreamJsonParser] Tool use detected: ${item.name} -> "${statusMessage}"`);
+              // Found a tool use - generate contextual status message
+              const contextualMessage = this.getContextualToolMessage(item.name, item.input);
+              console.log(`[StreamJsonParser] Tool use detected: ${item.name} -> "${contextualMessage}"`);
               return {
                 type: 'tool_start',
-                message: statusMessage,
+                message: contextualMessage,
                 tool: item.name,
                 timestamp,
               };
@@ -310,7 +310,7 @@ class StreamJsonParser {
   }
 
   /**
-   * Process a tool_use message into a simple status message
+   * Process a tool_use message into a contextual status message
    *
    * @param msg - Tool use message
    * @param timestamp - Message timestamp
@@ -319,12 +319,12 @@ class StreamJsonParser {
   private processToolUse(msg: StreamJsonMessage, timestamp: number): ClaudeStatusMessage | null {
     if (!msg.name) return null;
 
-    // Get simple status message for the tool (no file paths or details)
-    const statusMessage = StreamJsonParser.TOOL_DISPLAY[msg.name] || `Using ${msg.name}...`;
+    // Get contextual status message for the tool using input parameters
+    const contextualMessage = this.getContextualToolMessage(msg.name, msg.input);
 
     return {
       type: 'tool_start',
-      message: statusMessage,
+      message: contextualMessage,
       tool: msg.name,
       timestamp,
     };
@@ -350,6 +350,179 @@ class StreamJsonParser {
     // For successful results, we don't need to show a status
     // The next tool_use or text response will indicate progress
     return null;
+  }
+
+  /**
+   * Generate contextual status message based on tool name and input
+   *
+   * @param toolName - Name of the tool being used
+   * @param input - Tool input parameters
+   * @returns Human-readable status message
+   */
+  private getContextualToolMessage(toolName: string, input?: Record<string, unknown>): string {
+    if (!input) {
+      return StreamJsonParser.TOOL_DISPLAY[toolName] || `Using ${toolName}...`;
+    }
+
+    switch (toolName) {
+      case 'Bash': {
+        // Prefer Claude's description if available
+        const description = input['description'];
+        if (description && typeof description === 'string') {
+          return description;
+        }
+        return this.parseBashCommand(input['command'] as string | undefined);
+      }
+
+      case 'Read': {
+        const readPath = input['file_path'] as string | undefined;
+        const fileName = readPath?.split('/').pop() || 'file';
+        return `Reading ${fileName}`;
+      }
+
+      case 'Write': {
+        const writePath = input['file_path'] as string | undefined;
+        const writeFileName = writePath?.split('/').pop() || 'file';
+        return `Writing ${writeFileName}`;
+      }
+
+      case 'Edit': {
+        const editPath = input['file_path'] as string | undefined;
+        const editFileName = editPath?.split('/').pop() || 'file';
+        return `Editing ${editFileName}`;
+      }
+
+      case 'Glob': {
+        const pattern = input['pattern'] as string | undefined;
+        return `Searching for ${pattern || 'files'}`;
+      }
+
+      case 'Grep': {
+        const pattern = input['pattern'] as string | undefined;
+        return `Searching for "${pattern || 'pattern'}"`;
+      }
+
+      case 'Task': {
+        const taskDescription = input['description'] as string | undefined;
+        if (taskDescription) {
+          return taskDescription;
+        }
+        return 'Running sub-task...';
+      }
+
+      case 'TodoWrite': {
+        return 'Updating task list...';
+      }
+
+      default:
+        return StreamJsonParser.TOOL_DISPLAY[toolName] || `Using ${toolName}...`;
+    }
+  }
+
+  /**
+   * Parse Bash command to extract meaningful action description
+   *
+   * @param command - The bash command to parse
+   * @returns Human-readable description of the command
+   */
+  private parseBashCommand(command: string | undefined): string {
+    if (!command) return 'Running command...';
+
+    // Package installation patterns - npm
+    const npmInstall = command.match(/npm\s+(?:install|i|add)\s+(?:-[^\s]+\s+)*([\w@\/-]+)/);
+    if (npmInstall?.[1]) return `Installing ${npmInstall[1]}`;
+
+    // Package installation patterns - pnpm
+    const pnpmAdd = command.match(/pnpm\s+(?:add|install|i)\s+(?:-[^\s]+\s+)*([\w@\/-]+)/);
+    if (pnpmAdd?.[1]) return `Installing ${pnpmAdd[1]}`;
+
+    // Package installation patterns - yarn
+    const yarnAdd = command.match(/yarn\s+add\s+(?:-[^\s]+\s+)*([\w@\/-]+)/);
+    if (yarnAdd?.[1]) return `Installing ${yarnAdd[1]}`;
+
+    // Package installation patterns - bun
+    const bunAdd = command.match(/bun\s+(?:add|install|i)\s+(?:-[^\s]+\s+)*([\w@\/-]+)/);
+    if (bunAdd?.[1]) return `Installing ${bunAdd[1]}`;
+
+    // shadcn/ui component installation
+    const shadcn = command.match(/(?:npx\s+)?shadcn(?:@[\w.-]+)?(?:\s+ui)?\s+add\s+([\w\s-]+)/i);
+    if (shadcn?.[1]) {
+      const components = shadcn[1].trim();
+      return `Adding shadcn ${components} component${components.includes(' ') ? 's' : ''}`;
+    }
+
+    // npx create commands
+    const npxCreate = command.match(/npx\s+create-([\w-]+)/);
+    if (npxCreate?.[1]) return `Creating ${npxCreate[1]} project`;
+
+    // General npx commands
+    const npx = command.match(/npx\s+([\w@\/-]+)/);
+    if (npx?.[1]) return `Running ${npx[1]}`;
+
+    // Git operations
+    if (command.match(/git\s+clone/)) return 'Cloning repository';
+    if (command.match(/git\s+pull/)) return 'Pulling changes';
+    if (command.match(/git\s+push/)) return 'Pushing changes';
+    if (command.match(/git\s+commit/)) return 'Committing changes';
+    if (command.match(/git\s+checkout/)) return 'Switching branch';
+    if (command.match(/git\s+merge/)) return 'Merging branches';
+    if (command.match(/git\s+stash/)) return 'Stashing changes';
+    if (command.match(/git\s+fetch/)) return 'Fetching from remote';
+
+    // Build/dev commands
+    if (command.match(/npm\s+run\s+build/)) return 'Building project';
+    if (command.match(/npm\s+run\s+dev/)) return 'Starting dev server';
+    if (command.match(/npm\s+run\s+start/)) return 'Starting application';
+    if (command.match(/npm\s+(?:test|run\s+test)/)) return 'Running tests';
+    if (command.match(/npm\s+run\s+lint/)) return 'Linting code';
+    if (command.match(/pnpm\s+(?:build|run\s+build)/)) return 'Building project';
+    if (command.match(/pnpm\s+(?:dev|run\s+dev)/)) return 'Starting dev server';
+    if (command.match(/yarn\s+(?:build|run\s+build)/)) return 'Building project';
+    if (command.match(/yarn\s+(?:dev|run\s+dev)/)) return 'Starting dev server';
+
+    // Prisma commands
+    if (command.match(/prisma\s+migrate/)) return 'Running database migration';
+    if (command.match(/prisma\s+generate/)) return 'Generating Prisma client';
+    if (command.match(/prisma\s+db\s+push/)) return 'Pushing database schema';
+    if (command.match(/prisma\s+studio/)) return 'Opening Prisma Studio';
+
+    // Directory operations
+    const mkdir = command.match(/mkdir\s+(?:-[^\s]+\s+)*([^\s]+)/);
+    if (mkdir?.[1]) {
+      const dirName = mkdir[1].split('/').pop() || 'directory';
+      return `Creating ${dirName} directory`;
+    }
+
+    // Remove operations
+    const rm = command.match(/rm\s+(?:-[^\s]+\s+)*([^\s]+)/);
+    if (rm?.[1]) {
+      const target = rm[1].split('/').pop() || 'files';
+      return `Removing ${target}`;
+    }
+
+    // Copy operations
+    if (command.match(/cp\s+/)) return 'Copying files';
+
+    // Move operations
+    if (command.match(/mv\s+/)) return 'Moving files';
+
+    // TypeScript check
+    if (command.match(/tsc|typescript/)) return 'Type checking';
+
+    // ESLint
+    if (command.match(/eslint/)) return 'Linting code';
+
+    // Prettier
+    if (command.match(/prettier/)) return 'Formatting code';
+
+    // Docker
+    if (command.match(/docker\s+build/)) return 'Building Docker image';
+    if (command.match(/docker\s+run/)) return 'Running Docker container';
+    if (command.match(/docker-compose\s+up/)) return 'Starting Docker services';
+
+    // Default: show abbreviated command
+    const shortCommand = command.length > 40 ? command.substring(0, 40) + '...' : command;
+    return `Running: ${shortCommand}`;
   }
 
   /**
