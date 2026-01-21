@@ -137,8 +137,8 @@ class ClaudeCodeService {
       console.log(`[ClaudeCodeService] Disabling echo before command execution`);
       terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
 
-      // Small delay to ensure echo is disabled before command runs
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Delay to ensure echo is disabled before command runs (100ms buffer for slower systems)
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Then write the complete Claude Code command (with prompt included)
       console.log(`[ClaudeCodeService] Executing command with embedded prompt`);
@@ -227,8 +227,8 @@ class ClaudeCodeService {
     console.log(`[ClaudeCodeService] Disabling echo before resume command`);
     terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
 
-    // Small delay to ensure echo is disabled before command runs
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Delay to ensure echo is disabled before command runs (100ms buffer for slower systems)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Write the complete resume command (with prompt if provided)
     console.log(`[ClaudeCodeService] Resuming with command: ${command}`);

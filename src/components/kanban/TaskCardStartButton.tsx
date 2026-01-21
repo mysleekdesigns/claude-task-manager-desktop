@@ -3,6 +3,9 @@
  *
  * Button for starting/pausing/resuming Claude Code automation on a task.
  * Shows different states based on current Claude status.
+ *
+ * Note: This component relies on page-level polling in kanban.tsx for status updates.
+ * The task prop is updated by the parent component when page-level refetch occurs.
  */
 
 import { useState } from 'react';
@@ -16,7 +19,6 @@ import { Play, Loader2, Pause } from 'lucide-react';
 import { useIPCQuery } from '@/hooks/useIPC';
 import {
   useStartClaudeTask,
-  useClaudeStatusPolling,
   getClaudeStatusFromTask,
 } from '@/hooks/useClaudeStatus';
 import type { Task, ClaudeTaskStatus } from '@/types/ipc';
@@ -42,30 +44,20 @@ export function TaskCardStartButton({
   refetchTasks,
 }: TaskCardStartButtonProps) {
   const [isStarting, setIsStarting] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
   const { mutate: startTask } = useStartClaudeTask();
 
   // Fetch project data to get targetPath
   const { data: project } = useIPCQuery('projects:get', [task.projectId]);
 
-  // Poll for Claude status when active (5s interval to reduce re-renders)
-  const { data: statusData, refetch: refetchStatus } = useClaudeStatusPolling(task.id, 5000);
-
   // Get current Claude status from task database
-  const claudeStatusFromDB: ClaudeTaskStatus = getClaudeStatusFromTask(task);
+  // Page-level polling in kanban.tsx updates the task prop, so we use the task data directly
+  const claudeStatus: ClaudeTaskStatus = getClaudeStatusFromTask(task);
 
-  // Get actual runtime status (is terminal actually running?)
-  const isTerminalRunning = statusData?.isRunning || false;
-
-  // Detect state mismatch: database says STARTING but terminal isn't running
-  // We only check STARTING (not RUNNING) because by the time DB says RUNNING,
-  // the IPC handler has already validated the spawn succeeded.
-  const hasStateMismatch =
-    claudeStatusFromDB === 'STARTING' &&
-    !isTerminalRunning &&
-    statusData !== undefined; // Only detect mismatch after we've queried status
-
-  // Determine the effective Claude status
-  const claudeStatus: ClaudeTaskStatus = hasStateMismatch ? 'FAILED' : claudeStatusFromDB;
+  // Check if terminal is running based on task's terminal ID presence
+  // The page-level polling keeps task data fresh
+  const isTerminalRunning = Boolean(task.claudeTerminalId);
 
   const handleStart = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click event
@@ -91,9 +83,8 @@ export function TaskCardStartButton({
       toast.success('Claude Code session started');
       onStart?.();
 
-      // Refresh both status and tasks after starting
+      // Refresh tasks after starting (page-level polling will handle ongoing updates)
       setTimeout(() => {
-        void refetchStatus();
         void refetchTasks?.();
       }, 500);
     } catch (err) {
@@ -102,9 +93,8 @@ export function TaskCardStartButton({
         err instanceof Error ? err.message : 'Failed to start Claude Code session';
       toast.error(errorMessage);
 
-      // Refresh status and tasks to show the actual state after error
+      // Refresh tasks to show the actual state after error
       setTimeout(() => {
-        void refetchStatus();
         void refetchTasks?.();
       }, 100);
     } finally {
@@ -115,6 +105,7 @@ export function TaskCardStartButton({
   const handlePause = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
+    setIsPausing(true);
     try {
       // Pause the Claude Code session using claude:pauseTask
       const { invoke } = window.electron;
@@ -122,9 +113,8 @@ export function TaskCardStartButton({
 
       toast.success('Claude Code session paused');
 
-      // Refresh status and tasks after pausing
+      // Refresh tasks after pausing (page-level polling will handle ongoing updates)
       setTimeout(() => {
-        void refetchStatus();
         void refetchTasks?.();
       }, 500);
     } catch (err) {
@@ -133,13 +123,14 @@ export function TaskCardStartButton({
         err instanceof Error ? err.message : 'Failed to pause Claude Code session';
       toast.error(errorMessage);
 
-      // If the error is because terminal doesn't exist, trigger a status and task refresh
+      // If the error is because terminal doesn't exist, trigger a task refresh
       if (errorMessage.includes('not running') || errorMessage.includes('not found')) {
         setTimeout(() => {
-          void refetchStatus();
           void refetchTasks?.();
         }, 100);
       }
+    } finally {
+      setIsPausing(false);
     }
   };
 
@@ -152,6 +143,7 @@ export function TaskCardStartButton({
       return;
     }
 
+    setIsResuming(true);
     try {
       // Resume the Claude Code session using claude:resumeTask
       const { invoke } = window.electron;
@@ -162,9 +154,8 @@ export function TaskCardStartButton({
 
       toast.success('Claude Code session resumed');
 
-      // Refresh status and tasks after resuming
+      // Refresh tasks after resuming (page-level polling will handle ongoing updates)
       setTimeout(() => {
-        void refetchStatus();
         void refetchTasks?.();
       }, 500);
     } catch (err) {
@@ -173,13 +164,14 @@ export function TaskCardStartButton({
         err instanceof Error ? err.message : 'Failed to resume Claude Code session';
       toast.error(errorMessage);
 
-      // If the error is because terminal doesn't exist, trigger a status and task refresh
+      // If the error is because terminal doesn't exist, trigger a task refresh
       if (errorMessage.includes('not paused') || errorMessage.includes('not found')) {
         setTimeout(() => {
-          void refetchStatus();
           void refetchTasks?.();
         }, 100);
       }
+    } finally {
+      setIsResuming(false);
     }
   };
 
@@ -198,14 +190,24 @@ export function TaskCardStartButton({
             size="sm"
             variant="outline"
             onClick={(e) => { void handlePause(e); }}
-            className="h-7 px-3 text-xs gap-1.5 border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-600 dark:text-amber-500 dark:hover:bg-amber-950"
+            disabled={isPausing}
+            className="h-7 px-3 text-xs gap-1.5 border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-600 dark:text-amber-500 dark:hover:bg-amber-950 disabled:opacity-70"
           >
-            <Pause className="h-3 w-3" />
-            Pause
+            {isPausing ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Pausing...
+              </>
+            ) : (
+              <>
+                <Pause className="h-3 w-3" />
+                Pause
+              </>
+            )}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Pause Claude Code session</p>
+          <p>{isPausing ? 'Pausing Claude Code session' : 'Pause Claude Code session'}</p>
         </TooltipContent>
       </Tooltip>
     );
@@ -220,14 +222,24 @@ export function TaskCardStartButton({
             size="sm"
             variant="outline"
             onClick={(e) => { void handleResume(e); }}
-            className="h-7 px-3 text-xs gap-1.5 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 dark:border-green-600 dark:text-green-500 dark:hover:bg-green-950"
+            disabled={isResuming}
+            className="h-7 px-3 text-xs gap-1.5 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700 dark:border-green-600 dark:text-green-500 dark:hover:bg-green-950 disabled:opacity-70"
           >
-            <Play className="h-3 w-3" />
-            Resume
+            {isResuming ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Resuming...
+              </>
+            ) : (
+              <>
+                <Play className="h-3 w-3" />
+                Resume
+              </>
+            )}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Resume Claude Code session</p>
+          <p>{isResuming ? 'Resuming Claude Code session' : 'Resume Claude Code session'}</p>
         </TooltipContent>
       </Tooltip>
     );
