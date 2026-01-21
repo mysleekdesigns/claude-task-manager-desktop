@@ -4,9 +4,9 @@
  * Provides hooks for fetching and tracking Claude Code automation status.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useIPCQuery, useIPCMutation } from './useIPC';
-import type { ClaudeTaskStatus, Task } from '@/types/ipc';
+import type { ClaudeTaskStatus, Task, ClaudeStatusMessage, AllEventChannels } from '@/types/ipc';
 
 // ============================================================================
 // Types
@@ -193,4 +193,102 @@ export function getClaudeStatusFromTask(task: Task | null | undefined): ClaudeTa
  */
 export function isClaudeActive(status: ClaudeTaskStatus): boolean {
   return status === 'STARTING' || status === 'RUNNING' || status === 'AWAITING_INPUT' || status === 'PAUSED';
+}
+
+// ============================================================================
+// Status Messages Hook
+// ============================================================================
+
+/**
+ * Maximum number of status messages to keep in history
+ */
+const MAX_STATUS_MESSAGES = 50;
+
+/**
+ * Hook for subscribing to Claude Code status messages
+ * Receives real-time status updates via IPC event channel
+ *
+ * @param terminalId - The terminal ID to subscribe to status updates for
+ * @returns Object with current status, message history, and control functions
+ *
+ * @example
+ * ```tsx
+ * function TaskProgress({ terminalId }: { terminalId: string }) {
+ *   const { currentStatus, messages, clearMessages } = useClaudeStatusMessages(terminalId);
+ *
+ *   return (
+ *     <div>
+ *       <p>Current: {currentStatus?.summary}</p>
+ *       <ul>
+ *         {messages.map((msg, i) => (
+ *           <li key={i}>{msg.summary}</li>
+ *         ))}
+ *       </ul>
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
+export function useClaudeStatusMessages(terminalId: string | null) {
+  const [messages, setMessages] = useState<ClaudeStatusMessage[]>([]);
+  const [currentStatus, setCurrentStatus] = useState<ClaudeStatusMessage | null>(null);
+  const messagesRef = useRef<ClaudeStatusMessage[]>([]);
+
+  // Keep ref in sync
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Clear messages
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setCurrentStatus(null);
+    messagesRef.current = [];
+  }, []);
+
+  // Subscribe to status events
+  useEffect(() => {
+    if (!terminalId) {
+      return;
+    }
+
+    const channel = `terminal:status:${terminalId}` as AllEventChannels;
+
+    const handleStatusMessage = (...args: unknown[]) => {
+      const message = args[0] as ClaudeStatusMessage;
+
+      // Update current status
+      setCurrentStatus(message);
+
+      // Add to history (keep last MAX_STATUS_MESSAGES)
+      setMessages(prev => {
+        const updated = [...prev, message];
+        if (updated.length > MAX_STATUS_MESSAGES) {
+          return updated.slice(-MAX_STATUS_MESSAGES);
+        }
+        return updated;
+      });
+    };
+
+    // Subscribe to IPC events
+    window.electron.on(channel, handleStatusMessage);
+
+    return () => {
+      window.electron.removeListener(channel, handleStatusMessage);
+    };
+  }, [terminalId]);
+
+  // Reset when terminal ID changes
+  useEffect(() => {
+    if (terminalId) {
+      clearMessages();
+    }
+  }, [terminalId, clearMessages]);
+
+  return {
+    currentStatus,
+    messages,
+    clearMessages,
+    hasMessages: messages.length > 0,
+  };
 }

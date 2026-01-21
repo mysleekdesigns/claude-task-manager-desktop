@@ -1,8 +1,8 @@
 /**
  * Task Terminal Panel Component
  *
- * A slide-out panel that displays the terminal output for a running Claude Code task.
- * Shows real-time output from Claude Code's terminal session.
+ * A slide-out panel that displays Claude Code task progress.
+ * Shows a simple status line at top with terminal output below.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -14,12 +14,17 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { XTermWrapper } from '@/components/terminal/XTermWrapper';
-import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
-import { Terminal as TerminalIcon, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { XTermWrapper } from '@/components/terminal/XTermWrapper';
+import { ClaudeStatusDisplay } from '@/components/terminal/ClaudeStatusDisplay';
+import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
+import {
+  Terminal as TerminalIcon,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import type { Task } from '@/types/ipc';
-import { getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
+import { getClaudeStatusFromTask, useClaudeStatusMessages } from '@/hooks/useClaudeStatus';
 
 // ============================================================================
 // Types
@@ -46,9 +51,10 @@ export function TaskTerminalPanel({
   const terminalId = task?.claudeTerminalId ?? null;
   const claudeStatus = getClaudeStatusFromTask(task);
 
-  // Reset expanded state when panel closes using a ref to avoid the lint warning
-  // about setState in useEffect. This is fine since we're only setting to false
-  // when the panel closes.
+  // Subscribe to status messages
+  const { currentStatus, clearMessages } = useClaudeStatusMessages(terminalId);
+
+  // Reset expanded state when panel closes
   const wasOpenRef = React.useRef(isOpen);
   useEffect(() => {
     if (wasOpenRef.current && !isOpen) {
@@ -56,6 +62,11 @@ export function TaskTerminalPanel({
     }
     wasOpenRef.current = isOpen;
   }, [isOpen]);
+
+  // Clear messages when task changes
+  useEffect(() => {
+    clearMessages();
+  }, [task?.id, clearMessages]);
 
   if (!task) return null;
 
@@ -75,7 +86,7 @@ export function TaskTerminalPanel({
               <div className="flex-1 min-w-0">
                 <SheetTitle className="truncate">{task.title}</SheetTitle>
                 <SheetDescription className="truncate">
-                  {task.description || 'Watching Claude Code terminal output'}
+                  {task.description || 'Watching Claude Code progress'}
                 </SheetDescription>
               </div>
             </div>
@@ -112,25 +123,33 @@ export function TaskTerminalPanel({
           </div>
         </SheetHeader>
 
-        {/* Terminal Content */}
-        <div className="flex-1 min-h-0 bg-[#1a1b26]">
-          {terminalId ? (
-            <XTermWrapper
-              terminalId={terminalId}
-              className="h-full w-full"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center space-y-2">
-                <TerminalIcon className="h-12 w-12 mx-auto opacity-50" />
-                <p>No active terminal session</p>
-                <p className="text-sm">
-                  Start Claude Code to see terminal output
-                </p>
-              </div>
+        {/* Content */}
+        {terminalId ? (
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Simple status line */}
+            <div className="border-b bg-muted/30">
+              <ClaudeStatusDisplay currentStatus={currentStatus} />
             </div>
-          )}
-        </div>
+
+            {/* Terminal output */}
+            <div className="flex-1 min-h-0 bg-[#1a1b26]">
+              <XTermWrapper
+                terminalId={terminalId}
+                className="h-full"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center space-y-2">
+              <TerminalIcon className="h-12 w-12 mx-auto opacity-50" />
+              <p>No active terminal session</p>
+              <p className="text-sm">
+                Start Claude Code to see progress
+              </p>
+            </div>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

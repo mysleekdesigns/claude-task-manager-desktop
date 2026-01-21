@@ -1478,7 +1478,50 @@ export type DynamicTerminalEventChannel =
 export type DynamicClaudeEventChannel =
   | `claude:started:${string}`
   | `claude:completed:${string}`
-  | `claude:failed:${string}`;
+  | `claude:failed:${string}`
+  | `terminal:status:${string}`;
+
+// ============================================================================
+// Claude Status Display Types
+// ============================================================================
+
+/**
+ * Tool types used by Claude Code
+ */
+export type ClaudeToolType =
+  | 'Read'
+  | 'Write'
+  | 'Edit'
+  | 'Bash'
+  | 'Glob'
+  | 'Grep'
+  | 'WebFetch'
+  | 'WebSearch'
+  | 'TodoWrite'
+  | 'NotebookEdit'
+  | 'Skill'
+  | 'Task'
+  | 'unknown';
+
+/**
+ * Claude status message type - sent from main process to renderer
+ * via the `terminal:status:${terminalId}` event channel.
+ *
+ * This provides human-readable status updates parsed from Claude Code's
+ * stream-json output, allowing the UI to show clean progress indicators.
+ */
+export interface ClaudeStatusMessage {
+  /** Type of status message */
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system';
+  /** Human-readable status message (e.g., "Reading package.json...") */
+  message: string;
+  /** Optional additional details */
+  details?: string;
+  /** Tool name if applicable */
+  tool?: string;
+  /** Unix timestamp in milliseconds */
+  timestamp: number;
+}
 
 /**
  * Combined event channels (static + dynamic)

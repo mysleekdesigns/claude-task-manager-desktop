@@ -189,7 +189,10 @@ type ValidEventChannel = (typeof VALID_EVENT_CHANNELS)[number];
 /**
  * Dynamic event channels (supports template literals)
  */
-type DynamicEventChannel = `terminal:output:${string}` | `terminal:exit:${string}`;
+type DynamicEventChannel =
+  | `terminal:output:${string}`
+  | `terminal:exit:${string}`
+  | `terminal:status:${string}`;
 
 /**
  * All valid event channels (static + dynamic)
@@ -267,7 +270,11 @@ function isValidEventChannel(channel: string): channel is AllValidEventChannels 
   }
 
   // Check dynamic terminal channels
-  if (channel.startsWith('terminal:output:') || channel.startsWith('terminal:exit:')) {
+  if (
+    channel.startsWith('terminal:output:') ||
+    channel.startsWith('terminal:exit:') ||
+    channel.startsWith('terminal:status:')
+  ) {
     return true;
   }
 

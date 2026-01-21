@@ -148,9 +148,10 @@ export function TaskCard({
           )}
         </div>
 
-        {/* Live Output Preview - shown when Claude is running */}
-        {isClaudeRunning && task.claudeTerminalId && (
-          <TaskOutputPreview terminalId={task.claudeTerminalId} />
+        {/* Live Output Preview - shown when Claude is running or starting */}
+        {/* Use predictable terminal ID (claude-${taskId}) when starting to avoid race condition */}
+        {isClaudeRunning && (
+          <TaskOutputPreview terminalId={task.claudeTerminalId || `claude-${task.id}`} />
         )}
 
         {/* Bottom Row: Time, Start Button, Menu */}

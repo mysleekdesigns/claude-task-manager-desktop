@@ -9,6 +9,357 @@ import { terminalManager } from './terminal.js';
 import { databaseService } from './database.js';
 import type { BrowserWindow } from 'electron';
 
+// ============================================================================
+// Stream JSON Parser for Claude Code Output
+// ============================================================================
+
+/**
+ * Types for Claude Code stream-json output format
+ *
+ * The actual format from Claude Code is:
+ * - Top-level type: "system", "assistant", "user", "result"
+ * - For assistant messages with tools: message.content[].type = "tool_use"
+ * - For tool results: message.content[].type = "tool_result"
+ */
+interface StreamJsonMessage {
+  type: string;
+  subtype?: string;
+  content?: string;
+  // For assistant/user message types
+  message?: {
+    content?: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      id?: string;
+      input?: Record<string, unknown>;
+      tool_use_id?: string;
+      content?: string;
+      is_error?: boolean;
+    }>;
+  };
+  // Legacy fields (kept for compatibility)
+  name?: string;
+  input?: Record<string, unknown>;
+  tool_use_id?: string;
+  result?: unknown;
+  error?: string;
+}
+
+/**
+ * Status message sent to the renderer for clean display
+ */
+export interface ClaudeStatusMessage {
+  /** Type of status message */
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system';
+  /** Human-readable status message */
+  message: string;
+  /** Optional details */
+  details?: string;
+  /** Tool name if applicable */
+  tool?: string;
+  /** Timestamp */
+  timestamp: number;
+}
+
+/**
+ * Parses Claude Code stream-json output and generates human-readable status messages
+ */
+class StreamJsonParser {
+  private _lineBuffer = '';
+
+  /**
+   * System subtypes that should be filtered out (internal/non-user-facing)
+   */
+  private static readonly FILTERED_SYSTEM_SUBTYPES: Set<string> = new Set([
+    'hook_setup',
+    'hook_output',
+    'init',
+    'statusline-setup',
+    'statusline',
+  ]);
+
+  /**
+   * Patterns to filter in system subtypes (partial matches)
+   */
+  private static readonly FILTERED_SUBTYPE_PATTERNS: string[] = [
+    'hook',
+    'setup',
+    'init',
+  ];
+
+  /**
+   * Tool display names with simple verbs (no details/file paths)
+   */
+  private static readonly TOOL_DISPLAY: Record<string, string> = {
+    Read: 'Reading files...',
+    Write: 'Writing files...',
+    Edit: 'Editing code...',
+    Bash: 'Running command...',
+    Glob: 'Searching files...',
+    Grep: 'Searching code...',
+    WebFetch: 'Fetching web content...',
+    WebSearch: 'Searching the web...',
+    TodoWrite: 'Updating tasks...',
+    Skill: 'Running skill...',
+    NotebookEdit: 'Editing notebook...',
+    Task: 'Running sub-agent...',
+  };
+
+  /**
+   * Parse incoming data chunk and extract status messages
+   *
+   * @param chunk - Raw data chunk from terminal
+   * @returns Array of parsed status messages
+   */
+  parse(chunk: string): ClaudeStatusMessage[] {
+    const messages: ClaudeStatusMessage[] = [];
+
+    // Add chunk to line buffer
+    this._lineBuffer += chunk;
+
+    // Debug: Log chunk receipt (abbreviated for large chunks)
+    const chunkPreview = chunk.length > 200 ? `${chunk.substring(0, 200)}... (${String(chunk.length)} bytes)` : chunk;
+    console.log(`[StreamJsonParser] Received chunk: ${chunkPreview.replace(/\n/g, '\\n')}`);
+
+    // Process complete lines (ending with newline)
+    const lines = this._lineBuffer.split('\n');
+    // Keep the last incomplete line in buffer
+    this._lineBuffer = lines.pop() || '';
+
+    console.log(`[StreamJsonParser] Processing ${String(lines.length)} complete lines, buffer has ${String(this._lineBuffer.length)} bytes remaining`);
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Try to parse as JSON
+      try {
+        const parsed = JSON.parse(trimmed) as StreamJsonMessage;
+        console.log(`[StreamJsonParser] Parsed JSON with type: ${parsed.type}`);
+        const statusMessage = this.processMessage(parsed);
+        if (statusMessage) {
+          console.log(`[StreamJsonParser] Generated status message: ${statusMessage.message}`);
+          messages.push(statusMessage);
+        }
+      } catch {
+        // Not valid JSON - could be regular terminal output
+        // Log for debugging (abbreviated)
+        const linePreview = trimmed.length > 100 ? `${trimmed.substring(0, 100)}...` : trimmed;
+        console.log(`[StreamJsonParser] Non-JSON line (skipped): ${linePreview}`);
+      }
+    }
+
+    console.log(`[StreamJsonParser] Returning ${String(messages.length)} status messages`);
+    return messages;
+  }
+
+  /**
+   * Check if a system subtype should be filtered out
+   *
+   * @param subtype - The subtype to check
+   * @returns True if the subtype should be filtered
+   */
+  private isFilteredSubtype(subtype: string | undefined): boolean {
+    if (!subtype) return false;
+
+    // Check exact matches
+    if (StreamJsonParser.FILTERED_SYSTEM_SUBTYPES.has(subtype)) {
+      return true;
+    }
+
+    // Check partial matches (contains hook, setup, or init)
+    const lowerSubtype = subtype.toLowerCase();
+    return StreamJsonParser.FILTERED_SUBTYPE_PATTERNS.some(pattern =>
+      lowerSubtype.includes(pattern)
+    );
+  }
+
+  /**
+   * Check if content looks like internal JSON (starts with {)
+   *
+   * @param content - The content to check
+   * @returns True if content looks like JSON
+   */
+  private isJsonContent(content: string | undefined): boolean {
+    if (!content) return false;
+    const trimmed = content.trim();
+    return trimmed.startsWith('{') || trimmed.startsWith('[');
+  }
+
+  /**
+   * Process a parsed stream-json message into a status message
+   *
+   * @param msg - Parsed JSON message
+   * @returns Status message or null if not displayable
+   */
+  private processMessage(msg: StreamJsonMessage): ClaudeStatusMessage | null {
+    const timestamp = Date.now();
+
+    // Debug logging to trace what's being processed
+    console.log(`[StreamJsonParser] Processing message type: ${msg.type}, subtype: ${msg.subtype || 'none'}`);
+
+    switch (msg.type) {
+      case 'assistant':
+        // Check for tool_use inside the message content
+        if (msg.message?.content) {
+          for (const item of msg.message.content) {
+            if (item.type === 'tool_use' && item.name) {
+              // Found a tool use - generate status message
+              const statusMessage = StreamJsonParser.TOOL_DISPLAY[item.name] || `Using ${item.name}...`;
+              console.log(`[StreamJsonParser] Tool use detected: ${item.name} -> "${statusMessage}"`);
+              return {
+                type: 'tool_start',
+                message: statusMessage,
+                tool: item.name,
+                timestamp,
+              };
+            }
+            // Check for thinking content
+            if (item.type === 'text' && item.text) {
+              // Text responses - we could show "Responding..." but skip for now
+              // to avoid noise
+            }
+          }
+        }
+        // Claude is responding with text (legacy format check)
+        if (msg.subtype === 'thinking' && msg.content) {
+          return {
+            type: 'thinking',
+            message: 'Thinking...',
+            timestamp,
+          };
+        }
+        // Regular text response - skip status for normal text flow
+        return null;
+
+      case 'user':
+        // Check for tool_result inside the message content
+        if (msg.message?.content) {
+          for (const item of msg.message.content) {
+            if (item.type === 'tool_result') {
+              // Tool completed - only show errors
+              if (item.is_error) {
+                console.log(`[StreamJsonParser] Tool error detected`);
+                return {
+                  type: 'error',
+                  message: `Tool error: ${item.content || 'Unknown error'}`,
+                  timestamp,
+                };
+              }
+              // Success - no status message needed, next tool_use will show progress
+              console.log(`[StreamJsonParser] Tool result (success) - skipping status`);
+            }
+          }
+        }
+        return null;
+
+      case 'tool_use':
+        // Legacy format (kept for compatibility)
+        return this.processToolUse(msg, timestamp);
+
+      case 'tool_result':
+        // Legacy format (kept for compatibility)
+        return this.processToolResult(msg, timestamp);
+
+      case 'error':
+        return {
+          type: 'error',
+          message: `Error: ${msg.error || msg.content || 'Unknown error'}`,
+          timestamp,
+        };
+
+      case 'result':
+        // Final result message - show completion status
+        if (msg.subtype === 'success') {
+          console.log(`[StreamJsonParser] Result success detected`);
+          return {
+            type: 'system',
+            message: 'Task completed',
+            timestamp,
+          };
+        }
+        return null;
+
+      case 'system':
+        // Filter out internal system messages by subtype
+        if (this.isFilteredSubtype(msg.subtype)) {
+          console.log(`[StreamJsonParser] Filtered system subtype: ${msg.subtype}`);
+          return null;
+        }
+
+        // Filter out JSON-like content (internal data)
+        if (this.isJsonContent(msg.content)) {
+          return null;
+        }
+
+        // Only show meaningful user-facing system messages
+        if (msg.content) {
+          return {
+            type: 'system',
+            message: msg.content,
+            timestamp,
+          };
+        }
+        return null;
+
+      default:
+        console.log(`[StreamJsonParser] Unknown message type: ${msg.type}`);
+        return null;
+    }
+  }
+
+  /**
+   * Process a tool_use message into a simple status message
+   *
+   * @param msg - Tool use message
+   * @param timestamp - Message timestamp
+   * @returns Status message
+   */
+  private processToolUse(msg: StreamJsonMessage, timestamp: number): ClaudeStatusMessage | null {
+    if (!msg.name) return null;
+
+    // Get simple status message for the tool (no file paths or details)
+    const statusMessage = StreamJsonParser.TOOL_DISPLAY[msg.name] || `Using ${msg.name}...`;
+
+    return {
+      type: 'tool_start',
+      message: statusMessage,
+      tool: msg.name,
+      timestamp,
+    };
+  }
+
+  /**
+   * Process a tool_result message
+   *
+   * @param msg - Tool result message
+   * @param timestamp - Message timestamp
+   * @returns Status message or null
+   */
+  private processToolResult(msg: StreamJsonMessage, timestamp: number): ClaudeStatusMessage | null {
+    // Only show errors in tool results, success is implicit
+    if (msg.error) {
+      return {
+        type: 'error',
+        message: `Tool error: ${msg.error}`,
+        timestamp,
+      };
+    }
+
+    // For successful results, we don't need to show a status
+    // The next tool_use or text response will indicate progress
+    return null;
+  }
+
+  /**
+   * Reset the parser state
+   */
+  reset(): void {
+    this._lineBuffer = '';
+  }
+}
+
 /**
  * Options for starting a Claude Code task
  */
@@ -104,20 +455,38 @@ class ClaudeCodeService {
       console.log(`[ClaudeCodeService] Built command with embedded prompt`);
       console.log(`[ClaudeCodeService] Full command: ${command}`);
 
+      // Create a parser for this terminal session
+      const parser = new StreamJsonParser();
+
       // Spawn terminal for Claude Code
       terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
         cwd: options.projectPath,
         onData: (data: string) => {
           // Debug: log received data
-          const preview = data.length > 100 ? data.substring(0, 100) + '...' : data;
-          console.log(`[ClaudeCodeService] onData received ${String(data.length)} bytes, preview: ${JSON.stringify(preview)}`);
+          console.log(`[ClaudeCodeService] onData received ${String(data.length)} bytes`);
 
-          // Stream output to renderer
+          // Stream raw output to renderer for the terminal display
           mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
+
+          // Parse stream-json output and send clean status updates
+          const statusMessages = parser.parse(data);
+          console.log(`[ClaudeCodeService] Parser returned ${String(statusMessages.length)} status messages`);
+          for (const status of statusMessages) {
+            console.log(`[ClaudeCodeService] Sending status to renderer: ${status.message}`);
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
+          }
         },
         onExit: (code: number) => {
           // Debug: log exit event
           console.log(`[ClaudeCodeService] onExit called with exit code: ${String(code)}`);
+
+          // Send completion status message
+          const completionStatus: ClaudeStatusMessage = {
+            type: code === 0 ? 'system' : 'error',
+            message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
+            timestamp: Date.now(),
+          };
+          mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
 
           // Update task status based on exit code
           void this.handleTaskExit(options.taskId, code, mainWindow);
@@ -133,6 +502,14 @@ class ClaudeCodeService {
       const banner = this.buildStartupBanner(command, options);
       console.log(`[ClaudeCodeService] Sending startup banner via IPC`);
       mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+
+      // Send initial status message
+      const startStatus: ClaudeStatusMessage = {
+        type: 'system',
+        message: `🚀 Starting: ${options.taskTitle}`,
+        timestamp: Date.now(),
+      };
+      mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
 
       // Disable shell echo to prevent command duplication in output
       // Split into two writes with delay to avoid race condition
@@ -199,6 +576,7 @@ class ClaudeCodeService {
       '-p', // Print mode (non-interactive)
       '--dangerously-skip-permissions', // Skip permission prompts for programmatic execution
       '--output-format stream-json', // Streaming output
+      '--verbose', // Required for stream-json
       `--resume ${this.escapeShellArgument(options.sessionId)}`, // Resume with session ID
     ];
 
@@ -210,14 +588,31 @@ class ClaudeCodeService {
 
     const command = commandParts.join(' ');
 
+    // Create a parser for this terminal session
+    const parser = new StreamJsonParser();
+
     // Spawn terminal for Claude Code
     terminalManager.spawn(terminalId, `Claude Code (Resumed) - ${options.taskId}`, {
       cwd: options.projectPath,
       onData: (data: string) => {
-        // Stream output to renderer
+        // Stream raw output to renderer for the terminal display
         mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
+
+        // Parse stream-json output and send clean status updates
+        const statusMessages = parser.parse(data);
+        for (const status of statusMessages) {
+          mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
+        }
       },
       onExit: (code: number) => {
+        // Send completion status message
+        const completionStatus: ClaudeStatusMessage = {
+          type: code === 0 ? 'system' : 'error',
+          message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
+          timestamp: Date.now(),
+        };
+        mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+
         // Update task status based on exit code
         void this.handleTaskExit(options.taskId, code, mainWindow);
 
@@ -225,6 +620,24 @@ class ClaudeCodeService {
         mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
       },
     });
+
+    // Send simple resume banner
+    const banner = [
+      '\r\n',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+      '🔄 Resuming Claude Code Session\r\n',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+      '\r\n',
+    ].join('');
+    mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+
+    // Send initial status message
+    const startStatus: ClaudeStatusMessage = {
+      type: 'system',
+      message: '🔄 Resuming session...',
+      timestamp: Date.now(),
+    };
+    mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
 
     // Disable shell echo to prevent command duplication in output
     console.log(`[ClaudeCodeService] Disabling echo before resume command`);
@@ -277,84 +690,26 @@ class ClaudeCodeService {
   }
 
   /**
-   * Build a startup banner to display before executing Claude Code command.
-   * Shows the exact command, project path, and session ID clearly to the user.
+   * Build a simplified startup banner to display before executing Claude Code command.
+   * Shows just the task title and a simple starting message.
    *
-   * @param command - The Claude CLI command that will be executed
+   * @param _command - The Claude CLI command (unused in simplified banner)
    * @param options - Claude Code options containing context
    * @returns Formatted banner string with terminal line endings
    */
-  private buildStartupBanner(command: string, options: ClaudeCodeOptions): string {
+  private buildStartupBanner(_command: string, options: ClaudeCodeOptions): string {
     const banner: string[] = [];
 
-    // Top border
-    banner.push('╔════════════════════════════════════════════════════════════════════╗\r\n');
-
-    // Title
-    banner.push('║ Starting Claude Code                                                ║\r\n');
-
-    // Separator
-    banner.push('╠════════════════════════════════════════════════════════════════════╣\r\n');
-
-    // Command (may need multiple lines if long)
-    const commandLines = this.wrapText(`Command: ${command}`, 66);
-    commandLines.forEach(line => {
-      banner.push(`║ ${line.padEnd(66, ' ')} ║\r\n`);
-    });
-
-    // Project path
-    const pathLines = this.wrapText(`Path: ${options.projectPath}`, 66);
-    pathLines.forEach(line => {
-      banner.push(`║ ${line.padEnd(66, ' ')} ║\r\n`);
-    });
-
-    // Session ID
-    banner.push(`║ Session: ${options.sessionId.padEnd(56, ' ')} ║\r\n`);
-
-    // Task ID
-    banner.push(`║ Task ID: ${options.taskId.padEnd(56, ' ')} ║\r\n`);
-
-    // Bottom border
-    banner.push('╚════════════════════════════════════════════════════════════════════╝\r\n');
-
-    // Add spacing
+    // Simple, clean header
+    banner.push('\r\n');
+    banner.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n');
+    banner.push(`🤖 Task: ${options.taskTitle}\r\n`);
+    banner.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n');
+    banner.push('\r\n');
+    banner.push('🚀 Starting Claude Code...\r\n');
     banner.push('\r\n');
 
     return banner.join('');
-  }
-
-  /**
-   * Wrap text to fit within a specified width, breaking at word boundaries.
-   *
-   * @param text - Text to wrap
-   * @param maxWidth - Maximum width per line
-   * @returns Array of wrapped lines
-   */
-  private wrapText(text: string, maxWidth: number): string[] {
-    if (text.length <= maxWidth) {
-      return [text];
-    }
-
-    const lines: string[] = [];
-    let currentLine = '';
-
-    const words = text.split(' ');
-    for (const word of words) {
-      if (currentLine.length + word.length + 1 <= maxWidth) {
-        currentLine += (currentLine.length > 0 ? ' ' : '') + word;
-      } else {
-        if (currentLine.length > 0) {
-          lines.push(currentLine);
-        }
-        currentLine = word;
-      }
-    }
-
-    if (currentLine.length > 0) {
-      lines.push(currentLine);
-    }
-
-    return lines;
   }
 
   /**
