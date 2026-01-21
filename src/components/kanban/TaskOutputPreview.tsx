@@ -40,7 +40,7 @@ function stripAnsiCodes(text: string): string {
 // Component
 // ============================================================================
 
-const MAX_LINES = 12;
+const MAX_LINES = 5;
 
 export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   const [outputLines, setOutputLines] = useState<string[]>([]);
@@ -252,12 +252,13 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   return (
     <div
       ref={scrollRef}
-      className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md max-h-80 overflow-y-auto"
+      className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md max-h-32 overflow-y-auto overflow-x-hidden w-full min-w-0"
+      style={{ contain: 'inline-size' }}
     >
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 min-w-0 w-full overflow-hidden">
         {/* Issue 5: Display error state if buffer fetch failed */}
         {error && (
-          <div className="text-xs font-mono text-red-400">
+          <div className="text-xs font-mono text-red-400 truncate w-full">
             {error}
           </div>
         )}
@@ -270,7 +271,9 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
           outputLines.map((line, index) => (
             <div
               key={hashLine(line, index)} /* Issue 4: Use content hash for stable key */
-              className="text-xs font-mono text-zinc-300 leading-relaxed break-words whitespace-pre-wrap"
+              className="text-xs font-mono text-zinc-300 leading-relaxed w-full overflow-hidden text-ellipsis whitespace-nowrap"
+              style={{ wordBreak: 'break-all' }}
+              title={line} /* Show full line on hover */
             >
               {line || '\u00A0'} {/* Non-breaking space for empty lines */}
             </div>

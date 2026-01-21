@@ -112,17 +112,17 @@ export function TaskCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`cursor-grab active:cursor-grabbing transition-all ${
+      className={`cursor-grab active:cursor-grabbing transition-all overflow-hidden max-w-full ${
         isCurrentlyDragging
           ? 'opacity-50 shadow-lg ring-2 ring-primary'
           : 'hover:shadow-md'
       }`}
       onClick={onClick}
     >
-      {/* Card Content */}
-      <CardContent className="p-4 space-y-3 cursor-pointer">
+      {/* Card Content - min-w-0 is critical for flex children to respect overflow */}
+      <CardContent className="p-4 space-y-3 cursor-pointer overflow-hidden min-w-0 w-full">
         {/* Title */}
-        <h4 className="font-semibold text-base leading-tight">
+        <h4 className="font-semibold text-base leading-tight truncate" title={task.title}>
           {task.title}
         </h4>
 

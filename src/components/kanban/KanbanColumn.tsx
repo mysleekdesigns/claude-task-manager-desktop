@@ -122,10 +122,10 @@ export function KanbanColumn({
       {/* Column Content */}
       {!isCollapsed && (
         <>
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-w-0 overflow-hidden">
             <div
               ref={setNodeRef}
-              className="p-2 space-y-2 min-h-[200px]"
+              className="p-2 space-y-2 min-h-[200px] min-w-0 overflow-hidden"
             >
               <SortableContext
                 items={taskIds}
