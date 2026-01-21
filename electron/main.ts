@@ -14,6 +14,7 @@ import { trayService } from './services/tray.js';
 import { shortcutService } from './services/shortcuts.js';
 import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
 import { databaseService } from './services/database.js';
+import { performStartupCleanup } from './services/startup-cleanup.js';
 import { terminalManager } from './services/terminal.js';
 
 const logger = createIPCLogger('Main');
@@ -211,6 +212,7 @@ function initializeIPC(window: BrowserWindow): void {
  * Initialize the application
  * - Initialize database connection
  * - Run database migrations to create/update schema
+ * - Clean up stale states from previous session
  * - Create main window
  * - Register IPC handlers (depend on database and window being ready)
  */
@@ -226,10 +228,22 @@ async function initializeApp(): Promise<void> {
     databaseService.runMigrations();
     logger.info('Database migrations completed successfully');
 
-    // Step 3: Create main window (needed for terminal IPC handlers)
+    // Step 3: Clean up stale states from previous session (crash recovery)
+    // This resets tasks that were RUNNING/STARTING to FAILED and removes orphaned terminals
+    logger.info('Running startup cleanup...');
+    const cleanupResult = await performStartupCleanup();
+    if (cleanupResult.staleTasks > 0 || cleanupResult.orphanedTerminals > 0) {
+      logger.info(
+        `Startup cleanup completed: ${cleanupResult.staleTasks} stale task(s), ${cleanupResult.orphanedTerminals} orphaned terminal(s)`
+      );
+    } else {
+      logger.info('Startup cleanup completed: no stale states found');
+    }
+
+    // Step 4: Create main window (needed for terminal IPC handlers)
     await createWindow();
 
-    // Step 4: Register IPC handlers (depend on database and window being ready)
+    // Step 5: Register IPC handlers (depend on database and window being ready)
     if (!mainWindow) {
       throw new Error('Main window not created');
     }
