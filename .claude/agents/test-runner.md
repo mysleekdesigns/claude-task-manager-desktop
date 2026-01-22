@@ -33,40 +33,49 @@ You are a specialized agent for running and analyzing tests in the Claude Tasks 
 
 ## Test Commands
 
-### Unit Tests (Vitest)
+### Primary Commands
+
 ```bash
-# Run all tests
+# Run all tests (renderer + main process)
 npm test
 
+# Run renderer tests only (React components, hooks, UI logic)
+npm run test:renderer
+
+# Run main process tests only (Electron IPC, database, services)
+npm run test:main
+
+# Run with coverage report
+npm run test:coverage
+
+# Run E2E tests (Playwright with Electron)
+npm run test:e2e
+```
+
+### Additional Options
+
+```bash
 # Run specific file
 npm test -- src/hooks/useTasks.test.ts
 
-# Run with coverage
-npm test -- --coverage
-
-# Watch mode
+# Watch mode (re-run on changes)
 npm test -- --watch
 
 # Run tests matching pattern
 npm test -- -t "TaskCard"
-```
 
-### E2E Tests (Playwright)
-```bash
-# Run all e2e tests
-npm run test:e2e
+# Run specific E2E test file
+npm run test:e2e -- e2e/kanban.spec.ts
 
-# Run specific test file
-npm run test:e2e -- tests/kanban.spec.ts
-
-# Run in headed mode (for debugging)
+# Run E2E in headed mode (for debugging)
 npm run test:e2e -- --headed
 
-# Run specific browser
+# Run E2E with specific browser
 npm run test:e2e -- --project=chromium
 ```
 
 ### Type Checking
+
 ```bash
 # Check types
 npm run typecheck
@@ -75,9 +84,104 @@ npm run typecheck
 npx tsc --noEmit
 ```
 
+## Testing Environments
+
+This project uses three distinct testing environments:
+
+### Renderer Tests (jsdom)
+- **Location:** `src/**/*.test.{ts,tsx}`
+- **Environment:** jsdom (simulated browser DOM)
+- **Purpose:** React components, hooks, UI logic, state management
+- **Run with:** `npm run test:renderer`
+
+### Main Process Tests (node)
+- **Location:** `electron/**/*.test.ts`
+- **Environment:** Node.js (native Electron main process)
+- **Purpose:** IPC handlers, database operations, terminal management, services
+- **Run with:** `npm run test:main`
+
+### E2E Tests (Playwright + Electron)
+- **Location:** `e2e/**/*.spec.ts`
+- **Environment:** Full Electron application with Playwright
+- **Purpose:** Integration testing, user flows, cross-process communication
+- **Run with:** `npm run test:e2e`
+
+## Test Helpers
+
+### Renderer Test Helpers
+
+Located in `src/test/setup.ts` and `src/test/helpers.ts`:
+
+```typescript
+import {
+  getMockElectronAPI,
+  resetElectronMocks,
+  mockIPCInvoke
+} from '@/test/helpers';
+
+// Get the mock electron API for assertions
+const mockAPI = getMockElectronAPI();
+
+// Reset all mocks between tests
+beforeEach(() => {
+  resetElectronMocks();
+});
+
+// Mock specific IPC invoke responses
+mockIPCInvoke('tasks:list', [{ id: '1', title: 'Task 1' }]);
+```
+
+### Main Process Test Helpers
+
+Located in `electron/test/helpers.ts`:
+
+```typescript
+import {
+  createMockIPCEvent,
+  testIPCHandler,
+  createMockPrismaClient
+} from '../test/helpers';
+
+// Create a mock IPC event for handler testing
+const mockEvent = createMockIPCEvent();
+
+// Test an IPC handler directly
+const result = await testIPCHandler('tasks:create', mockEvent, taskData);
+
+// Create a mock Prisma client for database testing
+const mockPrisma = createMockPrismaClient({
+  task: {
+    findMany: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({ id: '1' }),
+  },
+});
+```
+
+### E2E Test Fixtures
+
+Located in `e2e/fixtures.ts`:
+
+```typescript
+import { test, expect } from './fixtures';
+
+test('can create a task', async ({ electronApp, window, waitForAppReady }) => {
+  // Wait for app to be fully loaded
+  await waitForAppReady();
+
+  // Use AppPageHelpers for common operations
+  const helpers = new AppPageHelpers(window);
+  await helpers.navigateToProject('my-project');
+  await helpers.createTask({ title: 'New Task', status: 'PENDING' });
+
+  // Assert task was created
+  await expect(window.getByText('New Task')).toBeVisible();
+});
+```
+
 ## Test Patterns
 
 ### Component Test
+
 ```typescript
 // src/components/kanban/TaskCard.test.tsx
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -107,6 +211,7 @@ describe('TaskCard', () => {
 ```
 
 ### Hook Test
+
 ```typescript
 // src/hooks/useTasks.test.ts
 import { renderHook, waitFor } from '@testing-library/react';
@@ -135,6 +240,7 @@ describe('useTasks', () => {
 ```
 
 ### IPC Handler Test
+
 ```typescript
 // electron/ipc/tasks.test.ts
 import { registerTaskHandlers } from './tasks';
@@ -161,6 +267,34 @@ describe('Task IPC Handlers', () => {
 });
 ```
 
+## Coverage Requirements
+
+### Targets
+
+- **Core business logic:** 80%+ coverage required
+- **UI components:** 70%+ coverage recommended
+- **Utilities and helpers:** 90%+ coverage recommended
+
+### Viewing Coverage
+
+```bash
+# Generate and view coverage report
+npm run test:coverage
+
+# Coverage reports are generated separately for:
+# - Renderer process: coverage/renderer/
+# - Main process: coverage/main/
+```
+
+### Coverage Focus Areas
+
+Prioritize coverage on:
+1. IPC handlers (electron/ipc/)
+2. Database services (electron/services/)
+3. Custom hooks (src/hooks/)
+4. State management (src/stores/)
+5. Utility functions (src/lib/, electron/lib/)
+
 ## Output Analysis
 
 When analyzing test failures:
@@ -168,3 +302,39 @@ When analyzing test failures:
 2. Check for missing mocks or setup
 3. Identify timing issues (use `waitFor` for async)
 4. Verify test isolation (no shared state)
+5. Check environment compatibility (jsdom vs node)
+
+## Integration with Other Agents
+
+After tests pass, consider running additional quality checks:
+
+### Security Audit
+Once tests are passing, delegate to the **security-audit** agent to:
+- Scan for security vulnerabilities
+- Check IPC channel security
+- Validate input sanitization
+- Review authentication/authorization logic
+
+```
+Use @security-audit to run security checks on the tested code
+```
+
+### Performance Audit
+For performance-critical code paths, delegate to the **performance-audit** agent to:
+- Profile render performance
+- Analyze bundle size impact
+- Check for memory leaks
+- Review database query efficiency
+
+```
+Use @performance-audit to profile performance of the tested features
+```
+
+### Recommended Workflow
+
+1. Run tests: `npm test`
+2. Fix any failures
+3. Check coverage: `npm run test:coverage`
+4. Run security audit on changed files
+5. Run performance audit on critical paths
+6. Run E2E tests for full integration: `npm run test:e2e`

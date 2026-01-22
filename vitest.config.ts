@@ -1,15 +1,12 @@
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    exclude: [
-      'node_modules',
-      'dist',
-      'dist-electron',
-      'electron/**/*.test.ts',
-      'electron/**/*.test.js',
-    ],
-    globals: true,
-    environment: 'node',
-  },
-});
+/**
+ * Default Vitest Configuration
+ *
+ * This file re-exports the renderer configuration as the default.
+ * For running both renderer and main process tests, use:
+ *   npm test
+ *
+ * For running specific test suites:
+ *   npm run test:renderer  - React/browser tests (jsdom)
+ *   npm run test:main      - Electron main process tests (Node.js)
+ */
+export { default } from './vitest.config.renderer';

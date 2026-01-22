@@ -43,6 +43,14 @@ yarn-error.log*
 coverage/
 test-results/
 
+# Playwright E2E test artifacts
+e2e/test-results/
+e2e/screenshots/
+e2e/snapshots/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # TypeScript
 *.tsbuildinfo
 
