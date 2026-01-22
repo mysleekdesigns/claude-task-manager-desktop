@@ -283,12 +283,9 @@ export function useClaudeStatusMessages(terminalId: string | null) {
       });
     };
 
-    // Subscribe to IPC events
-    window.electron.on(channel, handleStatusMessage);
-
-    return () => {
-      window.electron.removeListener(channel, handleStatusMessage);
-    };
+    // Subscribe to IPC events - use disposer pattern for reliable cleanup
+    const dispose = window.electron.on(channel, handleStatusMessage);
+    return dispose;
   }, [terminalId]);
 
   // Handle terminal ID changes - only clear when switching to a DIFFERENT terminal

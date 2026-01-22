@@ -29,11 +29,13 @@ export interface ElectronAPI {
    *
    * Supports both static event channels and dynamic terminal channels
    * (e.g., terminal:output:{id}, terminal:exit:{id})
+   *
+   * Returns a disposer function for reliable cleanup (React-friendly pattern).
    */
   on: (
     channel: AllEventChannels,
     callback: (...args: unknown[]) => void
-  ) => void;
+  ) => () => void;
 
   /**
    * Remove an event listener.

@@ -197,11 +197,11 @@ export function XTermWrapper({
       onExit?.(exitCode);
     };
 
-    // Subscribe to IPC events
+    // Subscribe to IPC events (using disposer pattern)
     const outputChannel = `terminal:output:${terminalId}` as AllEventChannels;
     const exitChannel = `terminal:exit:${terminalId}` as AllEventChannels;
-    window.electron.on(outputChannel, handleOutput);
-    window.electron.on(exitChannel, handleTerminalExit);
+    const disposeOutput = window.electron.on(outputChannel, handleOutput);
+    const disposeExit = window.electron.on(exitChannel, handleTerminalExit);
 
     // ============================================================================
     // Resize Observer
@@ -223,9 +223,9 @@ export function XTermWrapper({
         clearTimeout(resizeTimeoutRef.current);
       }
 
-      // Unsubscribe from IPC events
-      window.electron.removeListener(outputChannel, handleOutput);
-      window.electron.removeListener(exitChannel, handleTerminalExit);
+      // Unsubscribe from IPC events (using disposer pattern)
+      disposeOutput();
+      disposeExit();
 
       // Disconnect resize observer
       resizeObserver.disconnect();

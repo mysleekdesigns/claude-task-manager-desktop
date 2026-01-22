@@ -146,14 +146,8 @@ export function onEvent<T extends IpcEventChannelName>(
     return () => { /* noop */ };
   }
 
-  window.electron.on(channel, callback as (...args: unknown[]) => void);
-
-  return () => {
-    window.electron.removeListener(
-      channel,
-      callback as (...args: unknown[]) => void
-    );
-  };
+  const dispose = window.electron.on(channel, callback as (...args: unknown[]) => void);
+  return dispose;
 }
 
 // ============================================================================

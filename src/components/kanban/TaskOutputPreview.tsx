@@ -45,12 +45,16 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
     }, 50);
   }, []);
 
-  const handleStatus = useCallback((...args: unknown[]) => {
+  // Store the actual handler logic in a ref so it can be updated without changing the callback identity
+  const handleStatusRef = useRef<((...args: unknown[]) => void) | null>(null);
+
+  // Update the ref with current logic on every render
+  handleStatusRef.current = (...args: unknown[]) => {
     const data = args[0] as ClaudeStatusMessage;
     if (data?.message) {
       updateStatus(data.message, data.type === 'error');
     }
-  }, [updateStatus]);
+  };
 
   // Fetch cached status on mount to avoid showing default text
   useEffect(() => {
@@ -75,12 +79,13 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
     if (!terminalId) return;
 
     const channel = `terminal:status:${terminalId}` as const;
-    window.electron.on(channel, handleStatus);
 
-    return () => {
-      window.electron.removeListener(channel, handleStatus);
-    };
-  }, [terminalId, handleStatus]);
+    const dispose = window.electron.on(channel, (...args: unknown[]) => {
+      handleStatusRef.current?.(...args);
+    });
+
+    return dispose;
+  }, [terminalId]);
 
   // Cleanup debounce timeout on unmount
   useEffect(() => {

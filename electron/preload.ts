@@ -211,11 +211,12 @@ type InvokeFunction = <T>(
 
 /**
  * Type-safe event listener function signature
+ * Returns a disposer function for reliable cleanup
  */
 type OnFunction = (
   channel: AllValidEventChannels,
   callback: (...args: unknown[]) => void
-) => void;
+) => () => void;
 
 /**
  * Type-safe event remover function signature
@@ -236,6 +237,7 @@ export interface ElectronAPI {
 
   /**
    * Listen for events sent from the main process
+   * Returns a disposer function for reliable cleanup (React-friendly pattern)
    */
   on: OnFunction;
 
@@ -327,17 +329,19 @@ const electronAPI: ElectronAPI = {
    *
    * @param channel - The event channel to listen to (must be whitelisted)
    * @param callback - Callback to handle the event
+   * @returns A disposer function to remove the listener (React-friendly pattern)
    */
   on: (
     channel: AllValidEventChannels,
     callback: (...args: unknown[]) => void
-  ): void => {
+  ): (() => void) => {
     if (!isValidEventChannel(channel)) {
       console.error(
         `IPC Security: Channel "${String(channel)}" is not allowed. ` +
           `Allowed channels: ${VALID_EVENT_CHANNELS.join(', ')}`
       );
-      return;
+      // Return no-op disposer for invalid channels
+      return () => {};
     }
 
     // CRITICAL: Remove existing listener for this callback first to prevent duplicates
@@ -362,6 +366,12 @@ const electronAPI: ElectronAPI = {
     // Store the wrapper so we can remove it later
     callbackMap.set(callback, wrappedCallback);
     ipcRenderer.on(channel, wrappedCallback);
+
+    // Return a disposer function for reliable cleanup
+    return () => {
+      ipcRenderer.removeListener(channel, wrappedCallback);
+      callbackMap.delete(callback);
+    };
   },
 
   /**
