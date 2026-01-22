@@ -88,12 +88,16 @@ async function handleCreateTerminal(
     const { id, pid } = terminalManager.spawn(terminal.id, terminalName, {
       ...(cwd && { cwd }),
       onData: (outputData: string) => {
-        // Stream output to renderer process
-        mainWindow.webContents.send(`terminal:output:${terminal.id}`, outputData);
+        // Stream output to renderer process (check window exists during shutdown)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:output:${terminal.id}`, outputData);
+        }
       },
       onExit: (code: number) => {
-        // Notify renderer of terminal exit
-        mainWindow.webContents.send(`terminal:exit:${terminal.id}`, code);
+        // Notify renderer of terminal exit (check window exists during shutdown)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:exit:${terminal.id}`, code);
+        }
 
         // Delete terminal from database when process exits
         // This handles both manual close (where terminal:close already deleted it)

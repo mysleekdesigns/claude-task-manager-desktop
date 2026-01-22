@@ -256,15 +256,17 @@ class TerminalManager {
 
   /**
    * Kill a terminal process and remove it from the manager.
+   * This method is idempotent - calling it on a non-existent terminal is safe.
    *
    * @param id - Terminal ID
-   * @throws Error if terminal not found
+   * @returns True if terminal was killed, false if terminal was not found (already cleaned up)
    */
-  kill(id: string): void {
+  kill(id: string): boolean {
     const terminal = this.terminals.get(id);
 
     if (!terminal) {
-      throw new Error(`Terminal ${id} not found`);
+      console.debug(`[TerminalManager] Terminal ${id} not found - already cleaned up`);
+      return false;
     }
 
     try {
@@ -273,15 +275,15 @@ class TerminalManager {
       this.outputBuffers.delete(id);
       this.incompleteLines.delete(id);
       console.log(`[TerminalManager] Killed terminal ${id}`);
+      return true;
     } catch (error) {
       console.error(`[TerminalManager] Failed to kill terminal ${id}:`, error);
       // Still remove from maps even if kill fails
       this.terminals.delete(id);
       this.outputBuffers.delete(id);
       this.incompleteLines.delete(id);
-      throw new Error(
-        `Failed to kill terminal: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      // Return true since we cleaned up the terminal from our tracking
+      return true;
     }
   }
 

@@ -183,6 +183,10 @@ export interface Task {
   claudeStatus?: ClaudeTaskStatus;
   claudeTerminalId?: string | null;
   linkedTerminal?: Terminal | null;
+  // PRD Phase scoping fields
+  prdPhaseNumber?: number | null;
+  prdPhaseName?: string | null;
+  scopedPrdContent?: string | null;
 }
 
 /**

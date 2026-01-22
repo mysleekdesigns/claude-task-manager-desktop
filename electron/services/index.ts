@@ -9,3 +9,4 @@ export type { StartupCleanupResult } from './startup-cleanup';
 export { terminalManager } from './terminal';
 export { gitService } from './git';
 export type { WorktreeInfo, BranchInfo, GitStatus } from './git';
+export { claudeHooksService } from './claude-hooks';

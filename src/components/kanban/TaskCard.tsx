@@ -26,6 +26,7 @@ import { TaskCardStartButton } from './TaskCardStartButton';
 import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
 import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
 import { TaskOutputPreview } from './TaskOutputPreview';
+import { PhaseBadge } from './PhaseBadge';
 
 // ============================================================================
 // Types
@@ -149,6 +150,14 @@ function TaskCardComponent({
           {task.title}
         </h4>
 
+        {/* Phase Badge - only show if task is phase-scoped */}
+        {task.prdPhaseNumber != null && (
+          <PhaseBadge
+            phaseNumber={task.prdPhaseNumber}
+            phaseName={task.prdPhaseName}
+          />
+        )}
+
         {/* Description - truncated to ~2 lines */}
         {task.description && (
           <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
@@ -270,7 +279,9 @@ export const TaskCard = memo(TaskCardComponent, (prevProps, nextProps) => {
     prevProps.task.claudeStatus !== nextProps.task.claudeStatus ||
     prevProps.task.title !== nextProps.task.title ||
     prevProps.task.description !== nextProps.task.description ||
-    prevProps.task.updatedAt !== nextProps.task.updatedAt
+    prevProps.task.updatedAt !== nextProps.task.updatedAt ||
+    prevProps.task.prdPhaseNumber !== nextProps.task.prdPhaseNumber ||
+    prevProps.task.prdPhaseName !== nextProps.task.prdPhaseName
   ) {
     return false;
   }

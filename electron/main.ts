@@ -23,6 +23,17 @@ const logger = createIPCLogger('Main');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Module-level flag to track shutdown state
+let isQuitting = false;
+
+/**
+ * Check if the app is currently shutting down
+ * Other modules can use this to check shutdown state
+ */
+export function getIsQuitting(): boolean {
+  return isQuitting;
+}
+
 // Disable GPU Acceleration for Windows 7
 if (
   process.platform === 'win32' &&
@@ -340,30 +351,55 @@ app.on('ready', () => {
 });
 
 // Handle before-quit (set quitting flag to allow window close and cleanup)
-app.on('before-quit', () => {
+app.on('before-quit', async (event) => {
+  // If already quitting, allow the quit to proceed
+  if (isQuitting) {
+    return;
+  }
+
+  // Prevent the default quit to handle async cleanup
+  event.preventDefault();
+
+  // Set quitting flags
+  isQuitting = true;
   trayService.setQuitting(true);
 
-  // Kill all active terminal processes
   try {
-    logger.info('Cleaning up terminal processes...');
-    terminalManager.killAll();
-    logger.info('Terminal processes cleaned up successfully');
-  } catch (error) {
-    logger.error('Error cleaning up terminal processes:', error);
-  }
+    // Kill all active terminal processes synchronously first
+    try {
+      logger.info('Cleaning up terminal processes...');
+      terminalManager.killAll();
+      logger.info('Terminal processes cleaned up successfully');
+    } catch (error) {
+      logger.error('Error cleaning up terminal processes:', error);
+    }
 
-  // Disconnect from database
-  if (databaseService.isConnected()) {
-    logger.info('Disconnecting from database...');
-    databaseService
-      .disconnect()
-      .then(() => {
-        logger.info('Database disconnected successfully');
-      })
-      .catch((error) => {
-        logger.error('Error disconnecting from database:', error);
+    // Disconnect from database with a 5-second timeout
+    if (databaseService.isConnected()) {
+      logger.info('Disconnecting from database...');
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error('Database disconnect timeout')), 5000);
       });
+
+      try {
+        await Promise.race([databaseService.disconnect(), timeoutPromise]);
+        logger.info('Database disconnected successfully');
+      } catch (error) {
+        logger.error('Error disconnecting from database:', error);
+      }
+    }
+  } catch (error) {
+    logger.error('Error during shutdown cleanup:', error);
+  } finally {
+    // Exit the app after cleanup completes (or fails)
+    logger.info('Shutdown cleanup complete, exiting...');
+    app.exit(0);
   }
+});
+
+// Backup cleanup in case before-quit didn't fully clean up
+app.on('will-quit', () => {
+  terminalManager.killAll(); // Backup cleanup
 });
 
 app.on('window-all-closed', () => {

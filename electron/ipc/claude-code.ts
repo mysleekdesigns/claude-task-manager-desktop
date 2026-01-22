@@ -6,8 +6,11 @@
  */
 
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { databaseService } from '../services/database.js';
 import { claudeCodeService, type ClaudeCodeOptions } from '../services/claude-code.js';
+import { prdParser } from '../services/prd-parser.js';
 import { terminalManager } from '../services/terminal.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
@@ -120,11 +123,55 @@ async function handleStartTask(
     throw new Error('Claude Code is already running for this task');
   }
 
+  // Detect PRD phase reference in task description
+  let prdPhaseNumber: number | undefined;
+  let prdPhaseName: string | undefined;
+  let scopedPrdContent: string | undefined;
+
+  const taskDescription = data.taskDescription || '';
+  const detectedPhaseNumber = prdParser.detectPhaseReference(taskDescription);
+
+  if (detectedPhaseNumber !== null) {
+    console.log(`[claude:startTask] Detected phase reference: Phase ${detectedPhaseNumber}`);
+
+    // Try to read PRD.md from the project path
+    const prdPath = path.join(data.projectPath, 'PRD.md');
+    try {
+      const prdContent = await fs.readFile(prdPath, 'utf-8');
+      const detectedPhase = prdParser.getPhase(prdContent, detectedPhaseNumber);
+
+      if (detectedPhase) {
+        prdPhaseNumber = detectedPhase.number;
+        prdPhaseName = detectedPhase.name;
+        scopedPrdContent = prdParser.formatPhaseAsPrompt(detectedPhase);
+
+        console.log(`[claude:startTask] Extracted Phase ${prdPhaseNumber}: ${prdPhaseName}`);
+        console.log(`[claude:startTask] Scoped PRD content length: ${scopedPrdContent.length} chars`);
+
+        // Update the task in the database with phase info
+        await prisma.task.update({
+          where: { id: data.taskId },
+          data: {
+            prdPhaseNumber: detectedPhase.number,
+            prdPhaseName: detectedPhase.name,
+            scopedPrdContent: prdParser.formatPhaseAsPrompt(detectedPhase),
+          },
+        });
+        console.log(`[claude:startTask] Updated task with PRD phase info`);
+      } else {
+        console.log(`[claude:startTask] Phase ${detectedPhaseNumber} not found in PRD.md`);
+      }
+    } catch (error) {
+      // PRD.md not found or read error - continue without phase scoping
+      console.log(`[claude:startTask] Could not read PRD.md: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Build options for Claude Code service
   const options: ClaudeCodeOptions = {
     taskId: data.taskId,
     taskTitle: data.taskTitle,
-    taskDescription: data.taskDescription || '',
+    taskDescription: taskDescription,
     projectPath: data.projectPath,
     sessionId: data.sessionId,
     worktreeId: data.worktreeId,
@@ -132,6 +179,9 @@ async function handleStartTask(
     maxBudget: data.maxBudget,
     allowedTools: data.allowedTools,
     appendSystemPrompt: data.appendSystemPrompt,
+    prdPhaseNumber,
+    prdPhaseName,
+    scopedPrdContent,
   };
 
   // Update task status to STARTING before spawning terminal
@@ -174,12 +224,14 @@ async function handleStartTask(
       },
     });
 
-    // Send started event to renderer
-    mainWindow.webContents.send(`claude:started:${data.taskId}`, {
-      taskId: data.taskId,
-      terminalId,
-      sessionId: data.sessionId,
-    });
+    // Send started event to renderer (check window exists during shutdown)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(`claude:started:${data.taskId}`, {
+        taskId: data.taskId,
+        terminalId,
+        sessionId: data.sessionId,
+      });
+    }
   } catch (error) {
     // Rollback database status if terminal spawn fails
     await prisma.task.update({

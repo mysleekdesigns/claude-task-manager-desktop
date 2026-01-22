@@ -7,7 +7,12 @@
 
 import { terminalManager } from './terminal.js';
 import { databaseService } from './database.js';
+import { claudeHooksService } from './claude-hooks.js';
+import { trayService } from './tray.js';
+import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
+
+const logger = createIPCLogger('ClaudeCode');
 
 // ============================================================================
 // Stream JSON Parser for Claude Code Output
@@ -559,6 +564,12 @@ export interface ClaudeCodeOptions {
   appendSystemPrompt?: string | undefined;
   /** Skip permission prompts for programmatic execution (default: true) */
   skipPermissions?: boolean | undefined;
+  /** Phase number if this task is scoped to a specific PRD phase */
+  prdPhaseNumber?: number | undefined;
+  /** Phase name for display */
+  prdPhaseName?: string | undefined;
+  /** Scoped PRD content (only this phase's requirements) */
+  scopedPrdContent?: string | undefined;
 }
 
 /**
@@ -612,15 +623,31 @@ class ClaudeCodeService {
       console.log(`[ClaudeCodeService] Built command with embedded prompt`);
       console.log(`[ClaudeCodeService] Full command: ${command}`);
 
+      // Generate hooks config for phase-scoped tasks
+      let hooksConfigPath: string | undefined;
+      if (options.prdPhaseNumber !== undefined && options.prdPhaseName) {
+        console.log(`[ClaudeCodeService] Generating hooks config for Phase ${String(options.prdPhaseNumber)}: ${options.prdPhaseName}`);
+        hooksConfigPath = await claudeHooksService.generatePhaseHooksConfig(
+          options.prdPhaseNumber,
+          options.prdPhaseName,
+          options.projectPath
+        );
+        console.log(`[ClaudeCodeService] Hooks config generated at: ${hooksConfigPath}`);
+      }
+
       // Create a parser for this terminal session
       const parser = new StreamJsonParser();
 
-      // Spawn terminal for Claude Code
-      terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
-        cwd: options.projectPath,
-        onData: (data: string) => {
+      // Define the onData callback
+      const onDataCallback = (data: string): void => {
           // Debug: log received data
           console.log(`[ClaudeCodeService] onData received ${String(data.length)} bytes`);
+
+          // Check if window exists before sending events
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            console.log(`[ClaudeCodeService] Window destroyed, skipping data send`);
+            return;
+          }
 
           // Stream raw output to renderer for the terminal display
           mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
@@ -634,10 +661,15 @@ class ClaudeCodeService {
             lastStatusCache.set(terminalId, status);
             mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
           }
-        },
-        onExit: (code: number) => {
+      };
+
+      // Define the onExit callback
+      const onExitCallback = (code: number): void => {
           // Debug: log exit event
           console.log(`[ClaudeCodeService] onExit called with exit code: ${String(code)}`);
+
+          // Check if window exists before sending events
+          const windowValid = mainWindow && !mainWindow.isDestroyed();
 
           // Check if this task is being paused - if so, don't send failure message
           const isPausing = this.pausingTasks.has(options.taskId);
@@ -650,7 +682,9 @@ class ClaudeCodeService {
               timestamp: Date.now(),
             };
             lastStatusCache.set(terminalId, pausedStatus);
-            mainWindow.webContents.send(`terminal:status:${terminalId}`, pausedStatus);
+            if (windowValid) {
+              mainWindow.webContents.send(`terminal:status:${terminalId}`, pausedStatus);
+            }
             // Clear the pausing flag
             this.pausingTasks.delete(options.taskId);
           } else {
@@ -662,26 +696,49 @@ class ClaudeCodeService {
             };
             // Cache the status before sending to renderer
             lastStatusCache.set(terminalId, completionStatus);
-            mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+            if (windowValid) {
+              mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+            }
           }
 
           // Update task status based on exit code
           void this.handleTaskExit(options.taskId, code, mainWindow);
 
           // Notify renderer of process exit
-          mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+          if (windowValid) {
+            mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+          }
 
           // Clear status cache when terminal exits
           lastStatusCache.delete(terminalId);
-        },
-      });
+      };
+
+      // Spawn terminal for Claude Code with conditional env
+      if (hooksConfigPath) {
+        // With hooks config environment variable
+        terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
+          cwd: options.projectPath,
+          env: { CLAUDE_CODE_HOOKS_FILE: hooksConfigPath },
+          onData: onDataCallback,
+          onExit: onExitCallback,
+        });
+      } else {
+        // Without hooks config
+        terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
+          cwd: options.projectPath,
+          onData: onDataCallback,
+          onExit: onExitCallback,
+        });
+      }
 
       // Display startup banner BEFORE executing the command
       // Send banner directly to renderer via IPC instead of writing to terminal stdin
       // Writing to stdin causes the shell to try to execute the banner as commands
       const banner = this.buildStartupBanner(command, options);
       console.log(`[ClaudeCodeService] Sending startup banner via IPC`);
-      mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+      }
 
       // Send initial status message
       const startStatus: ClaudeStatusMessage = {
@@ -691,7 +748,9 @@ class ClaudeCodeService {
       };
       // Cache the status before sending to renderer
       lastStatusCache.set(terminalId, startStatus);
-      mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
+      }
 
       // Disable shell echo to prevent command duplication in output
       // Split into two writes with delay to avoid race condition
@@ -762,24 +821,27 @@ class ClaudeCodeService {
     const success = terminalManager.resumeTerminal(terminalId);
 
     if (success) {
-      // Send resume status message to renderer
-      const resumeStatus: ClaudeStatusMessage = {
-        type: 'system',
-        message: 'Resuming Claude Code...',
-        timestamp: Date.now(),
-      };
-      lastStatusCache.set(terminalId, resumeStatus);
-      mainWindow.webContents.send(`terminal:status:${terminalId}`, resumeStatus);
+      // Check if window exists before sending events
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // Send resume status message to renderer
+        const resumeStatus: ClaudeStatusMessage = {
+          type: 'system',
+          message: 'Resuming Claude Code...',
+          timestamp: Date.now(),
+        };
+        lastStatusCache.set(terminalId, resumeStatus);
+        mainWindow.webContents.send(`terminal:status:${terminalId}`, resumeStatus);
 
-      // Send banner to terminal output
-      const banner = [
-        '\r\n',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
-        '▶ Resumed Claude Code Session\r\n',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
-        '\r\n',
-      ].join('');
-      mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+        // Send banner to terminal output
+        const banner = [
+          '\r\n',
+          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+          '▶ Resumed Claude Code Session\r\n',
+          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+          '\r\n',
+        ].join('');
+        mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+      }
 
       console.log(`[ClaudeCodeService] Resumed task ${taskId} via SIGCONT`);
     }
@@ -961,6 +1023,9 @@ class ClaudeCodeService {
   /**
    * Build the task prompt from task details.
    *
+   * If scopedPrdContent is provided, generates a phase-scoped prompt with
+   * explicit boundary instructions to keep Claude focused on a single phase.
+   *
    * @param options - Claude Code options
    * @returns Formatted task prompt
    */
@@ -971,27 +1036,64 @@ class ClaudeCodeService {
     lines.push(`# Task: ${options.taskTitle}`);
     lines.push('');
 
-    // Task description
-    if (options.taskDescription) {
-      lines.push('## Requirements');
+    // Check if this is a phase-scoped task
+    if (options.scopedPrdContent && options.prdPhaseNumber !== undefined) {
+      // Phase-scoped prompt with explicit boundaries
+      const phaseName = options.prdPhaseName || `Phase ${options.prdPhaseNumber}`;
+      const nextPhase = options.prdPhaseNumber + 1;
+
+      lines.push('## Phase Scope');
+      lines.push(`**CRITICAL: This task is scoped to Phase ${options.prdPhaseNumber}: ${phaseName} ONLY.**`);
       lines.push('');
-      lines.push(options.taskDescription);
+      lines.push('You must:');
+      lines.push(`- ONLY work on the requirements listed below for Phase ${options.prdPhaseNumber}`);
+      lines.push(`- STOP immediately when Phase ${options.prdPhaseNumber} is complete`);
+      lines.push('- DO NOT proceed to any other phases');
+      lines.push('- DO NOT implement features from other phases');
       lines.push('');
+
+      lines.push(`## Phase ${options.prdPhaseNumber} Requirements`);
+      lines.push('');
+      lines.push(options.scopedPrdContent);
+      lines.push('');
+
+      // Context section
+      lines.push('## Context');
+      lines.push('');
+      lines.push('This task is being tracked in the Claude Tasks Desktop application.');
+      lines.push(`Task ID: ${options.taskId}`);
+      lines.push(`Session ID: ${options.sessionId}`);
+      lines.push('');
+
+      // Phase-specific instructions
+      lines.push('## Instructions');
+      lines.push('');
+      lines.push(`1. Implement ONLY the requirements for Phase ${options.prdPhaseNumber} above`);
+      lines.push(`2. When Phase ${options.prdPhaseNumber} is complete, STOP and provide a summary`);
+      lines.push(`3. Do NOT proceed to Phase ${nextPhase} or any other phases`);
+    } else {
+      // Standard prompt (existing behavior)
+      if (options.taskDescription) {
+        lines.push('## Requirements');
+        lines.push('');
+        lines.push(options.taskDescription);
+        lines.push('');
+      }
+
+      // Additional context
+      lines.push('## Context');
+      lines.push('');
+      lines.push('This task is being tracked in the Claude Tasks Desktop application.');
+      lines.push(`Task ID: ${options.taskId}`);
+      lines.push(`Session ID: ${options.sessionId}`);
+      lines.push('');
+
+      // Instructions
+      lines.push('## Instructions');
+      lines.push('');
+      lines.push('Please implement the requirements above following best practices.');
+      lines.push('When complete, provide a summary of the changes made.');
     }
-
-    // Additional context
-    lines.push('## Context');
-    lines.push('');
-    lines.push(`This task is being tracked in the Claude Tasks Desktop application.`);
-    lines.push(`Task ID: ${options.taskId}`);
-    lines.push(`Session ID: ${options.sessionId}`);
-    lines.push('');
-
-    // Instructions
-    lines.push('## Instructions');
-    lines.push('');
-    lines.push('Please implement the requirements above following best practices.');
-    lines.push('When complete, provide a summary of the changes made.');
 
     return lines.join('\n');
   }
@@ -1009,14 +1111,37 @@ class ClaudeCodeService {
     exitCode: number,
     mainWindow: BrowserWindow
   ): Promise<void> {
+    // Skip database operations during app quit to prevent blocking shutdown
+    if (trayService.getIsQuitting()) {
+      logger.info('Skipping task exit handling during app quit');
+      return;
+    }
+
     try {
       const prisma = databaseService.getClient();
 
-      // Get current task status
+      // Get current task status and project path for hooks cleanup
       const task = await prisma.task.findUnique({
         where: { id: taskId },
-        select: { claudeStatus: true },
+        select: {
+          claudeStatus: true,
+          prdPhaseNumber: true,
+          project: {
+            select: { targetPath: true },
+          },
+        },
       });
+
+      // Clean up hooks config if this was a phase-scoped task
+      if (task?.prdPhaseNumber !== null && task?.project?.targetPath) {
+        console.log(`[ClaudeCodeService] Cleaning up hooks config for phase-scoped task ${taskId}`);
+        try {
+          await claudeHooksService.cleanupHooksConfig(task.project.targetPath);
+        } catch (cleanupError) {
+          // Log but don't fail the exit handling
+          console.error(`[ClaudeCodeService] Failed to cleanup hooks config:`, cleanupError);
+        }
+      }
 
       // If task is already PAUSED, don't overwrite the status
       // This happens when the terminal is killed after pausing
@@ -1060,12 +1185,14 @@ class ClaudeCodeService {
         },
       });
 
-      // Send completion event to renderer
-      mainWindow.webContents.send(`claude:${claudeStatus.toLowerCase()}:${taskId}`, {
-        taskId,
-        exitCode,
-        status: claudeStatus,
-      });
+      // Send completion event to renderer (check if window exists)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`claude:${claudeStatus.toLowerCase()}:${taskId}`, {
+          taskId,
+          exitCode,
+          status: claudeStatus,
+        });
+      }
 
       console.log(
         `[ClaudeCodeService] Task ${taskId} completed with status ${claudeStatus} (exit code: ${String(exitCode)})`

@@ -118,6 +118,9 @@ model Task {
   claudeStartedAt    DateTime?          // When Claude started working
   claudeCompletedAt  DateTime?          // When Claude finished
   claudeStatus       ClaudeTaskStatus   @default(IDLE)
+  prdPhaseNumber     Int?               // The phase number from the PRD this task is scoped to (null if not phase-scoped)
+  prdPhaseName       String?            // The phase name (e.g., "Project Foundation")
+  scopedPrdContent   String?            // The extracted phase content that will be sent to Claude (only this phase's requirements)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
