@@ -118,6 +118,7 @@ const VALID_INVOKE_CHANNELS = [
   'terminal:resume',
   'terminal:getBuffer',
   'terminal:clearOutputBuffer',
+  'terminal:get-last-status',
   // Worktrees
   'worktrees:list',
   'worktrees:create',
@@ -167,6 +168,7 @@ const VALID_INVOKE_CHANNELS = [
   'claude:resumeTask',
   'claude:pauseTask',
   'claude:getTaskStatus',
+  'claude:getActiveTask',
 ] as const;
 
 /**

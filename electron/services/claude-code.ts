@@ -646,6 +646,8 @@ class ClaudeCodeService {
           console.log(`[ClaudeCodeService] Parser returned ${String(statusMessages.length)} status messages`);
           for (const status of statusMessages) {
             console.log(`[ClaudeCodeService] Sending status to renderer: ${status.message}`);
+            // Cache the status before sending to renderer
+            lastStatusCache.set(terminalId, status);
             mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
           }
         },
@@ -659,6 +661,8 @@ class ClaudeCodeService {
             message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
             timestamp: Date.now(),
           };
+          // Cache the status before sending to renderer
+          lastStatusCache.set(terminalId, completionStatus);
           mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
 
           // Update task status based on exit code
@@ -666,6 +670,9 @@ class ClaudeCodeService {
 
           // Notify renderer of process exit
           mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+
+          // Clear status cache when terminal exits
+          lastStatusCache.delete(terminalId);
         },
       });
 
@@ -682,6 +689,8 @@ class ClaudeCodeService {
         message: `🚀 Starting: ${options.taskTitle}`,
         timestamp: Date.now(),
       };
+      // Cache the status before sending to renderer
+      lastStatusCache.set(terminalId, startStatus);
       mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
 
       // Disable shell echo to prevent command duplication in output
@@ -774,6 +783,8 @@ class ClaudeCodeService {
         // Parse stream-json output and send clean status updates
         const statusMessages = parser.parse(data);
         for (const status of statusMessages) {
+          // Cache the status before sending to renderer
+          lastStatusCache.set(terminalId, status);
           mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
         }
       },
@@ -784,6 +795,8 @@ class ClaudeCodeService {
           message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
           timestamp: Date.now(),
         };
+        // Cache the status before sending to renderer
+        lastStatusCache.set(terminalId, completionStatus);
         mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
 
         // Update task status based on exit code
@@ -791,6 +804,9 @@ class ClaudeCodeService {
 
         // Notify renderer of process exit
         mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
+
+        // Clear status cache when terminal exits
+        lastStatusCache.delete(terminalId);
       },
     });
 
@@ -810,6 +826,8 @@ class ClaudeCodeService {
       message: '🔄 Resuming session...',
       timestamp: Date.now(),
     };
+    // Cache the status before sending to renderer
+    lastStatusCache.set(terminalId, startStatus);
     mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
 
     // Disable shell echo to prevent command duplication in output
@@ -1099,3 +1117,43 @@ class ClaudeCodeService {
 
 // Export singleton instance
 export const claudeCodeService = new ClaudeCodeService();
+
+// ============================================================================
+// Status Cache for Last Status per Terminal
+// ============================================================================
+
+/**
+ * Cache of the last status message per terminal.
+ * Used to restore status when the renderer reconnects or re-renders.
+ */
+const lastStatusCache = new Map<string, ClaudeStatusMessage>();
+
+/**
+ * Get the cached last status for a terminal.
+ *
+ * @param terminalId - The terminal ID
+ * @returns The cached status message or null if not found
+ */
+export function getLastStatus(terminalId: string): ClaudeStatusMessage | null {
+  return lastStatusCache.get(terminalId) || null;
+}
+
+/**
+ * Set/update the cached status for a terminal.
+ *
+ * @param terminalId - The terminal ID
+ * @param status - The status message to cache
+ */
+export function setLastStatus(terminalId: string, status: ClaudeStatusMessage): void {
+  lastStatusCache.set(terminalId, status);
+}
+
+/**
+ * Clear the cached status for a terminal.
+ * Should be called when the terminal is destroyed.
+ *
+ * @param terminalId - The terminal ID
+ */
+export function clearLastStatus(terminalId: string): void {
+  lastStatusCache.delete(terminalId);
+}

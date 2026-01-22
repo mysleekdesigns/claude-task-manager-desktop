@@ -1255,6 +1255,7 @@ export interface IpcChannels {
   'terminal:resume': (terminalId: string) => Promise<boolean>;
   'terminal:getBuffer': (terminalId: string) => Promise<string[]>;
   'terminal:clearOutputBuffer': (terminalId: string) => Promise<void>;
+  'terminal:get-last-status': (terminalId: string) => Promise<ClaudeStatusMessage | null>;
 
   // Worktree channels
   'worktrees:list': (projectId: string) => Promise<WorktreeWithStatus[]>;
@@ -1632,6 +1633,7 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'terminal:resume',
   'terminal:getBuffer',
   'terminal:clearOutputBuffer',
+  'terminal:get-last-status',
   'worktrees:list',
   'worktrees:create',
   'worktrees:get',

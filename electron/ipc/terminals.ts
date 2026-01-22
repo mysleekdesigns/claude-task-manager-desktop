@@ -10,6 +10,7 @@ import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { databaseService } from '../services/database.js';
 import { terminalManager } from '../services/terminal.js';
 import { captureSessionInsight } from '../services/session-capture.js';
+import { getLastStatus } from '../services/claude-code.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
   logIPCRequest,
@@ -444,6 +445,21 @@ async function handleClearOutputBuffer(
 }
 
 /**
+ * Get the last cached status message for a terminal
+ * This is used to restore status when reconnecting to prevent UI flashing
+ */
+async function handleGetLastStatus(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<ReturnType<typeof getLastStatus>> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  return getLastStatus(terminalId);
+}
+
+/**
  * Register all terminal-related IPC handlers.
  * Requires mainWindow reference for output streaming.
  *
@@ -511,6 +527,12 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     'terminal:clearOutputBuffer',
     wrapWithLogging('terminal:clearOutputBuffer', wrapHandler(handleClearOutputBuffer))
   );
+
+  // terminal:get-last-status - Get cached status message for a terminal
+  ipcMain.handle(
+    'terminal:get-last-status',
+    wrapWithLogging('terminal:get-last-status', wrapHandler(handleGetLastStatus))
+  );
 }
 
 /**
@@ -527,6 +549,7 @@ export function unregisterTerminalHandlers(): void {
   ipcMain.removeHandler('terminal:resume');
   ipcMain.removeHandler('terminal:getBuffer');
   ipcMain.removeHandler('terminal:clearOutputBuffer');
+  ipcMain.removeHandler('terminal:get-last-status');
 }
 
 /**

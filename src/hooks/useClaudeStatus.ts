@@ -233,6 +233,7 @@ export function useClaudeStatusMessages(terminalId: string | null) {
   const [messages, setMessages] = useState<ClaudeStatusMessage[]>([]);
   const [currentStatus, setCurrentStatus] = useState<ClaudeStatusMessage | null>(null);
   const messagesRef = useRef<ClaudeStatusMessage[]>([]);
+  const prevTerminalIdRef = useRef<string | null>(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -244,6 +245,18 @@ export function useClaudeStatusMessages(terminalId: string | null) {
     setMessages([]);
     setCurrentStatus(null);
     messagesRef.current = [];
+  }, []);
+
+  // Add a message (used for restoring cached status)
+  const addMessage = useCallback((message: ClaudeStatusMessage) => {
+    setCurrentStatus(message);
+    setMessages(prev => {
+      const updated = [...prev, message];
+      if (updated.length > MAX_STATUS_MESSAGES) {
+        return updated.slice(-MAX_STATUS_MESSAGES);
+      }
+      return updated;
+    });
   }, []);
 
   // Subscribe to status events
@@ -278,12 +291,43 @@ export function useClaudeStatusMessages(terminalId: string | null) {
     };
   }, [terminalId]);
 
-  // Reset when terminal ID changes
+  // Handle terminal ID changes - only clear when switching to a DIFFERENT terminal
+  // Fetch cached status before clearing to prevent flash
   useEffect(() => {
-    if (terminalId) {
-      clearMessages();
+    if (terminalId && prevTerminalIdRef.current !== terminalId) {
+      const previousTerminalId = prevTerminalIdRef.current;
+      prevTerminalIdRef.current = terminalId;
+
+      // Only clear and fetch cached status if switching terminals (not on initial mount)
+      if (previousTerminalId !== null) {
+        // Fetch cached status before clearing to prevent flash
+        window.electron.invoke('terminal:get-last-status', terminalId)
+          .then((result) => {
+            const cached = result as ClaudeStatusMessage | null;
+            clearMessages();
+            if (cached?.message) {
+              addMessage(cached);
+            }
+          })
+          .catch(() => {
+            // If fetch fails, just clear without restoring
+            clearMessages();
+          });
+      } else {
+        // Initial mount - try to restore cached status without clearing first
+        window.electron.invoke('terminal:get-last-status', terminalId)
+          .then((result) => {
+            const cached = result as ClaudeStatusMessage | null;
+            if (cached?.message) {
+              addMessage(cached);
+            }
+          })
+          .catch(() => {
+            // Ignore errors on initial fetch
+          });
+      }
     }
-  }, [terminalId, clearMessages]);
+  }, [terminalId, clearMessages, addMessage]);
 
   return {
     currentStatus,

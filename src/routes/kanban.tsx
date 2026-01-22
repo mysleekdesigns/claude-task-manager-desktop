@@ -2,12 +2,13 @@
  * Kanban Page
  *
  * Main page for the Kanban board view of tasks.
+ * Optimized for minimal re-renders with smart polling.
  */
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useTaskManager } from '@/hooks/useTasks';
-import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
+import { useTaskPolling } from '@/hooks/useTaskPolling';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { TaskModal } from '@/components/task/TaskModal';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
@@ -16,6 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, AlertCircle } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Polling interval for active tasks (10 seconds) */
+const ACTIVE_TASK_POLL_INTERVAL = 10000;
 
 export function KanbanPage() {
   const currentProject = useProjectStore((state) => state.currentProject);
@@ -121,27 +129,11 @@ export function KanbanPage() {
     }, 300);
   }, []);
 
-  // Auto-refresh when there are active Claude tasks
-  useEffect(() => {
-    if (!tasks || tasks.length === 0) return;
-
-    // Check if any tasks have active Claude sessions
-    const hasActiveTasks = tasks.some(task => {
-      const status = getClaudeStatusFromTask(task);
-      return isClaudeActive(status);
-    });
-
-    if (!hasActiveTasks) return;
-
-    // Poll every 5 seconds when there are active tasks (reduced from 3s to prevent flashing)
-    const interval = setInterval(() => {
-      void refetch();
-    }, 5000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [tasks, refetch]);
+  // Smart polling for active Claude tasks - isolated to minimize re-renders
+  useTaskPolling(tasks, refetch, {
+    activeInterval: ACTIVE_TASK_POLL_INTERVAL,
+    enabled: true,
+  });
 
   // No project selected
   if (!currentProject) {

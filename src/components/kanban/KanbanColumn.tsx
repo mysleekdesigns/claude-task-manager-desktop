@@ -3,8 +3,10 @@
  *
  * Droppable column for the Kanban board that contains task cards.
  * Uses @dnd-kit/sortable for drop functionality.
+ * Memoized to prevent unnecessary re-renders.
  */
 
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -15,7 +17,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskCard } from './TaskCard';
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
-import { useState } from 'react';
 
 // ============================================================================
 // Types
@@ -35,10 +36,32 @@ interface KanbanColumnProps {
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+// Get column color based on status - extracted to prevent recreation
+const getColumnAccent = (status: TaskStatus): string => {
+  switch (status) {
+    case 'PLANNING':
+      return 'border-cyan-500';
+    case 'IN_PROGRESS':
+      return 'border-cyan-500';
+    case 'AI_REVIEW':
+      return 'border-cyan-500';
+    case 'HUMAN_REVIEW':
+      return 'border-cyan-500';
+    case 'COMPLETED':
+      return 'border-cyan-500';
+    default:
+      return 'border-cyan-500';
+  }
+};
+
+// ============================================================================
 // Component
 // ============================================================================
 
-export function KanbanColumn({
+function KanbanColumnComponent({
   id,
   title,
   tasks,
@@ -53,25 +76,18 @@ export function KanbanColumn({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id });
 
-  const taskIds = tasks.map((t) => t.id);
+  // Memoize task IDs to prevent SortableContext from re-rendering unnecessarily
+  const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
 
-  // Get column color based on status
-  const getColumnAccent = (status: TaskStatus): string => {
-    switch (status) {
-      case 'PLANNING':
-        return 'border-cyan-500';
-      case 'IN_PROGRESS':
-        return 'border-cyan-500';
-      case 'AI_REVIEW':
-        return 'border-cyan-500';
-      case 'HUMAN_REVIEW':
-        return 'border-cyan-500';
-      case 'COMPLETED':
-        return 'border-cyan-500';
-      default:
-        return 'border-cyan-500';
-    }
-  };
+  // Memoize toggle handler
+  const handleToggleCollapse = useCallback(() => {
+    setIsCollapsed((prev) => !prev);
+  }, []);
+
+  // Memoize add task handler
+  const handleAddTask = useCallback(() => {
+    onAddTask?.(id);
+  }, [onAddTask, id]);
 
   return (
     <div
@@ -84,7 +100,7 @@ export function KanbanColumn({
         <div className="flex items-center gap-2 flex-1">
           {collapsible && (
             <button
-              onClick={() => { setIsCollapsed(!isCollapsed); }}
+              onClick={handleToggleCollapse}
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label={isCollapsed ? 'Expand column' : 'Collapse column'}
             >
@@ -110,7 +126,7 @@ export function KanbanColumn({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={() => { onAddTask(id); }}
+              onClick={handleAddTask}
               aria-label="Add task"
             >
               <Plus className="h-4 w-4" />
@@ -154,7 +170,7 @@ export function KanbanColumn({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => { onAddTask(id); }}
+                      onClick={handleAddTask}
                       className="mt-2"
                     >
                       <Plus className="mr-2 h-4 w-4" />
@@ -172,7 +188,7 @@ export function KanbanColumn({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { onAddTask(id); }}
+                onClick={handleAddTask}
                 className="w-full justify-start text-muted-foreground hover:text-foreground"
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -194,3 +210,51 @@ export function KanbanColumn({
     </div>
   );
 }
+
+// ============================================================================
+// Memoized Export
+// ============================================================================
+
+/**
+ * Memoized KanbanColumn component.
+ * Only re-renders when tasks array reference changes or column props change.
+ */
+export const KanbanColumn = memo(KanbanColumnComponent, (prevProps, nextProps) => {
+  // Check if basic props changed
+  if (
+    prevProps.id !== nextProps.id ||
+    prevProps.title !== nextProps.title ||
+    prevProps.collapsible !== nextProps.collapsible
+  ) {
+    return false;
+  }
+
+  // Check if tasks array changed (by reference first, then by content)
+  if (prevProps.tasks !== nextProps.tasks) {
+    // If array references are different, check if content actually changed
+    if (prevProps.tasks.length !== nextProps.tasks.length) {
+      return false;
+    }
+
+    // Compare task IDs and key properties
+    for (let i = 0; i < prevProps.tasks.length; i++) {
+      const prevTask = prevProps.tasks[i];
+      const nextTask = nextProps.tasks[i];
+      // Safety check for undefined
+      if (!prevTask || !nextTask) {
+        return false;
+      }
+      if (
+        prevTask.id !== nextTask.id ||
+        prevTask.status !== nextTask.status ||
+        prevTask.claudeStatus !== nextTask.claudeStatus ||
+        prevTask.updatedAt !== nextTask.updatedAt
+      ) {
+        return false;
+      }
+    }
+  }
+
+  // Props are equal, don't re-render
+  return true;
+});

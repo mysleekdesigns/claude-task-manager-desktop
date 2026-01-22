@@ -3,8 +3,10 @@
  *
  * Individual draggable task card for the Kanban board.
  * Uses @dnd-kit/sortable for drag-and-drop functionality.
+ * Wrapped with React.memo to prevent unnecessary re-renders.
  */
 
+import { memo, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,10 +42,48 @@ interface TaskCardProps {
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+// Format time ago - extracted to prevent recreation on every render
+const getTimeAgo = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) {
+    return 'just now';
+  } else if (diffMins < 60) {
+    return `${String(diffMins)} min ago`;
+  } else if (diffHours < 24) {
+    return `${String(diffHours)} hour${diffHours > 1 ? 's' : ''} ago`;
+  } else {
+    return `${String(diffDays)} day${diffDays > 1 ? 's' : ''} ago`;
+  }
+};
+
+// Get status badge label - extracted to prevent recreation on every render
+const getStatusLabel = (status: TaskStatus): string => {
+  const labels: Record<TaskStatus, string> = {
+    PENDING: 'Pending',
+    PLANNING: 'Planning',
+    IN_PROGRESS: 'In Progress',
+    AI_REVIEW: 'AI Review',
+    HUMAN_REVIEW: 'Human Review',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  };
+  return labels[status];
+};
+
+// ============================================================================
 // Component
 // ============================================================================
 
-export function TaskCard({
+function TaskCardComponent({
   task,
   onClick,
   onEdit,
@@ -72,39 +112,22 @@ export function TaskCard({
   const claudeStatus = getClaudeStatusFromTask(task);
   const isClaudeRunning = isClaudeActive(claudeStatus);
 
-  // Format time ago
-  const getTimeAgo = (dateString: string): string => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+  // Memoize event handlers to prevent child re-renders
+  const handleViewTerminal = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onViewTerminal?.(task);
+    },
+    [onViewTerminal, task]
+  );
 
-    if (diffMins < 1) {
-      return 'just now';
-    } else if (diffMins < 60) {
-      return `${String(diffMins)} min ago`;
-    } else if (diffHours < 24) {
-      return `${String(diffHours)} hour${diffHours > 1 ? 's' : ''} ago`;
-    } else {
-      return `${String(diffDays)} day${diffDays > 1 ? 's' : ''} ago`;
-    }
-  };
+  const handleEdit = useCallback(() => {
+    onEdit?.(task);
+  }, [onEdit, task]);
 
-  // Get status badge label
-  const getStatusLabel = (status: TaskStatus): string => {
-    const labels: Record<TaskStatus, string> = {
-      PENDING: 'Pending',
-      PLANNING: 'Planning',
-      IN_PROGRESS: 'In Progress',
-      AI_REVIEW: 'AI Review',
-      HUMAN_REVIEW: 'Human Review',
-      COMPLETED: 'Completed',
-      CANCELLED: 'Cancelled',
-    };
-    return labels[status];
-  };
+  const handleDelete = useCallback(() => {
+    onDelete?.(task);
+  }, [onDelete, task]);
 
   return (
     <Card
@@ -172,10 +195,7 @@ export function TaskCard({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewTerminal(task);
-                }}
+                onClick={handleViewTerminal}
                 aria-label="View terminal output"
               >
                 <Terminal className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -204,7 +224,7 @@ export function TaskCard({
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {onEdit && (
-                  <DropdownMenuItem onClick={() => { onEdit(task); }}>
+                  <DropdownMenuItem onClick={handleEdit}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
@@ -213,7 +233,7 @@ export function TaskCard({
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={() => { onDelete(task); }}
+                      onClick={handleDelete}
                       className="text-destructive focus:text-destructive"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -229,3 +249,39 @@ export function TaskCard({
     </Card>
   );
 }
+
+// ============================================================================
+// Memoized Export
+// ============================================================================
+
+/**
+ * Memoized TaskCard component to prevent unnecessary re-renders.
+ * Only re-renders when task data or callback functions change.
+ */
+export const TaskCard = memo(TaskCardComponent, (prevProps, nextProps) => {
+  // Custom comparison function for better control over re-renders
+  // Return true if props are equal (should NOT re-render)
+  // Return false if props are different (should re-render)
+
+  // Always check task changes first (most common reason to re-render)
+  if (
+    prevProps.task.id !== nextProps.task.id ||
+    prevProps.task.status !== nextProps.task.status ||
+    prevProps.task.claudeStatus !== nextProps.task.claudeStatus ||
+    prevProps.task.title !== nextProps.task.title ||
+    prevProps.task.description !== nextProps.task.description ||
+    prevProps.task.updatedAt !== nextProps.task.updatedAt
+  ) {
+    return false;
+  }
+
+  // Check dragging state
+  if (prevProps.isDragging !== nextProps.isDragging) {
+    return false;
+  }
+
+  // Callback reference changes don't matter for rendering
+  // since we use useCallback internally
+
+  return true;
+});

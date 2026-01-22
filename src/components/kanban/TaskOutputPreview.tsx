@@ -10,7 +10,7 @@
  * component mounts.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface TaskOutputPreviewProps {
   /** The terminal ID to listen for status updates. Format: claude-${taskId} */
@@ -26,17 +26,51 @@ interface ClaudeStatusMessage {
 }
 
 export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
-  const [status, setStatus] = useState<string>('Starting Claude Code...');
+  // Start with null to avoid showing "Starting Claude Code..." flash
+  const [status, setStatus] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
+
+  // Ref for debounce timeout
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced status update to prevent rapid flashing
+  const updateStatus = useCallback((message: string, isErr: boolean) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+      setStatus(message);
+      setIsError(isErr);
+    }, 50);
+  }, []);
 
   const handleStatus = useCallback((...args: unknown[]) => {
     const data = args[0] as ClaudeStatusMessage;
     if (data?.message) {
-      setStatus(data.message);
-      setIsError(data.type === 'error');
+      updateStatus(data.message, data.type === 'error');
     }
-  }, []);
+  }, [updateStatus]);
 
+  // Fetch cached status on mount to avoid showing default text
+  useEffect(() => {
+    if (!terminalId) return;
+
+    window.electron.invoke('terminal:get-last-status', terminalId)
+      .then((result) => {
+        const cached = result as ClaudeStatusMessage | null;
+        if (cached?.message) {
+          setStatus(cached.message);
+          setIsError(cached.type === 'error');
+        }
+      })
+      .catch(() => {
+        // Fallback if IPC not available yet - status will be null
+        // which shows the loading state
+      });
+  }, [terminalId]);
+
+  // Subscribe to live status updates
   useEffect(() => {
     if (!terminalId) return;
 
@@ -47,6 +81,29 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
       window.electron.removeListener(channel, handleStatus);
     };
   }, [terminalId, handleStatus]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Show a subtle loading state when status hasn't been fetched yet
+  if (status === null) {
+    return (
+      <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-zinc-500 animate-pulse" />
+          <span className="text-xs font-mono text-zinc-500">
+            Loading status...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md">
