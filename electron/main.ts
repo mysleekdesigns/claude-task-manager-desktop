@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import {
   loadWindowState,
@@ -48,6 +49,58 @@ const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
 let mainWindow: BrowserWindow | null = null;
 
 /**
+ * Wait for the Vite dev server to be ready by polling it
+ */
+async function waitForDevServer(
+  url: string,
+  timeout: number = 30000
+): Promise<void> {
+  const startTime = Date.now();
+  const parsedUrl = new URL(url);
+
+  return new Promise((resolve, reject) => {
+    const checkServer = () => {
+      const elapsed = Date.now() - startTime;
+
+      if (elapsed > timeout) {
+        reject(
+          new Error(`Dev server at ${url} did not respond within ${timeout}ms`)
+        );
+        return;
+      }
+
+      const req = http.request(
+        {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || 80,
+          path: '/',
+          method: 'HEAD',
+          timeout: 1000,
+        },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+            logger.info(`Dev server ready after ${elapsed}ms`);
+            resolve();
+          } else {
+            setTimeout(checkServer, 200);
+          }
+        }
+      );
+
+      req.on('error', () => setTimeout(checkServer, 200));
+      req.on('timeout', () => {
+        req.destroy();
+        setTimeout(checkServer, 200);
+      });
+      req.end();
+    };
+
+    logger.info(`Waiting for dev server at ${url}...`);
+    checkServer();
+  });
+}
+
+/**
  * Window defaults configuration
  */
 const WINDOW_DEFAULTS: WindowStateDefaults = {
@@ -77,6 +130,7 @@ async function createWindow(): Promise<void> {
     title: 'Claude Tasks',
     show: false, // Don't show until ready-to-show
     frame: true, // Keep native frame
+    backgroundColor: '#0f0f23', // Dark background matching the app theme
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -146,9 +200,26 @@ async function createWindow(): Promise<void> {
   // Initialize global keyboard shortcuts
   shortcutService.initialize(mainWindow);
 
+  // Initialize IPC handlers BEFORE loading URL to prevent race conditions
+  // This ensures handlers are available when the React app starts
+  initializeIPC(mainWindow);
+
   // Load the app
   if (isDev && VITE_DEV_SERVER_URL) {
-    await mainWindow.loadURL(VITE_DEV_SERVER_URL);
+    try {
+      await waitForDevServer(VITE_DEV_SERVER_URL);
+      await mainWindow.loadURL(VITE_DEV_SERVER_URL);
+    } catch (error) {
+      logger.error('Failed to connect to dev server:', error);
+      // Show error page as fallback
+      await mainWindow.loadURL(`data:text/html,
+        <html><body style="background:#1a1a2e;color:white;font-family:system-ui;padding:20px;">
+          <h1>Dev Server Connection Failed</h1>
+          <p>Could not connect to Vite dev server at ${VITE_DEV_SERVER_URL}</p>
+          <pre style="color:#ff6b6b">${error instanceof Error ? error.message : error}</pre>
+        </body></html>
+      `);
+    }
   } else {
     // Load the built index.html in production
     const indexPath = path.join(__dirname, '../dist/index.html');
@@ -240,14 +311,14 @@ async function initializeApp(): Promise<void> {
       logger.info('Startup cleanup completed: no stale states found');
     }
 
-    // Step 4: Create main window (needed for terminal IPC handlers)
+    // Step 4: Create main window and register IPC handlers
+    // Note: IPC handlers are now initialized inside createWindow() BEFORE loadURL
+    // to prevent race conditions where React app starts before handlers are ready
     await createWindow();
 
-    // Step 5: Register IPC handlers (depend on database and window being ready)
     if (!mainWindow) {
       throw new Error('Main window not created');
     }
-    initializeIPC(mainWindow);
   } catch (error) {
     logger.error('Failed to initialize application:', error);
 

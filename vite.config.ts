@@ -161,8 +161,8 @@ export default defineConfig(({ command }) => {
     },
     server: {
       port: 5173,
-      strictPort: true,
-      host: true,
+      strictPort: false, // Allow fallback to next available port
+      host: 'localhost', // Be explicit about hostname for HMR
     },
     clearScreen: false,
   };

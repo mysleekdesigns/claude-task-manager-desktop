@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -56,12 +55,10 @@ export function ThemeProvider({
   storageKey = 'claude-tasks-theme',
   ...props
 }: ThemeProviderProps) {
-  const { user } = useAuth();
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return defaultTheme;
     return (localStorage.getItem(storageKey) as Theme) ?? defaultTheme;
   });
-  const [isInitialized, setIsInitialized] = useState(false);
 
   const systemTheme = useSystemTheme();
 
@@ -73,37 +70,6 @@ export function ThemeProvider({
     return theme;
   }, [theme, systemTheme]);
 
-  // Load theme from database on mount (if user is logged in)
-  useEffect(() => {
-    async function loadThemeFromDatabase() {
-      if (!user?.id) {
-        setIsInitialized(true);
-        return;
-      }
-
-      try {
-        const settings = await window.electron.invoke<{
-          theme: string;
-        }>('settings:get', user.id);
-
-        if (settings && settings.theme) {
-          const dbTheme = settings.theme as Theme;
-          setThemeState(dbTheme);
-          localStorage.setItem(storageKey, dbTheme);
-        }
-      } catch (error) {
-        console.error('Failed to load theme from database:', error);
-        // Fallback to localStorage theme is already set in initial state
-      } finally {
-        setIsInitialized(true);
-      }
-    }
-
-    if (!isInitialized) {
-      void loadThemeFromDatabase();
-    }
-  }, [user?.id, storageKey, isInitialized]);
-
   // Apply theme class to document root
   useEffect(() => {
     const root = window.document.documentElement;
@@ -111,26 +77,15 @@ export function ThemeProvider({
     root.classList.add(resolvedTheme);
   }, [resolvedTheme]);
 
-  // Update theme in database and localStorage
+  // Update theme in localStorage only (no database dependency)
+  // Database sync can be handled at a higher level if needed
   const setTheme = useCallback(
     async (newTheme: Theme) => {
       // Update localStorage immediately for instant feedback
       localStorage.setItem(storageKey, newTheme);
       setThemeState(newTheme);
-
-      // Sync with database if user is logged in
-      if (user?.id) {
-        try {
-          await window.electron.invoke('settings:update', user.id, {
-            theme: newTheme,
-          });
-        } catch (error) {
-          console.error('Failed to save theme to database:', error);
-          // Theme is still applied from localStorage, just not persisted to DB
-        }
-      }
     },
-    [user?.id, storageKey]
+    [storageKey]
   );
 
   const value = {

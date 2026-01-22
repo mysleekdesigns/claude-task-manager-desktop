@@ -111,15 +111,15 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   }
 
   return (
-    <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md">
-      <div className="flex items-center gap-2">
+    <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md overflow-hidden">
+      <div className="flex items-start gap-2 min-w-0">
         <span
-          className={`inline-block w-2 h-2 rounded-full ${
+          className={`inline-block w-2 h-2 rounded-full flex-shrink-0 mt-1 ${
             isError ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'
           }`}
         />
         <span
-          className={`text-xs font-mono break-words whitespace-normal ${
+          className={`text-xs font-mono break-words min-w-0 line-clamp-2 ${
             isError ? 'text-red-400' : 'text-zinc-300'
           }`}
           title={status}
