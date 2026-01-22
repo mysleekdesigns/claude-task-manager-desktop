@@ -135,7 +135,7 @@ function TaskCardComponent({
       style={style}
       {...attributes}
       {...listeners}
-      className={`cursor-grab active:cursor-grabbing transition-all overflow-hidden max-w-full ${
+      className={`cursor-grab active:cursor-grabbing transition-all overflow-hidden max-w-full border border-primary ${
         isCurrentlyDragging
           ? 'opacity-50 shadow-lg ring-2 ring-primary'
           : 'hover:shadow-md'

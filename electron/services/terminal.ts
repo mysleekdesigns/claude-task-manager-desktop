@@ -7,6 +7,7 @@
 
 import * as pty from 'node-pty';
 import { platform } from 'os';
+import { execSync } from 'child_process';
 
 /**
  * Options for spawning a new terminal
@@ -460,8 +461,94 @@ class TerminalManager {
   }
 
   /**
+   * Find the foreground process group ID for a terminal.
+   *
+   * When a shell runs a foreground command (like `claude`), that command typically
+   * becomes the leader of its own process group. This is standard Unix job control.
+   * The shell's PGID is NOT the same as the foreground command's PGID.
+   *
+   * This method finds the actual foreground PGID by:
+   * 1. Finding child processes of the shell
+   * 2. Looking for a child that has a different PGID (indicating a new process group)
+   * 3. Returning that PGID so we can signal the correct process group
+   *
+   * @param shellPid - The PID of the shell process (from node-pty)
+   * @returns The foreground PGID, or null if not found
+   */
+  private findForegroundPgid(shellPid: number): number | null {
+    if (platform() === 'win32') {
+      // Windows doesn't use Unix-style process groups
+      return null;
+    }
+
+    try {
+      // Get all processes with their PID, PPID, and PGID
+      // Look for direct children of the shell that have their own PGID
+      const output = execSync(
+        `ps -o pid=,ppid=,pgid= -p $(pgrep -P ${shellPid} 2>/dev/null | tr '\\n' ',' | sed 's/,$//')`,
+        { encoding: 'utf-8', timeout: 5000 }
+      ).trim();
+
+      if (!output) {
+        console.log(`[TerminalManager] No child processes found for shell PID ${shellPid}`);
+        return null;
+      }
+
+      // Parse the output to find a process with a different PGID than the shell
+      const lines = output.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const pidStr = parts[0];
+          const pgidStr = parts[2];
+          if (pidStr && pgidStr) {
+            const childPid = parseInt(pidStr, 10);
+            const pgid = parseInt(pgidStr, 10);
+
+            // If this child has a PGID different from the shell's PID,
+            // it's likely the foreground process group leader
+            if (pgid !== shellPid && pgid === childPid) {
+              console.log(`[TerminalManager] Found foreground PGID ${pgid} (process ${childPid}) for shell ${shellPid}`);
+              return pgid;
+            }
+          }
+        }
+      }
+
+      // If all children have the shell's PGID, check if any child has its own PGID
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const pgidStr = parts[2];
+          if (pgidStr) {
+            const pgid = parseInt(pgidStr, 10);
+            if (pgid !== shellPid) {
+              console.log(`[TerminalManager] Found foreground PGID ${pgid} for shell ${shellPid}`);
+              return pgid;
+            }
+          }
+        }
+      }
+
+      console.log(`[TerminalManager] All children share shell PGID ${shellPid}`);
+      return null;
+    } catch (error) {
+      // pgrep returns exit code 1 when no processes match, which is normal
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`[TerminalManager] Could not find foreground PGID for shell ${shellPid}: ${errorMessage}`);
+      return null;
+    }
+  }
+
+  /**
    * Pause a terminal process by sending SIGSTOP signal.
-   * This suspends the process execution without terminating it.
+   *
+   * IMPORTANT: On Unix systems with job control, when a shell runs a foreground
+   * command, that command becomes the leader of its own process group. Sending
+   * SIGSTOP to the shell's PGID will NOT stop the foreground command.
+   *
+   * This method first tries to find and pause the actual foreground process group,
+   * falling back to the shell's process group if no foreground process is found.
    *
    * @param id - Terminal ID
    * @returns True if pause was successful, false if terminal not found
@@ -473,11 +560,41 @@ class TerminalManager {
       return false;
     }
 
+    const shellPid = terminal.pty.pid;
+    const pausedGroups: number[] = [];
+
     try {
-      // Send SIGSTOP to pause the process
-      process.kill(terminal.pty.pid, 'SIGSTOP');
-      console.log(`[TerminalManager] Paused terminal ${id} (PID ${String(terminal.pty.pid)})`);
-      return true;
+      // First, try to find and pause the foreground process group
+      const foregroundPgid = this.findForegroundPgid(shellPid);
+
+      if (foregroundPgid && foregroundPgid !== shellPid) {
+        // Pause the foreground process group (e.g., claude and its children)
+        try {
+          process.kill(-foregroundPgid, 'SIGSTOP');
+          pausedGroups.push(foregroundPgid);
+          console.log(`[TerminalManager] Sent SIGSTOP to foreground PGID ${foregroundPgid}`);
+        } catch (fgError) {
+          console.error(`[TerminalManager] Failed to pause foreground PGID ${foregroundPgid}:`, fgError);
+        }
+      }
+
+      // Also pause the shell's process group to ensure nothing runs
+      try {
+        process.kill(-shellPid, 'SIGSTOP');
+        pausedGroups.push(shellPid);
+        console.log(`[TerminalManager] Sent SIGSTOP to shell PGID ${shellPid}`);
+      } catch (shellError) {
+        // Shell might already be stopped or waiting, which is fine
+        console.log(`[TerminalManager] Could not SIGSTOP shell PGID ${shellPid} (may already be waiting):`, shellError);
+      }
+
+      if (pausedGroups.length > 0) {
+        console.log(`[TerminalManager] Paused terminal ${id} process groups: ${pausedGroups.join(', ')}`);
+        return true;
+      }
+
+      console.error(`[TerminalManager] Failed to pause any process groups for terminal ${id}`);
+      return false;
     } catch (error) {
       console.error(`[TerminalManager] Failed to pause terminal ${id}:`, error);
       return false;
@@ -486,7 +603,9 @@ class TerminalManager {
 
   /**
    * Resume a paused terminal process by sending SIGCONT signal.
-   * This continues a previously suspended process.
+   *
+   * This method sends SIGCONT to both the foreground process group (if found)
+   * and the shell's process group to ensure all processes are resumed.
    *
    * @param id - Terminal ID
    * @returns True if resume was successful, false if terminal not found
@@ -498,11 +617,38 @@ class TerminalManager {
       return false;
     }
 
+    const shellPid = terminal.pty.pid;
+    const resumedGroups: number[] = [];
+
     try {
-      // Send SIGCONT to resume the process
-      process.kill(terminal.pty.pid, 'SIGCONT');
-      console.log(`[TerminalManager] Resumed terminal ${id} (PID ${String(terminal.pty.pid)})`);
-      return true;
+      // Resume the shell's process group first
+      try {
+        process.kill(-shellPid, 'SIGCONT');
+        resumedGroups.push(shellPid);
+        console.log(`[TerminalManager] Sent SIGCONT to shell PGID ${shellPid}`);
+      } catch (shellError) {
+        console.log(`[TerminalManager] Could not SIGCONT shell PGID ${shellPid}:`, shellError);
+      }
+
+      // Also try to resume the foreground process group if it exists
+      const foregroundPgid = this.findForegroundPgid(shellPid);
+      if (foregroundPgid && foregroundPgid !== shellPid) {
+        try {
+          process.kill(-foregroundPgid, 'SIGCONT');
+          resumedGroups.push(foregroundPgid);
+          console.log(`[TerminalManager] Sent SIGCONT to foreground PGID ${foregroundPgid}`);
+        } catch (fgError) {
+          console.error(`[TerminalManager] Failed to resume foreground PGID ${foregroundPgid}:`, fgError);
+        }
+      }
+
+      if (resumedGroups.length > 0) {
+        console.log(`[TerminalManager] Resumed terminal ${id} process groups: ${resumedGroups.join(', ')}`);
+        return true;
+      }
+
+      console.error(`[TerminalManager] Failed to resume any process groups for terminal ${id}`);
+      return false;
     } catch (error) {
       console.error(`[TerminalManager] Failed to resume terminal ${id}:`, error);
       return false;

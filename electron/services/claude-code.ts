@@ -562,20 +562,6 @@ export interface ClaudeCodeOptions {
 }
 
 /**
- * Options for resuming a Claude Code task
- */
-export interface ResumeTaskOptions {
-  /** Task ID to resume */
-  taskId: string;
-  /** Session ID to resume */
-  sessionId: string;
-  /** Project path */
-  projectPath: string;
-  /** Optional prompt to send after resuming */
-  prompt?: string | undefined;
-}
-
-/**
  * Result from starting a Claude Code task
  */
 export interface ClaudeCodeStartResult {
@@ -583,14 +569,6 @@ export interface ClaudeCodeStartResult {
   terminalId: string;
   /** Session ID for the Claude session */
   sessionId: string;
-}
-
-/**
- * Result from resuming a Claude Code task
- */
-export interface ClaudeCodeResumeResult {
-  /** Terminal ID for the Claude process */
-  terminalId: string;
 }
 
 /**
@@ -604,6 +582,12 @@ export interface ClaudeCodeResumeResult {
  * - Configure Claude CLI options
  */
 class ClaudeCodeService {
+  /**
+   * Track tasks that are currently being paused.
+   * Used to prevent sending failure messages when a task is intentionally paused.
+   */
+  private pausingTasks: Set<string> = new Set();
+
   /**
    * Start a new Claude Code task.
    *
@@ -655,15 +639,31 @@ class ClaudeCodeService {
           // Debug: log exit event
           console.log(`[ClaudeCodeService] onExit called with exit code: ${String(code)}`);
 
-          // Send completion status message
-          const completionStatus: ClaudeStatusMessage = {
-            type: code === 0 ? 'system' : 'error',
-            message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
-            timestamp: Date.now(),
-          };
-          // Cache the status before sending to renderer
-          lastStatusCache.set(terminalId, completionStatus);
-          mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+          // Check if this task is being paused - if so, don't send failure message
+          const isPausing = this.pausingTasks.has(options.taskId);
+          if (isPausing) {
+            console.log(`[ClaudeCodeService] Task ${options.taskId} is being paused, skipping failure message`);
+            // Send a paused status instead of failure
+            const pausedStatus: ClaudeStatusMessage = {
+              type: 'system',
+              message: '⏸️ Task paused',
+              timestamp: Date.now(),
+            };
+            lastStatusCache.set(terminalId, pausedStatus);
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, pausedStatus);
+            // Clear the pausing flag
+            this.pausingTasks.delete(options.taskId);
+          } else {
+            // Send completion status message only if not pausing
+            const completionStatus: ClaudeStatusMessage = {
+              type: code === 0 ? 'system' : 'error',
+              message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
+              timestamp: Date.now(),
+            };
+            // Cache the status before sending to renderer
+            lastStatusCache.set(terminalId, completionStatus);
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+          }
 
           // Update task status based on exit code
           void this.handleTaskExit(options.taskId, code, mainWindow);
@@ -740,144 +740,109 @@ class ClaudeCodeService {
   }
 
   /**
-   * Resume an existing Claude Code session.
+   * Resume an existing Claude Code session by sending SIGCONT to the paused terminal.
+   * This continues a process that was previously suspended with SIGSTOP.
    *
-   * @param options - Resume task options
+   * @param taskId - Task ID to resume
    * @param mainWindow - Main BrowserWindow for output streaming
-   * @returns Terminal ID
+   * @returns True if resume was successful, false otherwise
    */
-  async resumeTask(
-    options: ResumeTaskOptions,
-    mainWindow: BrowserWindow
-  ): Promise<ClaudeCodeResumeResult> {
-    const terminalId = `claude-${options.taskId}`;
-
-    // Build the resume command with proper flags
-    const commandParts = [
-      'claude',
-      '-p', // Print mode (non-interactive)
-      '--dangerously-skip-permissions', // Skip permission prompts for programmatic execution
-      '--output-format stream-json', // Streaming output
-      '--verbose', // Required for stream-json
-      `--resume ${this.escapeShellArgument(options.sessionId)}`, // Resume with session ID
-    ];
-
-    // If a prompt is provided, include it as an argument
-    if (options.prompt) {
-      const escapedPrompt = this.escapeShellArgument(options.prompt);
-      commandParts.push(escapedPrompt);
-    }
-
-    const command = commandParts.join(' ');
-
-    // Create a parser for this terminal session
-    const parser = new StreamJsonParser();
-
-    // Spawn terminal for Claude Code
-    terminalManager.spawn(terminalId, `Claude Code (Resumed) - ${options.taskId}`, {
-      cwd: options.projectPath,
-      onData: (data: string) => {
-        // Stream raw output to renderer for the terminal display
-        mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
-
-        // Parse stream-json output and send clean status updates
-        const statusMessages = parser.parse(data);
-        for (const status of statusMessages) {
-          // Cache the status before sending to renderer
-          lastStatusCache.set(terminalId, status);
-          mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
-        }
-      },
-      onExit: (code: number) => {
-        // Send completion status message
-        const completionStatus: ClaudeStatusMessage = {
-          type: code === 0 ? 'system' : 'error',
-          message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
-          timestamp: Date.now(),
-        };
-        // Cache the status before sending to renderer
-        lastStatusCache.set(terminalId, completionStatus);
-        mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
-
-        // Update task status based on exit code
-        void this.handleTaskExit(options.taskId, code, mainWindow);
-
-        // Notify renderer of process exit
-        mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
-
-        // Clear status cache when terminal exits
-        lastStatusCache.delete(terminalId);
-      },
-    });
-
-    // Send simple resume banner
-    const banner = [
-      '\r\n',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
-      '🔄 Resuming Claude Code Session\r\n',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
-      '\r\n',
-    ].join('');
-    mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
-
-    // Send initial status message
-    const startStatus: ClaudeStatusMessage = {
-      type: 'system',
-      message: '🔄 Resuming session...',
-      timestamp: Date.now(),
-    };
-    // Cache the status before sending to renderer
-    lastStatusCache.set(terminalId, startStatus);
-    mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
-
-    // Disable shell echo to prevent command duplication in output
-    console.log(`[ClaudeCodeService] Disabling echo before resume command`);
-    terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
-
-    // Delay to ensure echo is disabled before command runs (100ms buffer for slower systems)
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Write the complete resume command (with prompt if provided)
-    console.log(`[ClaudeCodeService] Resuming with command: ${command}`);
-    terminalManager.write(terminalId, `${command}\n`);
-
-    return {
-      terminalId,
-    };
-  }
-
-  /**
-   * Pause a Claude Code task (graceful stop).
-   * Sends Ctrl+C to the terminal to stop Claude gracefully, then kills the terminal.
-   *
-   * @param taskId - Task ID to pause
-   */
-  pauseTask(taskId: string): void {
+  resumeTask(taskId: string, mainWindow: BrowserWindow): boolean {
     const terminalId = `claude-${taskId}`;
 
     if (!terminalManager.has(terminalId)) {
-      throw new Error(`Claude Code terminal for task ${taskId} not found`);
+      console.error(`[ClaudeCodeService] Terminal ${terminalId} not found for resume`);
+      return false;
     }
+
+    // Clear the pausing flag since we're resuming
+    this.clearPausingFlag(taskId);
+
+    // Use terminalManager.resumeTerminal() which sends SIGCONT
+    const success = terminalManager.resumeTerminal(terminalId);
+
+    if (success) {
+      // Send resume status message to renderer
+      const resumeStatus: ClaudeStatusMessage = {
+        type: 'system',
+        message: 'Resuming Claude Code...',
+        timestamp: Date.now(),
+      };
+      lastStatusCache.set(terminalId, resumeStatus);
+      mainWindow.webContents.send(`terminal:status:${terminalId}`, resumeStatus);
+
+      // Send banner to terminal output
+      const banner = [
+        '\r\n',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+        '▶ Resumed Claude Code Session\r\n',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n',
+        '\r\n',
+      ].join('');
+      mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
+
+      console.log(`[ClaudeCodeService] Resumed task ${taskId} via SIGCONT`);
+    }
+
+    return success;
+  }
+
+  /**
+   * Pause a Claude Code task using SIGSTOP.
+   * Suspends the terminal process without terminating it, allowing it to be resumed later.
+   *
+   * @param taskId - Task ID to pause
+   * @returns True if pause was successful, false otherwise
+   */
+  pauseTask(taskId: string): boolean {
+    const terminalId = `claude-${taskId}`;
+
+    if (!terminalManager.has(terminalId)) {
+      console.error(`[ClaudeCodeService] Claude Code terminal for task ${taskId} not found`);
+      return false;
+    }
+
+    // Mark this task as being paused BEFORE sending SIGSTOP
+    // This prevents the onExit handler from sending a failure message if the process exits
+    this.pausingTasks.add(taskId);
+    console.log(`[ClaudeCodeService] Marked task ${taskId} as pausing`);
 
     try {
-      // Send Ctrl+C to gracefully stop Claude
-      terminalManager.write(terminalId, '\x03');
-
-      // Wait briefly for graceful shutdown before killing the terminal
-      setTimeout(() => {
-        if (terminalManager.has(terminalId)) {
-          terminalManager.kill(terminalId);
-          console.log(`[ClaudeCodeService] Killed terminal ${terminalId} after pause`);
-        }
-      }, 500);
+      const success = terminalManager.pauseTerminal(terminalId);
+      if (success) {
+        console.log(`[ClaudeCodeService] Paused terminal ${terminalId} with SIGSTOP`);
+      } else {
+        console.error(`[ClaudeCodeService] Failed to pause terminal ${terminalId}`);
+        // Clean up the pausing flag on failure
+        this.pausingTasks.delete(taskId);
+      }
+      return success;
     } catch (error) {
       console.error(`[ClaudeCodeService] Error pausing task ${taskId}:`, error);
-      // Try to kill the terminal anyway
-      if (terminalManager.has(terminalId)) {
-        terminalManager.kill(terminalId);
-      }
-      throw error;
+      // Clean up the pausing flag on error
+      this.pausingTasks.delete(taskId);
+      return false;
     }
+  }
+
+  /**
+   * Check if a task is currently being paused.
+   *
+   * @param taskId - Task ID to check
+   * @returns True if the task is being paused
+   */
+  isTaskPausing(taskId: string): boolean {
+    return this.pausingTasks.has(taskId);
+  }
+
+  /**
+   * Clear the pausing flag for a task.
+   *
+   * @param taskId - Task ID to clear
+   */
+  clearPausingFlag(taskId: string): void {
+    this.pausingTasks.delete(taskId);
+    console.log(`[ClaudeCodeService] Cleared pausing flag for task ${taskId}`);
   }
 
   /**

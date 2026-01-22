@@ -34,7 +34,9 @@ export interface StartTaskInput {
 
 export interface ResumeTaskInput {
   taskId: string;
-  sessionId: string;
+  /** @deprecated No longer used - resume uses SIGCONT on existing terminal */
+  sessionId?: string;
+  /** @deprecated No longer used - resume uses SIGCONT on existing terminal */
   prompt?: string;
 }
 
@@ -213,7 +215,8 @@ async function handleStartTask(
 }
 
 /**
- * Resume a Claude Code task
+ * Resume a Claude Code task by sending SIGCONT to the paused terminal.
+ * This continues a process that was previously suspended with SIGSTOP.
  */
 async function handleResumeTask(
   _event: IpcMainInvokeEvent,
@@ -221,8 +224,8 @@ async function handleResumeTask(
   data: ResumeTaskInput
 ): Promise<ResumeTaskResponse> {
   // Validate required fields
-  if (!data.taskId || !data.sessionId) {
-    throw IPCErrors.invalidArguments('Task ID and session ID are required');
+  if (!data.taskId) {
+    throw IPCErrors.invalidArguments('Task ID is required');
   }
 
   const prisma = databaseService.getClient();
@@ -230,41 +233,35 @@ async function handleResumeTask(
   // Verify task exists
   const task = await prisma.task.findUnique({
     where: { id: data.taskId },
-    include: { project: true },
   });
 
   if (!task) {
     throw new Error('Task not found');
   }
 
-  if (!task.project.targetPath) {
-    throw new Error('Project has no target path configured');
+  // Verify task is in PAUSED state
+  if (task.claudeStatus !== 'PAUSED') {
+    throw new Error(`Cannot resume task: task is not paused (current status: ${task.claudeStatus})`);
   }
 
-  // Check if Claude is already running for this task
+  // Check that the terminal still exists (process was suspended, not killed)
   const terminalId = `claude-${data.taskId}`;
-
-  // If task is PAUSED and terminal still exists, clean it up first
-  if (task.claudeStatus === 'PAUSED' && terminalManager.has(terminalId)) {
-    console.log(`[claude:resumeTask] Cleaning up stale terminal for paused task ${data.taskId}`);
-    try {
-      terminalManager.kill(terminalId);
-    } catch (error) {
-      console.warn(`[claude:resumeTask] Failed to clean up stale terminal:`, error);
-    }
-  } else if (terminalManager.has(terminalId)) {
-    // Only throw error if task is not PAUSED
-    throw new Error('Claude Code is already running for this task');
+  if (!terminalManager.has(terminalId)) {
+    throw new Error('Cannot resume task: terminal process no longer exists. The task may need to be restarted.');
   }
 
-  // Update task status to IN_PROGRESS and RUNNING
+  // Resume the Claude Code task using SIGCONT
+  const success = claudeCodeService.resumeTask(data.taskId, mainWindow);
+
+  if (!success) {
+    throw new Error('Failed to resume Claude Code: SIGCONT signal failed');
+  }
+
+  // Update task status to RUNNING on success
   await prisma.task.update({
     where: { id: data.taskId },
     data: {
-      status: 'IN_PROGRESS',
       claudeStatus: 'RUNNING',
-      claudeTerminalId: terminalId,
-      claudeStartedAt: new Date(),
     },
   });
 
@@ -273,57 +270,16 @@ async function handleResumeTask(
     data: {
       taskId: data.taskId,
       type: 'info',
-      message: 'Resuming Claude Code session',
-      metadata: JSON.stringify({
-        sessionId: data.sessionId,
-      }),
+      message: 'Resumed Claude Code session via SIGCONT',
+      metadata: JSON.stringify({}),
     },
   });
 
-  let result;
-  try {
-    // Resume the Claude Code task
-    result = await claudeCodeService.resumeTask(
-      {
-        taskId: data.taskId,
-        sessionId: data.sessionId,
-        projectPath: task.project.targetPath,
-        prompt: data.prompt,
-      },
-      mainWindow
-    );
-  } catch (error) {
-    // Rollback database status if resume fails
-    await prisma.task.update({
-      where: { id: data.taskId },
-      data: {
-        status: 'PENDING', // Rollback to PENDING since resume failed
-        claudeStatus: 'FAILED',
-        claudeTerminalId: null,
-        claudeCompletedAt: new Date(),
-      },
-    });
+  console.log(`[claude:resumeTask] Successfully resumed task ${data.taskId} via SIGCONT`);
 
-    // Log the error
-    await prisma.taskLog.create({
-      data: {
-        taskId: data.taskId,
-        type: 'error',
-        message: 'Failed to resume Claude Code session',
-        metadata: JSON.stringify({
-          error: error instanceof Error ? error.message : 'Unknown error',
-          sessionId: data.sessionId,
-        }),
-      },
-    });
-
-    console.error('[claude:resumeTask] Failed to resume Claude Code:', error);
-    throw new Error(
-      `Failed to resume Claude Code: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
-
-  return result;
+  return {
+    terminalId,
+  };
 }
 
 /**
@@ -355,7 +311,14 @@ async function handlePauseTask(
     throw new Error('Claude Code is not running for this task');
   }
 
-  // Update task status to PAUSED
+  // First, try to pause the terminal (sends SIGSTOP)
+  const success = claudeCodeService.pauseTask(data.taskId);
+
+  if (!success) {
+    throw new Error('Failed to pause Claude Code terminal');
+  }
+
+  // Only update database if pause succeeded
   await prisma.task.update({
     where: { id: data.taskId },
     data: {
@@ -363,15 +326,12 @@ async function handlePauseTask(
     },
   });
 
-  // Pause the Claude Code task (sends Ctrl+C)
-  claudeCodeService.pauseTask(data.taskId);
-
   // Add a log entry for pausing Claude Code
   await prisma.taskLog.create({
     data: {
       taskId: data.taskId,
       type: 'info',
-      message: 'Pausing Claude Code session',
+      message: 'Paused Claude Code session via SIGSTOP',
       metadata: JSON.stringify({}),
     },
   });

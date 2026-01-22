@@ -36,28 +36,6 @@ interface KanbanColumnProps {
 }
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-// Get column color based on status - extracted to prevent recreation
-const getColumnAccent = (status: TaskStatus): string => {
-  switch (status) {
-    case 'PLANNING':
-      return 'border-cyan-500';
-    case 'IN_PROGRESS':
-      return 'border-cyan-500';
-    case 'AI_REVIEW':
-      return 'border-cyan-500';
-    case 'HUMAN_REVIEW':
-      return 'border-cyan-500';
-    case 'COMPLETED':
-      return 'border-cyan-500';
-    default:
-      return 'border-cyan-500';
-  }
-};
-
-// ============================================================================
 // Component
 // ============================================================================
 
@@ -91,8 +69,8 @@ function KanbanColumnComponent({
 
   return (
     <div
-      className={`flex flex-col w-80 flex-shrink-0 bg-muted/30 rounded-lg border-2 transition-colors ${
-        isOver ? 'ring-2 ring-primary border-primary' : getColumnAccent(id)
+      className={`flex flex-col w-80 flex-shrink-0 bg-muted/30 rounded-lg border border-border transition-colors ${
+        isOver ? 'ring-2 ring-primary border-primary' : ''
       }`}
     >
       {/* Column Header */}
