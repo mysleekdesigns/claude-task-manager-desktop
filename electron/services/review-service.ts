@@ -134,7 +134,7 @@ class ReviewService {
    * 4. Conditionally add research review if CrawlForge MCP is configured
    *
    * @param taskId - The task ID to review
-   * @param reviewTypes - Types of reviews to run (default: security, quality, testing)
+   * @param reviewTypes - Types of reviews to run (default: security, quality, performance)
    */
   async startReview(
     taskId: string,
@@ -161,7 +161,7 @@ class ReviewService {
     }
 
     // Determine review types based on available MCPs
-    let finalReviewTypes = reviewTypes || ['security', 'quality', 'testing'];
+    let finalReviewTypes: ReviewType[] = reviewTypes || ['security', 'quality', 'performance'];
 
     // Add research if CrawlForge is available and not already included
     if (!finalReviewTypes.includes('research')) {

@@ -136,6 +136,7 @@ model Task {
   changelogEntry ChangelogEntry?
   activities     TaskActivity[]
   reviews        TaskReview[]
+  fixes          TaskFix[]
   taskSummary    TaskSummary?
 
   @@index([projectId])
@@ -467,6 +468,27 @@ model TaskReview {
   task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, reviewType])
+  @@index([taskId])
+  @@index([status])
+}
+
+model TaskFix {
+  id            String    @id @default(cuid())
+  taskId        String
+  fixType       String    // 'security' | 'quality' | 'testing'
+  status        String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED
+  summary       String?
+  findings      String    @default("[]") // JSON array of findings being fixed
+  patch         String?   // Generated fix/patch content
+  researchNotes String?   // Research findings from CrawlForge
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fixType])
   @@index([taskId])
   @@index([status])
 }

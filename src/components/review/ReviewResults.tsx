@@ -9,7 +9,6 @@ import { useState, useEffect } from 'react';
 import {
   Shield,
   Code,
-  TestTube,
   Zap,
   FileText,
   Search,
@@ -18,6 +17,8 @@ import {
   Info,
   CheckCircle,
   Loader2,
+  Wand2,
+  HelpCircle,
 } from 'lucide-react';
 import {
   Accordion,
@@ -26,12 +27,14 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { invoke } from '@/lib/ipc';
 import type {
   ReviewType,
   ReviewFinding,
   FindingSeverity,
   ReviewStatus,
+  FixType,
 } from '@/types/ipc';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +45,6 @@ import { cn } from '@/lib/utils';
 const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string }>> = {
   security: Shield,
   quality: Code,
-  testing: TestTube,
   performance: Zap,
   documentation: FileText,
   research: Search,
@@ -51,7 +53,6 @@ const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string 
 const REVIEW_LABELS: Record<ReviewType, string> = {
   security: 'Security',
   quality: 'Code Quality',
-  testing: 'Test Coverage',
   performance: 'Performance',
   documentation: 'Documentation',
   research: 'Research',
@@ -97,8 +98,9 @@ interface FindingItemProps {
 }
 
 function FindingItem({ finding }: FindingItemProps) {
-  const SeverityIcon = SEVERITY_ICONS[finding.severity];
-  const severityColorClass = SEVERITY_COLORS[finding.severity];
+  // Use fallback icon if severity is not in the record
+  const SeverityIcon = SEVERITY_ICONS[finding.severity] ?? HelpCircle;
+  const severityColorClass = SEVERITY_COLORS[finding.severity] ?? 'text-gray-600 bg-gray-100 dark:bg-gray-900/30 dark:text-gray-400';
 
   return (
     <div className="flex gap-3 p-3 bg-muted rounded-md">
@@ -133,6 +135,7 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
+  const [fixingTypes, setFixingTypes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setIsLoading(true);
@@ -201,6 +204,31 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
     }
   };
 
+  // Handle fix issues button click
+  const handleFixIssues = async (reviewType: ReviewType, findings: ReviewFinding[]) => {
+    if (!taskId) return;
+
+    // Only allow fixing for review types that support fixes
+    const fixableTypes: FixType[] = ['security', 'quality'];
+    if (!fixableTypes.includes(reviewType as FixType)) {
+      console.warn(`Fix not supported for review type: ${reviewType}`);
+      return;
+    }
+
+    setFixingTypes((prev) => new Set(prev).add(reviewType));
+    try {
+      await invoke('fix:start', { taskId, fixType: reviewType as FixType, findings });
+    } catch (err) {
+      console.error('Failed to start fix:', err);
+    } finally {
+      setFixingTypes((prev) => {
+        const next = new Set(prev);
+        next.delete(reviewType);
+        return next;
+      });
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -239,7 +267,8 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
       onValueChange={handleAccordionChange}
     >
       {reviews.map((review) => {
-        const Icon = REVIEW_ICONS[review.reviewType];
+        // Use fallback icon if reviewType is not in the record
+        const Icon = REVIEW_ICONS[review.reviewType] ?? HelpCircle;
         // Use findingsCount from the progress response, not the loaded findings array
         const findingsCount = review.findingsCount;
         const isComplete = review.status === 'COMPLETED';
@@ -311,6 +340,35 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
                 <div className="text-center text-muted-foreground py-4">
                   <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
                   <p className="text-sm">No issues found</p>
+                </div>
+              )}
+
+              {/* Fix Issues Button - only for fixable review types */}
+              {review.findingsCount > 0 &&
+                review.status === 'COMPLETED' &&
+                ['security', 'quality'].includes(review.reviewType) && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      handleFixIssues(review.reviewType, review.findings || [])
+                    }
+                    disabled={fixingTypes.has(review.reviewType)}
+                    className="gap-2"
+                  >
+                    {fixingTypes.has(review.reviewType) ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Fixing Issues...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4" />
+                        Fix Issues
+                      </>
+                    )}
+                  </Button>
                 </div>
               )}
             </AccordionContent>

@@ -2,12 +2,12 @@
  * Review Output Preview Component
  *
  * Displays real-time AI review progress on task cards.
- * Shows the status of each review agent (security, quality, testing, etc.)
+ * Shows the status of each review agent (security, quality, performance, etc.)
  * and the current activity message.
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Shield, Code, TestTube, Zap, FileText, Search } from 'lucide-react';
+import { Shield, Code, Zap, FileText, Search } from 'lucide-react';
 import type { ReviewType, ReviewProgressResponse, ReviewStatus } from '@/types/ipc';
 
 // ============================================================================
@@ -17,7 +17,6 @@ import type { ReviewType, ReviewProgressResponse, ReviewStatus } from '@/types/i
 const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string }>> = {
   security: Shield,
   quality: Code,
-  testing: TestTube,
   performance: Zap,
   documentation: FileText,
   research: Search,
@@ -26,7 +25,6 @@ const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string 
 const REVIEW_LABELS: Record<ReviewType, string> = {
   security: 'Security',
   quality: 'Quality',
-  testing: 'Testing',
   performance: 'Performance',
   documentation: 'Documentation',
   research: 'Research',
@@ -156,7 +154,10 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   const hasFailed = progress.reviews.some((r) => r.status === 'FAILED');
   const isAllCompleted = progress.status === 'completed';
 
-  const Icon = activeReviewType ? REVIEW_ICONS[activeReviewType] : Shield;
+  // Safely get the icon - fallback to Shield if the review type is not recognized
+  const Icon = activeReviewType && REVIEW_ICONS[activeReviewType]
+    ? REVIEW_ICONS[activeReviewType]
+    : Shield;
 
   return (
     <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md overflow-hidden">
@@ -164,7 +165,8 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
       <div className="flex items-center gap-2 mb-1.5">
         <div className="flex gap-1">
           {progress.reviews.map((review) => {
-            const AgentIcon = REVIEW_ICONS[review.reviewType];
+            // Safely get the icon - fallback to Shield if the review type is not recognized
+            const AgentIcon = REVIEW_ICONS[review.reviewType] ?? Shield;
             return (
               <div
                 key={review.reviewType}
@@ -177,7 +179,7 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
                         ? 'bg-blue-500/20 text-blue-400'
                         : 'bg-zinc-700/50 text-zinc-500'
                 }`}
-                title={`${REVIEW_LABELS[review.reviewType]}: ${review.status.toLowerCase()}`}
+                title={`${REVIEW_LABELS[review.reviewType] ?? review.reviewType}: ${review.status.toLowerCase()}`}
               >
                 <AgentIcon className="w-3 h-3" />
               </div>

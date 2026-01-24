@@ -1419,6 +1419,11 @@ export interface IpcChannels {
   'review:cancel': (taskId: string) => Promise<void>;
   'review:getHistory': (taskId: string) => Promise<TaskHistoryResponse | null>;
   'review:getFindings': (data: { taskId: string; reviewType: ReviewType }) => Promise<ReviewFinding[] | null>;
+
+  // Fix Workflow channels
+  'fix:start': (data: StartFixInput) => Promise<void>;
+  'fix:getProgress': (data: { taskId: string; fixType: FixType }) => Promise<FixProgressResponse | null>;
+  'fix:cancel': (data: { taskId: string; fixType: FixType }) => Promise<void>;
 }
 
 /**
@@ -1574,7 +1579,7 @@ export interface UpdateProgress {
 /**
  * Type of AI review to perform
  */
-export type ReviewType = 'security' | 'quality' | 'testing' | 'performance' | 'documentation' | 'research';
+export type ReviewType = 'security' | 'quality' | 'performance' | 'documentation' | 'research';
 
 /**
  * Status of an individual review
@@ -1657,6 +1662,44 @@ export interface ReviewFinding {
 export interface StartReviewInput {
   taskId: string;
   reviewTypes?: ReviewType[];
+}
+
+// ============================================================================
+// Fix Types
+// ============================================================================
+
+/** Types of fixes that can be performed */
+export type FixType = 'security' | 'quality';
+
+/** Status of a fix operation */
+export type FixStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+
+/** Input for starting a fix */
+export interface StartFixInput {
+  taskId: string;
+  fixType: FixType;
+  findings: ReviewFinding[];
+}
+
+/** Progress response for a fix operation */
+export interface FixProgressResponse {
+  taskId: string;
+  fixType: FixType;
+  status: FixStatus;
+  summary?: string;
+  currentActivity?: {
+    message: string;
+    timestamp: number;
+  };
+}
+
+/** Result of a completed fix */
+export interface FixResult {
+  fixType: FixType;
+  status: FixStatus;
+  summary?: string;
+  patch?: string;
+  researchNotes?: string;
 }
 
 /**
@@ -1823,6 +1866,10 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'review:cancel',
   'review:getHistory',
   'review:getFindings',
+  // Fix Workflow
+  'fix:start',
+  'fix:getProgress',
+  'fix:cancel',
 ] as const;
 
 /**

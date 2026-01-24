@@ -2,7 +2,7 @@
  * Review Agent Pool Manager
  *
  * Manages a pool of concurrent AI review agents that analyze task changes
- * for security, quality, testing, performance, and documentation issues.
+ * for security, quality, performance, documentation, and research issues.
  */
 
 import { BrowserWindow } from 'electron';
@@ -19,7 +19,6 @@ const logger = createIPCLogger('ReviewAgentPool');
 export type ReviewType =
   | 'security'
   | 'quality'
-  | 'testing'
   | 'performance'
   | 'documentation'
   | 'research';
@@ -92,6 +91,7 @@ export interface ReviewFinding {
 interface ReviewOutput {
   score: number;
   findings: ReviewFinding[];
+  error?: string;
 }
 
 /**
@@ -105,10 +105,10 @@ const REVIEW_PROMPTS: Record<ReviewType, string> = {
 - OWASP Top 10 issues
 - Insecure dependencies or configurations
 
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}
+Output your findings wrapped in XML tags with this exact format:
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}</review_json>
 
-Only output the JSON, no other text.`,
+IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 
   quality: `You are a code quality reviewer. Analyze the recent changes for:
 - Code readability and maintainability
@@ -118,22 +118,10 @@ Only output the JSON, no other text.`,
 - Naming conventions
 - Function/method complexity
 
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}
+Output your findings wrapped in XML tags with this exact format:
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}</review_json>
 
-Only output the JSON, no other text.`,
-
-  testing: `You are a test coverage reviewer. Analyze the recent changes for:
-- Missing test coverage
-- Edge cases not handled
-- Test quality and assertions
-- Mock/stub usage patterns
-- Integration test gaps
-
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}
-
-Only output the JSON, no other text.`,
+IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 
   performance: `You are a performance reviewer. Analyze the recent changes for:
 - Algorithm complexity issues (O(n^2) or worse)
@@ -143,10 +131,10 @@ Only output the JSON, no other text.`,
 - Database query efficiency
 - Caching opportunities
 
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}
+Output your findings wrapped in XML tags with this exact format:
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}</review_json>
 
-Only output the JSON, no other text.`,
+IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 
   documentation: `You are a documentation reviewer. Analyze the recent changes for:
 - Missing JSDoc/comments for complex logic
@@ -155,10 +143,10 @@ Only output the JSON, no other text.`,
 - README updates needed
 - Type documentation
 
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}
+Output your findings wrapped in XML tags with this exact format:
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}</review_json>
 
-Only output the JSON, no other text.`,
+IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 
   research: `You are a research assistant. For each issue found in the code review:
 - Use mcp__crawlforge__deep_research to find current best practices and solutions (up to January 2026)
@@ -173,10 +161,10 @@ Focus on:
 
 For each issue, research the latest solutions and provide specific recommendations with source links.
 
-Output your findings as JSON on a single line with this exact format:
-{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string with source links where applicable", "file": "optional string", "line": "optional number"}]}
+Output your findings wrapped in XML tags with this exact format:
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string with source links where applicable", "file": "optional string", "line": "optional number"}]}</review_json>
 
-Only output the JSON, no other text.`,
+IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 };
 
 /**
@@ -505,14 +493,14 @@ class ReviewAgentPoolManager {
    * @param projectPath - Project directory path
    * @param taskDescription - Task description for context
    * @param mainWindow - BrowserWindow for IPC events
-   * @param reviewTypes - Types of reviews to run (default: security, quality, testing)
+   * @param reviewTypes - Types of reviews to run (default: security, quality, performance, research)
    */
   async startAllReviews(
     taskId: string,
     projectPath: string,
     taskDescription: string,
     mainWindow: BrowserWindow,
-    reviewTypes: ReviewType[] = ['security', 'quality', 'testing', 'research']
+    reviewTypes: ReviewType[] = ['security', 'quality', 'performance', 'research']
   ): Promise<void> {
     logger.info(`Starting ${String(reviewTypes.length)} reviews for task ${taskId}`);
 
@@ -717,22 +705,40 @@ class ReviewAgentPoolManager {
       // Parse the output
       const result = this.parseReviewOutput(agent.outputBuffer);
 
-      // Update TaskReview with results
-      await prisma.taskReview.update({
-        where: { id: agent.reviewId },
-        data: {
-          status: 'COMPLETED',
-          score: result.score,
-          summary: `Found ${String(result.findings.length)} issue(s)`,
-          findings: JSON.stringify(result.findings),
-          completedAt: new Date(),
-        },
-      });
+      // Check if parsing failed (score === -1 indicates parse failure)
+      if (result.score === -1) {
+        // Mark as failed due to parse error
+        await prisma.taskReview.update({
+          where: { id: agent.reviewId },
+          data: {
+            status: 'FAILED',
+            summary: result.error || 'Failed to parse review output',
+            completedAt: new Date(),
+          },
+        });
 
-      agent.status = 'completed';
-      logger.info(
-        `${agent.reviewType} review completed for task ${agent.taskId} (score: ${String(result.score)})`
-      );
+        agent.status = 'failed';
+        logger.warn(
+          `${agent.reviewType} review failed for task ${agent.taskId} (parse error: ${result.error || 'unknown'})`
+        );
+      } else {
+        // Update TaskReview with results
+        await prisma.taskReview.update({
+          where: { id: agent.reviewId },
+          data: {
+            status: 'COMPLETED',
+            score: result.score,
+            summary: `Found ${String(result.findings.length)} issue(s)`,
+            findings: JSON.stringify(result.findings),
+            completedAt: new Date(),
+          },
+        });
+
+        agent.status = 'completed';
+        logger.info(
+          `${agent.reviewType} review completed for task ${agent.taskId} (score: ${String(result.score)})`
+        );
+      }
     } else {
       // Mark as failed
       await prisma.taskReview.update({
@@ -898,54 +904,157 @@ class ReviewAgentPoolManager {
   }
 
   /**
+   * Extract content from XML tags.
+   *
+   * @param text - The text to search for XML tags
+   * @param tagName - The name of the XML tag to extract content from
+   * @returns The content inside the tags or null if not found
+   */
+  private extractFromXmlTags(text: string, tagName: string): string | null {
+    const openTag = `<${tagName}>`;
+    const closeTag = `</${tagName}>`;
+
+    const startIndex = text.indexOf(openTag);
+    if (startIndex === -1) {
+      return null;
+    }
+
+    const contentStart = startIndex + openTag.length;
+    const endIndex = text.indexOf(closeTag, contentStart);
+    if (endIndex === -1) {
+      return null;
+    }
+
+    return text.substring(contentStart, endIndex).trim();
+  }
+
+  /**
+   * Concatenate all text content from stream-json NDJSON output.
+   * Handles both "type": "assistant" messages with content arrays
+   * and "type": "result" events.
+   *
+   * @param output - The raw NDJSON output from Claude's stream-json format
+   * @returns Concatenated text content from all messages
+   */
+  private extractTextFromStreamJson(output: string): string {
+    const textParts: string[] = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('{')) {
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+
+        // Handle "type": "assistant" messages with content array
+        if (parsed['type'] === 'assistant' && parsed['message']) {
+          const message = parsed['message'] as Record<string, unknown>;
+          const content = message['content'] as Array<Record<string, unknown>> | undefined;
+
+          if (content && Array.isArray(content)) {
+            for (const block of content) {
+              if (block['type'] === 'text' && typeof block['text'] === 'string') {
+                textParts.push(block['text']);
+              }
+            }
+          }
+        }
+
+        // Handle "type": "result" events
+        if (parsed['type'] === 'result' && typeof parsed['result'] === 'string') {
+          textParts.push(parsed['result']);
+        }
+      } catch {
+        // Non-JSON line, skip
+      }
+    }
+
+    return textParts.join('\n');
+  }
+
+  /**
    * Parse review output from Claude Code.
+   * Handles stream-json NDJSON format where output is wrapped in event structures.
    */
   private parseReviewOutput(output: string): ReviewOutput {
     try {
-      // Try to find JSON in the output - first pass: direct JSON lines
+      // Step 1: Extract all text content from stream-json NDJSON format
+      const concatenatedText = this.extractTextFromStreamJson(output);
+
+      // Step 2: Look for <review_json>...</review_json> tags in concatenated text
+      const xmlJsonContent = this.extractFromXmlTags(concatenatedText, 'review_json');
+      if (xmlJsonContent) {
+        try {
+          const parsed = JSON.parse(xmlJsonContent) as ReviewOutput;
+          if (typeof parsed.score === 'number') {
+            const result = {
+              score: Math.max(0, Math.min(100, parsed.score)),
+              findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+            };
+            logger.info(`Parsed review score from XML tags: ${String(result.score)} with ${String(result.findings.length)} findings`);
+            return result;
+          }
+        } catch (parseError) {
+          logger.warn('Failed to parse JSON from XML tags:', parseError);
+        }
+      }
+
+      // Step 3: Also check raw output for XML tags (in case format differs)
+      const rawXmlContent = this.extractFromXmlTags(output, 'review_json');
+      if (rawXmlContent) {
+        try {
+          const parsed = JSON.parse(rawXmlContent) as ReviewOutput;
+          if (typeof parsed.score === 'number') {
+            const result = {
+              score: Math.max(0, Math.min(100, parsed.score)),
+              findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+            };
+            logger.info(`Parsed review score from raw XML tags: ${String(result.score)} with ${String(result.findings.length)} findings`);
+            return result;
+          }
+        } catch (parseError) {
+          logger.warn('Failed to parse JSON from raw XML tags:', parseError);
+        }
+      }
+
+      // Step 4: Fall back to balanced brace extraction from concatenated text
+      if (concatenatedText.includes('"score"')) {
+        const result = this.extractScoreJson(concatenatedText);
+        if (result) {
+          logger.info(`Parsed review score from concatenated text: ${String(result.score)} with ${String(result.findings.length)} findings`);
+          return result;
+        }
+      }
+
+      // Step 5: Try to find JSON in raw output lines (legacy approach)
       const lines = output.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('{') && trimmed.includes('"score"')) {
           const result = this.extractScoreJson(trimmed);
           if (result) {
-            logger.info(`Parsed review score: ${String(result.score)} with ${String(result.findings.length)} findings`);
+            logger.info(`Parsed review score from raw line: ${String(result.score)} with ${String(result.findings.length)} findings`);
             return result;
           }
         }
       }
 
-      // Try to parse wrapped stream-json output
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line.trim()) as { message?: { content?: Array<{ text?: string }> } };
-          if (parsed.message?.content) {
-            for (const item of parsed.message.content) {
-              if (item.text && item.text.includes('"score"')) {
-                // Use balanced brace extraction instead of regex
-                const result = this.extractScoreJson(item.text);
-                if (result) {
-                  logger.info(`Parsed review score from stream-json: ${String(result.score)} with ${String(result.findings.length)} findings`);
-                  return result;
-                }
-              }
-            }
-          }
-        } catch {
-          // Continue to next line
-        }
-      }
+      // Parsing failed - return error indicator instead of default score
+      logger.error('Failed to parse review output - no valid JSON found');
+      logger.error(`Output buffer length: ${String(output.length)} chars`);
+      logger.error(`Concatenated text length: ${String(concatenatedText.length)} chars`);
+      logger.error(`Output buffer preview (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
+      logger.error(`Output buffer preview (last 500 chars): ${output.substring(Math.max(0, output.length - 500)).replace(/\n/g, '\\n')}`);
+      logger.error(`Concatenated text preview: ${concatenatedText.substring(0, 500).replace(/\n/g, '\\n')}`);
 
-      // Default if parsing fails - log the actual output for debugging
-      logger.warn('Failed to parse review output, using default score');
-      logger.warn(`Output buffer length: ${String(output.length)} chars`);
-      logger.warn(`Output buffer preview (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
-      logger.warn(`Output buffer preview (last 500 chars): ${output.substring(Math.max(0, output.length - 500)).replace(/\n/g, '\\n')}`);
-      return { score: 50, findings: [] };
+      return { score: -1, findings: [], error: 'Failed to parse review output' };
     } catch (error) {
       logger.error('Error parsing review output:', error);
       logger.error(`Output buffer on error (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
-      return { score: 50, findings: [] };
+      return { score: -1, findings: [], error: `Parse error: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
