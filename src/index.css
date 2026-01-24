@@ -1,7 +1,28 @@
+/* ===== Geist Font Declarations ===== */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/GeistVF.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMonoVF.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @import "tailwindcss";
 
 /* ===== Tailwind v4 Theme Configuration for shadcn/ui ===== */
 @theme {
+  /* Font families */
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
   /* Colors - using oklch for better color interpolation */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
