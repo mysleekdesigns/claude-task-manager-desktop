@@ -183,7 +183,10 @@ function TaskCardComponent({
         {/* Live Output Preview - shown when Claude is running or starting */}
         {/* Use predictable terminal ID (claude-${taskId}) when starting to avoid race condition */}
         {isClaudeRunning && (
-          <TaskOutputPreview terminalId={task.claudeTerminalId || `claude-${task.id}`} />
+          <TaskOutputPreview
+            terminalId={task.claudeTerminalId || `claude-${task.id}`}
+            claudeStatus={task.claudeStatus}
+          />
         )}
 
         {/* Bottom Row: Time, Start Button, Menu */}

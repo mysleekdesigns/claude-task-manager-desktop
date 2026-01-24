@@ -11,10 +11,13 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import type { ClaudeTaskStatus } from '@/types/ipc';
 
 interface TaskOutputPreviewProps {
   /** The terminal ID to listen for status updates. Format: claude-${taskId} */
   terminalId: string;
+  /** The Claude task status - error styling only shows when status is 'FAILED' */
+  claudeStatus?: ClaudeTaskStatus | undefined;
 }
 
 interface ClaudeStatusMessage {
@@ -25,7 +28,7 @@ interface ClaudeStatusMessage {
   timestamp: number;
 }
 
-export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
+export function TaskOutputPreview({ terminalId, claudeStatus }: TaskOutputPreviewProps) {
   // Start with null to avoid showing "Starting Claude Code..." flash
   const [status, setStatus] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
@@ -51,12 +54,16 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
   const handleStatusRef = useRef<((...args: unknown[]) => void) | null>(null);
 
   // Update the ref with current logic on every render
+  // Note: We track the message type but error styling is controlled by claudeStatus prop
   handleStatusRef.current = (...args: unknown[]) => {
     const data = args[0] as ClaudeStatusMessage;
     if (data?.message) {
+      // Only show error styling when task has FAILED, not during execution
+      const isErrorType = data.type === 'error' || data.type === 'command_failed';
+      const shouldShowError = isErrorType && claudeStatus === 'FAILED';
       updateStatus(
         data.message,
-        data.type === 'error' || data.type === 'command_failed',
+        shouldShowError,
         data.type === 'awaiting_input'
       );
     }
@@ -71,7 +78,9 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
         const cached = result as ClaudeStatusMessage | null;
         if (cached?.message) {
           setStatus(cached.message);
-          setIsError(cached.type === 'error' || cached.type === 'command_failed');
+          // Only show error styling when task has FAILED, not during execution
+          const isErrorType = cached.type === 'error' || cached.type === 'command_failed';
+          setIsError(isErrorType && claudeStatus === 'FAILED');
           setIsAwaitingInput(cached.type === 'awaiting_input');
         }
       })
@@ -79,7 +88,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
         // Fallback if IPC not available yet - status will be null
         // which shows the loading state
       });
-  }, [terminalId]);
+  }, [terminalId, claudeStatus]);
 
   // Subscribe to live status updates
   useEffect(() => {
