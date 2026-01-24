@@ -17,6 +17,7 @@ import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
 import { databaseService } from './services/database.js';
 import { performStartupCleanup } from './services/startup-cleanup.js';
 import { terminalManager } from './services/terminal.js';
+import { claudeCodeService } from './services/claude-code.js';
 
 const logger = createIPCLogger('Main');
 
@@ -365,7 +366,16 @@ app.on('before-quit', async (event) => {
   trayService.setQuitting(true);
 
   try {
-    // Kill all active terminal processes synchronously first
+    // Kill all active Claude Code processes first (spawn-based)
+    try {
+      logger.info('Cleaning up Claude Code processes...');
+      claudeCodeService.killAllProcesses();
+      logger.info('Claude Code processes cleaned up successfully');
+    } catch (error) {
+      logger.error('Error cleaning up Claude Code processes:', error);
+    }
+
+    // Kill all active terminal processes (PTY-based)
     try {
       logger.info('Cleaning up terminal processes...');
       terminalManager.killAll();
@@ -399,7 +409,8 @@ app.on('before-quit', async (event) => {
 
 // Backup cleanup in case before-quit didn't fully clean up
 app.on('will-quit', () => {
-  terminalManager.killAll(); // Backup cleanup
+  claudeCodeService.killAllProcesses(); // Backup cleanup for Claude processes
+  terminalManager.killAll(); // Backup cleanup for terminal processes
 });
 
 app.on('window-all-closed', () => {

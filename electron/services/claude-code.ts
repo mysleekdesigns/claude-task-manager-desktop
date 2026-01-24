@@ -3,9 +3,12 @@
  *
  * Manages Claude Code CLI integration for task automation.
  * Handles spawning Claude Code processes, session management, and terminal integration.
+ *
+ * Uses child_process.spawn instead of node-pty to prevent TTY detection,
+ * ensuring Claude Code respects the --output-format stream-json flag.
  */
 
-import { terminalManager } from './terminal.js';
+import { spawn, type ChildProcess } from 'child_process';
 import { databaseService } from './database.js';
 import { claudeHooksService } from './claude-hooks.js';
 import { trayService } from './tray.js';
@@ -43,6 +46,23 @@ interface StreamJsonMessage {
       is_error?: boolean;
     }>;
   };
+  // For stream_event messages (partial streaming with --include-partial-messages)
+  event?: {
+    type: string;
+    index?: number;
+    content_block?: {
+      type: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    };
+    delta?: {
+      type: string;
+      text?: string;
+      partial_json?: string;
+      thinking?: string;
+    };
+  };
   // Legacy fields (kept for compatibility)
   name?: string;
   input?: Record<string, unknown>;
@@ -72,6 +92,19 @@ export interface ClaudeStatusMessage {
  */
 class StreamJsonParser {
   private _lineBuffer = '';
+
+  /**
+   * Strip ANSI escape sequences from a string.
+   * This handles both CSI sequences (e.g., colors) and OSC sequences (e.g., terminal titles).
+   *
+   * @param str - String potentially containing ANSI escape codes
+   * @returns Clean string with ANSI codes removed
+   */
+  private stripAnsiCodes(str: string): string {
+    // Remove ANSI CSI sequences (e.g., \x1b[0m for reset, \x1b[31m for red)
+    // Remove ANSI OSC sequences (e.g., \x1b]0;title\x07 for window title)
+    return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
+  }
 
   /**
    * System subtypes that should be filtered out (internal/non-user-facing)
@@ -127,15 +160,16 @@ class StreamJsonParser {
     const chunkPreview = chunk.length > 200 ? `${chunk.substring(0, 200)}... (${String(chunk.length)} bytes)` : chunk;
     console.log(`[StreamJsonParser] Received chunk: ${chunkPreview.replace(/\n/g, '\\n')}`);
 
-    // Process complete lines (ending with newline)
-    const lines = this._lineBuffer.split('\n');
+    // Process complete lines (handle all line ending styles: \r\n, \n, or \r)
+    const lines = this._lineBuffer.split(/\r?\n|\r/);
     // Keep the last incomplete line in buffer
     this._lineBuffer = lines.pop() || '';
 
     console.log(`[StreamJsonParser] Processing ${String(lines.length)} complete lines, buffer has ${String(this._lineBuffer.length)} bytes remaining`);
 
     for (const line of lines) {
-      const trimmed = line.trim();
+      // Strip ANSI escape sequences before processing
+      const trimmed = this.stripAnsiCodes(line).trim();
       if (!trimmed) continue;
 
       // Try to parse as JSON
@@ -308,6 +342,10 @@ class StreamJsonParser {
         }
         return null;
 
+      case 'stream_event':
+        // Handle partial streaming events from --include-partial-messages
+        return this.processStreamEvent(msg, timestamp);
+
       default:
         console.log(`[StreamJsonParser] Unknown message type: ${msg.type}`);
         return null;
@@ -355,6 +393,63 @@ class StreamJsonParser {
     // For successful results, we don't need to show a status
     // The next tool_use or text response will indicate progress
     return null;
+  }
+
+  /**
+   * Process a stream_event message (partial streaming with --include-partial-messages)
+   *
+   * @param msg - Stream event message
+   * @param timestamp - Message timestamp
+   * @returns Status message or null
+   */
+  private processStreamEvent(msg: StreamJsonMessage, timestamp: number): ClaudeStatusMessage | null {
+    const event = msg.event;
+    if (!event) {
+      console.log(`[StreamJsonParser] stream_event missing event field`);
+      return null;
+    }
+
+    console.log(`[StreamJsonParser] Processing stream_event: ${event.type}`);
+
+    switch (event.type) {
+      case 'content_block_start':
+        // Check if this is a tool_use block starting
+        if (event.content_block?.type === 'tool_use' && event.content_block.name) {
+          const toolName = event.content_block.name;
+          const contextualMessage = this.getContextualToolMessage(toolName, event.content_block.input);
+          console.log(`[StreamJsonParser] stream_event tool_use start: ${toolName} -> "${contextualMessage}"`);
+          return {
+            type: 'tool_start',
+            message: contextualMessage,
+            tool: toolName,
+            timestamp,
+          };
+        }
+
+        // Check if this is a thinking block starting
+        if (event.content_block?.type === 'thinking') {
+          console.log(`[StreamJsonParser] stream_event thinking start`);
+          return {
+            type: 'thinking',
+            message: 'Thinking...',
+            timestamp,
+          };
+        }
+
+        // Text blocks starting - no status needed
+        return null;
+
+      case 'content_block_delta':
+      case 'content_block_stop':
+      case 'message_start':
+      case 'message_stop':
+        // These events don't need status updates - they're for incremental streaming
+        return null;
+
+      default:
+        console.log(`[StreamJsonParser] Unhandled stream_event type: ${event.type}`);
+        return null;
+    }
   }
 
   /**
@@ -583,6 +678,20 @@ export interface ClaudeCodeStartResult {
 }
 
 /**
+ * Managed Claude process instance
+ */
+interface ManagedClaudeProcess {
+  /** The spawned child process */
+  process: ChildProcess;
+  /** Task ID for tracking */
+  taskId: string;
+  /** Terminal ID for IPC events */
+  terminalId: string;
+  /** StreamJsonParser for this process */
+  parser: StreamJsonParser;
+}
+
+/**
  * ClaudeCodeService manages Claude Code CLI processes for task automation.
  *
  * Features:
@@ -591,6 +700,9 @@ export interface ClaudeCodeStartResult {
  * - Pause/stop Claude sessions gracefully
  * - Build task prompts with requirements
  * - Configure Claude CLI options
+ *
+ * Uses child_process.spawn instead of node-pty to prevent TTY detection,
+ * ensuring Claude Code outputs stream-json format correctly.
  */
 class ClaudeCodeService {
   /**
@@ -600,7 +712,16 @@ class ClaudeCodeService {
   private pausingTasks: Set<string> = new Set();
 
   /**
+   * Map of active Claude processes by taskId.
+   * Used for pause/resume/kill operations.
+   */
+  private activeProcesses: Map<string, ManagedClaudeProcess> = new Map();
+
+  /**
    * Start a new Claude Code task.
+   *
+   * Uses child_process.spawn instead of node-pty to prevent TTY detection,
+   * ensuring Claude Code respects the --output-format stream-json flag.
    *
    * @param options - Claude Code configuration options
    * @param mainWindow - Main BrowserWindow for output streaming
@@ -613,15 +734,16 @@ class ClaudeCodeService {
     const terminalId = `claude-${options.taskId}`;
 
     try {
-      // Build the task prompt FIRST
+      // Build the task prompt
       const taskPrompt = this.buildTaskPrompt(options);
       console.log(`[ClaudeCodeService] Built task prompt (${String(taskPrompt.length)} chars)`);
       console.log(`[ClaudeCodeService] Task prompt preview: ${taskPrompt.substring(0, 200)}...`);
 
-      // Build the Claude Code command with the prompt included as an argument
-      const command = this.buildClaudeCommand(options, taskPrompt);
-      console.log(`[ClaudeCodeService] Built command with embedded prompt`);
-      console.log(`[ClaudeCodeService] Full command: ${command}`);
+      // Build the arguments array for spawn (no shell escaping needed)
+      const args = this.buildClaudeArgs(options, taskPrompt);
+      console.log(`[ClaudeCodeService] Built spawn args: claude ${args.join(' ').substring(0, 200)}...`);
+      console.log(`[ClaudeCodeService] Full command: claude ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`);
+      console.log(`[ClaudeCodeService] Working directory: ${options.projectPath}`);
 
       // Generate hooks config for phase-scoped tasks
       let hooksConfigPath: string | undefined;
@@ -635,106 +757,17 @@ class ClaudeCodeService {
         console.log(`[ClaudeCodeService] Hooks config generated at: ${hooksConfigPath}`);
       }
 
-      // Create a parser for this terminal session
+      // Create a parser for this process
       const parser = new StreamJsonParser();
 
-      // Define the onData callback
-      const onDataCallback = (data: string): void => {
-          // Debug: log received data
-          console.log(`[ClaudeCodeService] onData received ${String(data.length)} bytes`);
-
-          // Check if window exists before sending events
-          if (!mainWindow || mainWindow.isDestroyed()) {
-            console.log(`[ClaudeCodeService] Window destroyed, skipping data send`);
-            return;
-          }
-
-          // Stream raw output to renderer for the terminal display
-          mainWindow.webContents.send(`terminal:output:${terminalId}`, data);
-
-          // Parse stream-json output and send clean status updates
-          const statusMessages = parser.parse(data);
-          console.log(`[ClaudeCodeService] Parser returned ${String(statusMessages.length)} status messages`);
-          for (const status of statusMessages) {
-            console.log(`[ClaudeCodeService] Sending status to renderer: ${status.message}`);
-            // Cache the status before sending to renderer
-            lastStatusCache.set(terminalId, status);
-            mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
-          }
-      };
-
-      // Define the onExit callback
-      const onExitCallback = (code: number): void => {
-          // Debug: log exit event
-          console.log(`[ClaudeCodeService] onExit called with exit code: ${String(code)}`);
-
-          // Check if window exists before sending events
-          const windowValid = mainWindow && !mainWindow.isDestroyed();
-
-          // Check if this task is being paused - if so, don't send failure message
-          const isPausing = this.pausingTasks.has(options.taskId);
-          if (isPausing) {
-            console.log(`[ClaudeCodeService] Task ${options.taskId} is being paused, skipping failure message`);
-            // Send a paused status instead of failure
-            const pausedStatus: ClaudeStatusMessage = {
-              type: 'system',
-              message: '⏸️ Task paused',
-              timestamp: Date.now(),
-            };
-            lastStatusCache.set(terminalId, pausedStatus);
-            if (windowValid) {
-              mainWindow.webContents.send(`terminal:status:${terminalId}`, pausedStatus);
-            }
-            // Clear the pausing flag
-            this.pausingTasks.delete(options.taskId);
-          } else {
-            // Send completion status message only if not pausing
-            const completionStatus: ClaudeStatusMessage = {
-              type: code === 0 ? 'system' : 'error',
-              message: code === 0 ? '✅ Task completed successfully' : `❌ Task failed with exit code ${String(code)}`,
-              timestamp: Date.now(),
-            };
-            // Cache the status before sending to renderer
-            lastStatusCache.set(terminalId, completionStatus);
-            if (windowValid) {
-              mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
-            }
-          }
-
-          // Update task status based on exit code
-          void this.handleTaskExit(options.taskId, code, mainWindow);
-
-          // Notify renderer of process exit
-          if (windowValid) {
-            mainWindow.webContents.send(`terminal:exit:${terminalId}`, code);
-          }
-
-          // Clear status cache when terminal exits
-          lastStatusCache.delete(terminalId);
-      };
-
-      // Spawn terminal for Claude Code with conditional env
+      // Build environment variables
+      const env = { ...process.env };
       if (hooksConfigPath) {
-        // With hooks config environment variable
-        terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
-          cwd: options.projectPath,
-          env: { CLAUDE_CODE_HOOKS_FILE: hooksConfigPath },
-          onData: onDataCallback,
-          onExit: onExitCallback,
-        });
-      } else {
-        // Without hooks config
-        terminalManager.spawn(terminalId, `Claude Code - ${options.taskTitle}`, {
-          cwd: options.projectPath,
-          onData: onDataCallback,
-          onExit: onExitCallback,
-        });
+        env['CLAUDE_CODE_HOOKS_FILE'] = hooksConfigPath;
       }
 
-      // Display startup banner BEFORE executing the command
-      // Send banner directly to renderer via IPC instead of writing to terminal stdin
-      // Writing to stdin causes the shell to try to execute the banner as commands
-      const banner = this.buildStartupBanner(command, options);
+      // Display startup banner BEFORE spawning the process
+      const banner = this.buildStartupBanner(options);
       console.log(`[ClaudeCodeService] Sending startup banner via IPC`);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(`terminal:output:${terminalId}`, banner);
@@ -743,26 +776,287 @@ class ClaudeCodeService {
       // Send initial status message
       const startStatus: ClaudeStatusMessage = {
         type: 'system',
-        message: `🚀 Starting: ${options.taskTitle}`,
+        message: `Starting: ${options.taskTitle}`,
         timestamp: Date.now(),
       };
-      // Cache the status before sending to renderer
       lastStatusCache.set(terminalId, startStatus);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(`terminal:status:${terminalId}`, startStatus);
       }
 
-      // Disable shell echo to prevent command duplication in output
-      // Split into two writes with delay to avoid race condition
-      console.log(`[ClaudeCodeService] Disabling echo before command execution`);
-      terminalManager.write(terminalId, `stty -echo 2>/dev/null\n`);
+      // Spawn the Claude Code process using child_process.spawn
+      // This prevents TTY detection, ensuring Claude respects --output-format stream-json
+      const claudeProcess = spawn('claude', args, {
+        cwd: options.projectPath,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-      // Delay to ensure echo is disabled before command runs (100ms buffer for slower systems)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log(`[ClaudeCodeService] Spawned Claude Code process with PID: ${String(claudeProcess.pid)}`);
 
-      // Then write the complete Claude Code command (with prompt included)
-      console.log(`[ClaudeCodeService] Executing command with embedded prompt`);
-      terminalManager.write(terminalId, `${command}\n`);
+      // DEBUG: Track if we ever receive data
+      let dataEventFired = false;
+
+      // DEBUG: Verify streams exist immediately after spawn
+      console.log('[ClaudeCodeService] DEBUG: stdout exists:', !!claudeProcess.stdout);
+      console.log('[ClaudeCodeService] DEBUG: stderr exists:', !!claudeProcess.stderr);
+      console.log('[ClaudeCodeService] DEBUG: stdin exists:', !!claudeProcess.stdin);
+      console.log('[ClaudeCodeService] DEBUG: stdout type:', claudeProcess.stdout ? typeof claudeProcess.stdout : 'null');
+      console.log('[ClaudeCodeService] DEBUG: stderr type:', claudeProcess.stderr ? typeof claudeProcess.stderr : 'null');
+
+      if (!claudeProcess.stdout) {
+        console.error('[ClaudeCodeService] CRITICAL: stdout is null/undefined! Stream capture will fail.');
+        console.error('[ClaudeCodeService] This may indicate spawn failed or stdio config is wrong.');
+      }
+      if (!claudeProcess.stderr) {
+        console.error('[ClaudeCodeService] CRITICAL: stderr is null/undefined! Error capture will fail.');
+      }
+      if (!claudeProcess.pid) {
+        console.error('[ClaudeCodeService] CRITICAL: Process has no PID! Spawn may have failed silently.');
+      }
+
+      // Close stdin to signal no more input - this triggers Claude CLI to start processing
+      // Without this, the CLI waits indefinitely for stdin to close before producing output
+      if (claudeProcess.stdin) {
+        claudeProcess.stdin.end();
+        console.log('[ClaudeCodeService] DEBUG: stdin closed to trigger CLI processing');
+      }
+
+      // DEBUG: Listen for the spawn event to confirm process started correctly
+      claudeProcess.on('spawn', () => {
+        console.log('[ClaudeCodeService] DEBUG: spawn event fired - process started successfully');
+        console.log(`[ClaudeCodeService] DEBUG: PID after spawn: ${String(claudeProcess.pid)}`);
+        // Check stream state when spawn fires
+        if (claudeProcess.stdout) {
+          console.log('[ClaudeCodeService] DEBUG: At spawn - stdout.readableFlowing:', claudeProcess.stdout.readableFlowing);
+          console.log('[ClaudeCodeService] DEBUG: At spawn - stdout.readableLength:', claudeProcess.stdout.readableLength);
+        }
+      });
+
+      // DEBUG: Check if there's already buffered data (race condition check)
+      if (claudeProcess.stdout) {
+        const initialReadableLength = claudeProcess.stdout.readableLength;
+        console.log('[ClaudeCodeService] DEBUG: Immediately after spawn - readableLength:', initialReadableLength);
+        if (initialReadableLength > 0) {
+          console.log('[ClaudeCodeService] DEBUG: WARNING - Data already buffered before handler attached!');
+        }
+      }
+
+      // DEBUG: Check if streams are readable/writable
+      if (claudeProcess.stdout) {
+        console.log('[ClaudeCodeService] DEBUG: stdout readable:', claudeProcess.stdout.readable);
+        console.log('[ClaudeCodeService] DEBUG: stdout readableFlowing:', claudeProcess.stdout.readableFlowing);
+        console.log('[ClaudeCodeService] DEBUG: stdout readableLength:', claudeProcess.stdout.readableLength);
+      }
+      if (claudeProcess.stderr) {
+        console.log('[ClaudeCodeService] DEBUG: stderr readable:', claudeProcess.stderr.readable);
+      }
+
+      // Store the managed process
+      const managedProcess: ManagedClaudeProcess = {
+        process: claudeProcess,
+        taskId: options.taskId,
+        terminalId,
+        parser,
+      };
+      this.activeProcesses.set(options.taskId, managedProcess);
+
+      // Handle stdout data - use explicit null check instead of optional chaining
+      if (claudeProcess.stdout) {
+        console.log('[ClaudeCodeService] DEBUG: Attaching stdout data handler');
+
+        // DEBUG: Check initial stream state
+        console.log('[ClaudeCodeService] DEBUG: Initial stdout.readableFlowing:', claudeProcess.stdout.readableFlowing);
+        console.log('[ClaudeCodeService] DEBUG: Initial stdout.readableLength:', claudeProcess.stdout.readableLength);
+        console.log('[ClaudeCodeService] DEBUG: Initial stdout.isPaused():', claudeProcess.stdout.isPaused());
+
+        // Ensure the stream is in flowing mode by setting encoding
+        // Some Node.js versions require this to properly emit 'data' events
+        claudeProcess.stdout.setEncoding('utf8');
+
+        // DEBUG: Check state after setEncoding
+        console.log('[ClaudeCodeService] DEBUG: After setEncoding - readableFlowing:', claudeProcess.stdout.readableFlowing);
+
+        // Explicitly start reading (in case the stream is paused)
+        claudeProcess.stdout.resume();
+
+        // DEBUG: Check state after resume
+        console.log('[ClaudeCodeService] DEBUG: After resume - readableFlowing:', claudeProcess.stdout.readableFlowing);
+        console.log('[ClaudeCodeService] DEBUG: After resume - isPaused():', claudeProcess.stdout.isPaused());
+
+        claudeProcess.stdout.on('data', (data: Buffer | string) => {
+          // DEBUG: Mark that we received data
+          if (!dataEventFired) {
+            dataEventFired = true;
+            console.log('[ClaudeCodeService] DEBUG: FIRST data event fired!');
+          }
+
+          // With setEncoding('utf8'), data will be a string, but handle Buffer for safety
+          const text = typeof data === 'string' ? data : data.toString('utf8');
+          console.log(`[ClaudeCodeService] stdout received ${String(text.length)} chars`);
+          console.log(`[ClaudeCodeService] stdout preview: ${text.substring(0, 200).replace(/\n/g, '\\n')}`);
+
+          // Check if window exists before sending events
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            console.log(`[ClaudeCodeService] Window destroyed, skipping data send`);
+            return;
+          }
+
+          // Format the JSON output nicely for terminal display
+          const formattedOutput = this.formatJsonOutputForTerminal(text);
+          mainWindow.webContents.send(`terminal:output:${terminalId}`, formattedOutput);
+
+          // Parse stream-json output and send clean status updates
+          const statusMessages = parser.parse(text);
+          console.log(`[ClaudeCodeService] Parser returned ${String(statusMessages.length)} status messages`);
+          for (const status of statusMessages) {
+            console.log(`[ClaudeCodeService] Sending status to renderer: ${status.message}`);
+            lastStatusCache.set(terminalId, status);
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
+          }
+        });
+
+        // DEBUG: Check state after attaching data handler
+        console.log('[ClaudeCodeService] DEBUG: After data handler attached - readableFlowing:', claudeProcess.stdout.readableFlowing);
+
+        // Also listen for end and close events on stdout
+        claudeProcess.stdout.on('end', () => {
+          console.log('[ClaudeCodeService] DEBUG: stdout stream ended');
+        });
+        claudeProcess.stdout.on('close', () => {
+          console.log('[ClaudeCodeService] DEBUG: stdout stream closed');
+        });
+        claudeProcess.stdout.on('error', (err: Error) => {
+          console.error('[ClaudeCodeService] ERROR: stdout stream error:', err.message);
+        });
+
+        // DEBUG: Log Node.js and Electron versions for context
+        console.log('[ClaudeCodeService] DEBUG: Node.js version:', process.version);
+        console.log('[ClaudeCodeService] DEBUG: Electron version:', process.versions.electron);
+        console.log('[ClaudeCodeService] DEBUG: Chrome version:', process.versions.chrome);
+
+        // DEBUG: Schedule a check after a delay to see if stream state changed
+        setTimeout(() => {
+          console.log('[ClaudeCodeService] DEBUG: After 1s - dataEventFired:', dataEventFired);
+          if (claudeProcess.stdout) {
+            console.log('[ClaudeCodeService] DEBUG: After 1s - readableFlowing:', claudeProcess.stdout.readableFlowing);
+            console.log('[ClaudeCodeService] DEBUG: After 1s - readableLength:', claudeProcess.stdout.readableLength);
+            console.log('[ClaudeCodeService] DEBUG: After 1s - isPaused():', claudeProcess.stdout.isPaused());
+            console.log('[ClaudeCodeService] DEBUG: After 1s - destroyed:', claudeProcess.stdout.destroyed);
+            console.log('[ClaudeCodeService] DEBUG: After 1s - process.killed:', claudeProcess.killed);
+            console.log('[ClaudeCodeService] DEBUG: After 1s - process.exitCode:', claudeProcess.exitCode);
+          }
+          // If no data after 1s, something is definitely wrong
+          if (!dataEventFired) {
+            console.error('[ClaudeCodeService] ERROR: No data received after 1 second!');
+            console.error('[ClaudeCodeService] ERROR: This suggests stdout is not producing any output.');
+            console.error('[ClaudeCodeService] ERROR: Possible causes:');
+            console.error('[ClaudeCodeService] ERROR:   1. Claude CLI is buffering output');
+            console.error('[ClaudeCodeService] ERROR:   2. Stream is stuck in paused mode');
+            console.error('[ClaudeCodeService] ERROR:   3. Process failed silently');
+          }
+        }, 1000);
+
+      } else {
+        console.error('[ClaudeCodeService] CRITICAL: Cannot attach stdout handler - stream is null!');
+      }
+
+      // Handle stderr data - use explicit null check instead of optional chaining
+      if (claudeProcess.stderr) {
+        console.log('[ClaudeCodeService] DEBUG: Attaching stderr data handler');
+
+        // Ensure the stream is in flowing mode
+        claudeProcess.stderr.setEncoding('utf8');
+        claudeProcess.stderr.resume();
+
+        claudeProcess.stderr.on('data', (data: Buffer | string) => {
+          const text = typeof data === 'string' ? data : data.toString('utf8');
+          console.log(`[ClaudeCodeService] stderr received ${String(text.length)} chars: ${text.substring(0, 100)}`);
+
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            return;
+          }
+
+          // Send stderr to terminal with error formatting
+          const formattedError = `\x1b[31m${text}\x1b[0m`; // Red color
+          mainWindow.webContents.send(`terminal:output:${terminalId}`, formattedError);
+        });
+
+        claudeProcess.stderr.on('error', (err: Error) => {
+          console.error('[ClaudeCodeService] ERROR: stderr stream error:', err.message);
+        });
+      } else {
+        console.error('[ClaudeCodeService] CRITICAL: Cannot attach stderr handler - stream is null!');
+      }
+
+      // Handle process exit
+      claudeProcess.on('exit', (code: number | null, signal: string | null) => {
+        const exitCode = code ?? (signal ? 128 : 1); // Use signal-based exit code or default to 1
+        console.log(`[ClaudeCodeService] Process exited with code: ${String(exitCode)}, signal: ${signal || 'none'}`);
+
+        // Remove from active processes
+        this.activeProcesses.delete(options.taskId);
+
+        // Check if window exists before sending events
+        const windowValid = mainWindow && !mainWindow.isDestroyed();
+
+        // Check if this task is being paused - if so, don't send failure message
+        const isPausing = this.pausingTasks.has(options.taskId);
+        if (isPausing) {
+          console.log(`[ClaudeCodeService] Task ${options.taskId} is being paused, skipping failure message`);
+          const pausedStatus: ClaudeStatusMessage = {
+            type: 'system',
+            message: 'Task paused',
+            timestamp: Date.now(),
+          };
+          lastStatusCache.set(terminalId, pausedStatus);
+          if (windowValid) {
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, pausedStatus);
+          }
+          this.pausingTasks.delete(options.taskId);
+        } else {
+          // Send completion status message
+          const completionStatus: ClaudeStatusMessage = {
+            type: exitCode === 0 ? 'system' : 'error',
+            message: exitCode === 0 ? 'Task completed successfully' : `Task failed with exit code ${String(exitCode)}`,
+            timestamp: Date.now(),
+          };
+          lastStatusCache.set(terminalId, completionStatus);
+          if (windowValid) {
+            mainWindow.webContents.send(`terminal:status:${terminalId}`, completionStatus);
+          }
+        }
+
+        // Update task status based on exit code
+        void this.handleTaskExit(options.taskId, exitCode, mainWindow);
+
+        // Notify renderer of process exit
+        if (windowValid) {
+          mainWindow.webContents.send(`terminal:exit:${terminalId}`, exitCode);
+        }
+
+        // Clear status cache when process exits
+        lastStatusCache.delete(terminalId);
+      });
+
+      // Handle process errors (spawn failures, etc.)
+      claudeProcess.on('error', (err: Error) => {
+        console.error(`[ClaudeCodeService] Process error for task ${options.taskId}:`, err);
+
+        // Remove from active processes
+        this.activeProcesses.delete(options.taskId);
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const errorStatus: ClaudeStatusMessage = {
+            type: 'error',
+            message: `Failed to start Claude Code: ${err.message}`,
+            timestamp: Date.now(),
+          };
+          lastStatusCache.set(terminalId, errorStatus);
+          mainWindow.webContents.send(`terminal:status:${terminalId}`, errorStatus);
+          mainWindow.webContents.send(`terminal:output:${terminalId}`, `\x1b[31mError: ${err.message}\x1b[0m\r\n`);
+        }
+      });
 
       console.log(
         `[ClaudeCodeService] Successfully started Claude Code for task ${options.taskId} (terminal: ${terminalId})`
@@ -779,14 +1073,16 @@ class ClaudeCodeService {
       );
       console.error(`[ClaudeCodeService] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
 
-      // Clean up terminal if it was created
-      if (terminalManager.has(terminalId)) {
+      // Clean up process if it was created
+      const managedProcess = this.activeProcesses.get(options.taskId);
+      if (managedProcess) {
         try {
-          terminalManager.kill(terminalId);
-          console.log(`[ClaudeCodeService] Cleaned up terminal ${terminalId} after error`);
+          managedProcess.process.kill();
+          this.activeProcesses.delete(options.taskId);
+          console.log(`[ClaudeCodeService] Cleaned up process for task ${options.taskId} after error`);
         } catch (killError) {
           console.error(
-            `[ClaudeCodeService] Failed to clean up terminal ${terminalId}:`,
+            `[ClaudeCodeService] Failed to clean up process for task ${options.taskId}:`,
             killError
           );
         }
@@ -799,7 +1095,70 @@ class ClaudeCodeService {
   }
 
   /**
-   * Resume an existing Claude Code session by sending SIGCONT to the paused terminal.
+   * Format JSON output from Claude Code for terminal display.
+   * Converts raw JSON lines into a more readable format.
+   *
+   * @param text - Raw text output from Claude Code
+   * @returns Formatted text suitable for terminal display
+   */
+  private formatJsonOutputForTerminal(text: string): string {
+    // Split into lines and format each line
+    const lines = text.split('\n');
+    const formattedLines: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        formattedLines.push('');
+        continue;
+      }
+
+      // Try to parse as JSON for prettier formatting
+      try {
+        const parsed = JSON.parse(trimmed);
+        // Format based on message type
+        if (parsed.type === 'assistant' && parsed.message?.content) {
+          for (const item of parsed.message.content) {
+            if (item.type === 'text' && item.text) {
+              formattedLines.push(item.text);
+            } else if (item.type === 'tool_use') {
+              formattedLines.push(`\x1b[36m[Tool: ${item.name || 'unknown'}]\x1b[0m`);
+            }
+          }
+        } else if (parsed.type === 'user' && parsed.message?.content) {
+          for (const item of parsed.message.content) {
+            if (item.type === 'tool_result' && !item.is_error) {
+              // Tool results can be verbose, just show a marker
+              formattedLines.push(`\x1b[32m[Tool completed]\x1b[0m`);
+            } else if (item.type === 'tool_result' && item.is_error) {
+              formattedLines.push(`\x1b[31m[Tool error: ${item.content || 'Unknown'}]\x1b[0m`);
+            }
+          }
+        } else if (parsed.type === 'system') {
+          // Show system messages in gray
+          if (parsed.content) {
+            formattedLines.push(`\x1b[90m${parsed.content}\x1b[0m`);
+          }
+        } else if (parsed.type === 'result') {
+          if (parsed.subtype === 'success') {
+            formattedLines.push(`\x1b[32m[Task completed]\x1b[0m`);
+          }
+        } else {
+          // For other types, show a compact JSON representation
+          formattedLines.push(`\x1b[90m${JSON.stringify(parsed)}\x1b[0m`);
+        }
+      } catch {
+        // Not JSON, show as-is
+        formattedLines.push(line);
+      }
+    }
+
+    // Join with carriage return + newline for terminal display
+    return formattedLines.join('\r\n');
+  }
+
+  /**
+   * Resume an existing Claude Code session by sending SIGCONT to the paused process.
    * This continues a process that was previously suspended with SIGSTOP.
    *
    * @param taskId - Task ID to resume
@@ -808,19 +1167,27 @@ class ClaudeCodeService {
    */
   resumeTask(taskId: string, mainWindow: BrowserWindow): boolean {
     const terminalId = `claude-${taskId}`;
+    const managedProcess = this.activeProcesses.get(taskId);
 
-    if (!terminalManager.has(terminalId)) {
-      console.error(`[ClaudeCodeService] Terminal ${terminalId} not found for resume`);
+    if (!managedProcess) {
+      console.error(`[ClaudeCodeService] Process for task ${taskId} not found for resume`);
+      return false;
+    }
+
+    const pid = managedProcess.process.pid;
+    if (!pid) {
+      console.error(`[ClaudeCodeService] Process for task ${taskId} has no PID`);
       return false;
     }
 
     // Clear the pausing flag since we're resuming
     this.clearPausingFlag(taskId);
 
-    // Use terminalManager.resumeTerminal() which sends SIGCONT
-    const success = terminalManager.resumeTerminal(terminalId);
+    try {
+      // Send SIGCONT to resume the process
+      process.kill(pid, 'SIGCONT');
+      console.log(`[ClaudeCodeService] Sent SIGCONT to PID ${String(pid)}`);
 
-    if (success) {
       // Check if window exists before sending events
       if (mainWindow && !mainWindow.isDestroyed()) {
         // Send resume status message to renderer
@@ -844,41 +1211,44 @@ class ClaudeCodeService {
       }
 
       console.log(`[ClaudeCodeService] Resumed task ${taskId} via SIGCONT`);
+      return true;
+    } catch (error) {
+      console.error(`[ClaudeCodeService] Failed to resume task ${taskId}:`, error);
+      return false;
     }
-
-    return success;
   }
 
   /**
    * Pause a Claude Code task using SIGSTOP.
-   * Suspends the terminal process without terminating it, allowing it to be resumed later.
+   * Suspends the process without terminating it, allowing it to be resumed later.
    *
    * @param taskId - Task ID to pause
    * @returns True if pause was successful, false otherwise
    */
   pauseTask(taskId: string): boolean {
-    const terminalId = `claude-${taskId}`;
+    const managedProcess = this.activeProcesses.get(taskId);
 
-    if (!terminalManager.has(terminalId)) {
-      console.error(`[ClaudeCodeService] Claude Code terminal for task ${taskId} not found`);
+    if (!managedProcess) {
+      console.error(`[ClaudeCodeService] Process for task ${taskId} not found`);
+      return false;
+    }
+
+    const pid = managedProcess.process.pid;
+    if (!pid) {
+      console.error(`[ClaudeCodeService] Process for task ${taskId} has no PID`);
       return false;
     }
 
     // Mark this task as being paused BEFORE sending SIGSTOP
-    // This prevents the onExit handler from sending a failure message if the process exits
+    // This prevents the exit handler from sending a failure message if the process exits
     this.pausingTasks.add(taskId);
     console.log(`[ClaudeCodeService] Marked task ${taskId} as pausing`);
 
     try {
-      const success = terminalManager.pauseTerminal(terminalId);
-      if (success) {
-        console.log(`[ClaudeCodeService] Paused terminal ${terminalId} with SIGSTOP`);
-      } else {
-        console.error(`[ClaudeCodeService] Failed to pause terminal ${terminalId}`);
-        // Clean up the pausing flag on failure
-        this.pausingTasks.delete(taskId);
-      }
-      return success;
+      // Send SIGSTOP to pause the process
+      process.kill(pid, 'SIGSTOP');
+      console.log(`[ClaudeCodeService] Sent SIGSTOP to PID ${String(pid)}`);
+      return true;
     } catch (error) {
       console.error(`[ClaudeCodeService] Error pausing task ${taskId}:`, error);
       // Clean up the pausing flag on error
@@ -908,116 +1278,139 @@ class ClaudeCodeService {
   }
 
   /**
+   * Check if a Claude Code process is active for a task.
+   *
+   * @param taskId - Task ID to check
+   * @returns True if a process is active for this task
+   */
+  hasActiveProcess(taskId: string): boolean {
+    return this.activeProcesses.has(taskId);
+  }
+
+  /**
+   * Kill a Claude Code process for a task.
+   *
+   * @param taskId - Task ID to kill
+   * @returns True if the process was killed, false if not found
+   */
+  killTask(taskId: string): boolean {
+    const managedProcess = this.activeProcesses.get(taskId);
+
+    if (!managedProcess) {
+      console.log(`[ClaudeCodeService] No active process for task ${taskId}`);
+      return false;
+    }
+
+    try {
+      managedProcess.process.kill();
+      this.activeProcesses.delete(taskId);
+      console.log(`[ClaudeCodeService] Killed process for task ${taskId}`);
+      return true;
+    } catch (error) {
+      console.error(`[ClaudeCodeService] Error killing task ${taskId}:`, error);
+      // Still remove from tracking
+      this.activeProcesses.delete(taskId);
+      return true;
+    }
+  }
+
+  /**
+   * Kill all active Claude Code processes.
+   * Should be called when the app is closing.
+   */
+  killAllProcesses(): void {
+    console.log(`[ClaudeCodeService] Killing all processes (${String(this.activeProcesses.size)} active)`);
+
+    for (const [taskId, managedProcess] of this.activeProcesses.entries()) {
+      try {
+        managedProcess.process.kill();
+        console.log(`[ClaudeCodeService] Killed process for task ${taskId}`);
+      } catch (error) {
+        console.error(`[ClaudeCodeService] Error killing process for task ${taskId}:`, error);
+      }
+    }
+
+    this.activeProcesses.clear();
+    this.pausingTasks.clear();
+  }
+
+  /**
    * Build a simplified startup banner to display before executing Claude Code command.
    * Shows just the task title and a simple starting message.
    *
-   * @param _command - The Claude CLI command (unused in simplified banner)
    * @param options - Claude Code options containing context
    * @returns Formatted banner string with terminal line endings
    */
-  private buildStartupBanner(_command: string, options: ClaudeCodeOptions): string {
+  private buildStartupBanner(options: ClaudeCodeOptions): string {
     const banner: string[] = [];
 
     // Simple, clean header
     banner.push('\r\n');
     banner.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n');
-    banner.push(`🤖 Task: ${options.taskTitle}\r\n`);
+    banner.push(`Task: ${options.taskTitle}\r\n`);
     banner.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\r\n');
     banner.push('\r\n');
-    banner.push('🚀 Starting Claude Code...\r\n');
+    banner.push('Starting Claude Code...\r\n');
     banner.push('\r\n');
 
     return banner.join('');
   }
 
   /**
-   * Build the Claude Code CLI command from options.
+   * Build the arguments array for spawning Claude Code.
+   *
+   * Since we use child_process.spawn, we don't need shell escaping.
+   * Arguments are passed directly to the process.
    *
    * @param options - Claude Code options
    * @param taskPrompt - The task prompt to include as a command argument
-   * @returns Complete Claude CLI command
+   * @returns Array of arguments for spawn
    */
-  private buildClaudeCommand(options: ClaudeCodeOptions, taskPrompt: string): string {
-    const parts = ['claude'];
+  private buildClaudeArgs(options: ClaudeCodeOptions, taskPrompt: string): string[] {
+    const args: string[] = [];
 
     // Print mode (non-interactive) for programmatic use
-    parts.push('-p');
+    args.push('-p');
 
     // Skip permission prompts for programmatic execution (default: true)
     // This is standard practice for programmatic Claude Code execution
     // Requires user to have accepted terms once by running `claude --dangerously-skip-permissions` manually
     if (options.skipPermissions !== false) {
-      parts.push('--dangerously-skip-permissions');
+      args.push('--dangerously-skip-permissions');
     }
 
     // Streaming JSON output format (requires --verbose)
-    parts.push('--output-format stream-json');
-    parts.push('--verbose');
+    args.push('--output-format', 'stream-json');
+    args.push('--verbose');
+    // Include partial streaming events for real-time progress updates
+    args.push('--include-partial-messages');
 
     // Max turns
     if (options.maxTurns !== undefined) {
-      parts.push(`--max-turns ${String(options.maxTurns)}`);
+      args.push('--max-turns', String(options.maxTurns));
     }
 
     // Max budget
     if (options.maxBudget !== undefined) {
-      parts.push(`--max-budget ${String(options.maxBudget)}`);
+      args.push('--max-budget', String(options.maxBudget));
     }
 
     // Allowed tools
     if (options.allowedTools && options.allowedTools.length > 0) {
-      parts.push(`--allowed-tools ${options.allowedTools.join(',')}`);
+      args.push('--allowed-tools', options.allowedTools.join(','));
     }
 
-    // Custom system prompt
+    // Custom system prompt - no escaping needed with spawn
     if (options.appendSystemPrompt) {
-      // Escape the system prompt using proper shell escaping
-      const escapedPrompt = this.escapeShellArgument(options.appendSystemPrompt);
-      parts.push(`--append-system-prompt ${escapedPrompt}`);
+      args.push('--append-system-prompt', options.appendSystemPrompt);
     }
 
-    // Add the task prompt as the final argument
-    // Escape the prompt properly for shell execution
+    // Add the task prompt as the final argument - no escaping needed with spawn
     if (taskPrompt) {
-      const escapedPrompt = this.escapeShellArgument(taskPrompt);
-      parts.push(escapedPrompt);
+      args.push(taskPrompt);
     }
 
-    return parts.join(' ');
-  }
-
-  /**
-   * Escape a string for use as a shell argument using POSIX $'...' quoting.
-   * This handles quotes, newlines, and special characters correctly.
-   *
-   * @param str - String to escape
-   * @returns Properly escaped string for shell
-   */
-  private escapeShellArgument(str: string): string {
-    // Use $'...' POSIX quoting which properly handles escape sequences
-    // Within $'...', we need to escape:
-    // - Backslashes as \\ (must be first to avoid double-escaping)
-    // - Single quotes as \'
-    // - Newlines as \n (literal newlines would be interpreted as command separators)
-    // - Carriage returns as \r
-    // - Tabs as \t
-
-    // Escape backslashes first (to avoid double-escaping subsequent replacements)
-    let escaped = str.replace(/\\/g, '\\\\');
-
-    // Escape single quotes
-    escaped = escaped.replace(/'/g, "\\'");
-
-    // Convert literal newlines to \n escape sequences
-    // This is critical - literal newlines in $'...' break the command into multiple lines
-    escaped = escaped.replace(/\n/g, '\\n');
-
-    // Also escape carriage returns and tabs for completeness
-    escaped = escaped.replace(/\r/g, '\\r');
-    escaped = escaped.replace(/\t/g, '\\t');
-
-    // Return with $'...' wrapper
-    return `$'${escaped}'`;
+    return args;
   }
 
   /**

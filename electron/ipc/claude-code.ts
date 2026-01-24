@@ -11,7 +11,6 @@ import path from 'path';
 import { databaseService } from '../services/database.js';
 import { claudeCodeService, type ClaudeCodeOptions } from '../services/claude-code.js';
 import { prdParser } from '../services/prd-parser.js';
-import { terminalManager } from '../services/terminal.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
   logIPCRequest,
@@ -119,7 +118,7 @@ async function handleStartTask(
 
   // Check if Claude is already running for this task
   const terminalId = `claude-${data.taskId}`;
-  if (terminalManager.has(terminalId)) {
+  if (claudeCodeService.hasActiveProcess(data.taskId)) {
     throw new Error('Claude Code is already running for this task');
   }
 
@@ -296,10 +295,10 @@ async function handleResumeTask(
     throw new Error(`Cannot resume task: task is not paused (current status: ${task.claudeStatus})`);
   }
 
-  // Check that the terminal still exists (process was suspended, not killed)
+  // Check that the process still exists (process was suspended, not killed)
   const terminalId = `claude-${data.taskId}`;
-  if (!terminalManager.has(terminalId)) {
-    throw new Error('Cannot resume task: terminal process no longer exists. The task may need to be restarted.');
+  if (!claudeCodeService.hasActiveProcess(data.taskId)) {
+    throw new Error('Cannot resume task: Claude process no longer exists. The task may need to be restarted.');
   }
 
   // Resume the Claude Code task using SIGCONT
@@ -358,12 +357,11 @@ async function handlePauseTask(
   }
 
   // Check if Claude is running for this task
-  const terminalId = `claude-${data.taskId}`;
-  if (!terminalManager.has(terminalId)) {
+  if (!claudeCodeService.hasActiveProcess(data.taskId)) {
     throw new Error('Claude Code is not running for this task');
   }
 
-  // First, try to pause the terminal (sends SIGSTOP)
+  // Try to pause the process (sends SIGSTOP)
   const success = claudeCodeService.pauseTask(data.taskId);
 
   if (!success) {
@@ -420,7 +418,7 @@ async function handleGetTaskStatus(
 
   // Check if Claude is running for this task
   const terminalId = `claude-${data.taskId}`;
-  const isRunning = terminalManager.has(terminalId);
+  const isRunning = claudeCodeService.hasActiveProcess(data.taskId);
 
   // For simplicity, we use the task ID as session ID
   // In a real implementation, you might want to store the session ID in the database
@@ -472,9 +470,9 @@ async function handleGetActiveTask(
     };
   }
 
-  // Check if Claude terminal is currently running
+  // Check if Claude process is currently running
   const terminalId = `claude-${data.taskId}`;
-  const isRunning = terminalManager.has(terminalId);
+  const isRunning = claudeCodeService.hasActiveProcess(data.taskId);
 
   return {
     isRunning,
