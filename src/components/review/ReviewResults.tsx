@@ -209,7 +209,7 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
     if (!taskId) return;
 
     // Only allow fixing for review types that support fixes
-    const fixableTypes: FixType[] = ['security', 'quality'];
+    const fixableTypes: FixType[] = ['security', 'quality', 'performance'];
     if (!fixableTypes.includes(reviewType as FixType)) {
       console.warn(`Fix not supported for review type: ${reviewType}`);
       return;

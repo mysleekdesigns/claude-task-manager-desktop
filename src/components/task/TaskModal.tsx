@@ -129,7 +129,8 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
   if (loading || !task) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px]">
+        <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px]" aria-describedby={undefined}>
+          <DialogTitle className="sr-only">Loading task</DialogTitle>
           <div className="flex items-center justify-center p-8">
             <p className="text-sm text-muted-foreground">Loading task...</p>
           </div>
@@ -140,12 +141,13 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px] overflow-hidden flex flex-col" aria-describedby={undefined}>
         <DialogHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               {isEditingTitle ? (
                 <div className="flex items-center gap-2">
+                  <DialogTitle className="sr-only">{task.title}</DialogTitle>
                   <Input
                     value={title}
                     onChange={(e) => { setTitle(e.target.value); }}

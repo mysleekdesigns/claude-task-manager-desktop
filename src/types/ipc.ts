@@ -1669,7 +1669,7 @@ export interface StartReviewInput {
 // ============================================================================
 
 /** Types of fixes that can be performed */
-export type FixType = 'security' | 'quality';
+export type FixType = 'security' | 'quality' | 'performance';
 
 /** Status of a fix operation */
 export type FixStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';

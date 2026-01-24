@@ -3,10 +3,15 @@
  *
  * Progress bar showing review completion status.
  * Displays overall progress with counter and optional overall score.
+ * Includes fix buttons for review types with scores below 100.
  */
 
+import { useState } from 'react';
+import { Zap, Code, Shield, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import type { ReviewProgressResponse } from '@/types/ipc';
+import { Button } from '@/components/ui/button';
+import { invoke } from '@/lib/ipc';
+import type { ReviewProgressResponse, ReviewType, FixType, ReviewFinding } from '@/types/ipc';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -18,10 +23,60 @@ interface ReviewProgressProps {
   compact?: boolean;
 }
 
+// Fix button configuration
+const FIX_BUTTONS: Array<{
+  reviewType: ReviewType;
+  fixType: FixType;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { reviewType: 'performance', fixType: 'performance', label: 'Fix Performance', Icon: Zap },
+  { reviewType: 'quality', fixType: 'quality', label: 'Fix Code Quality', Icon: Code },
+  { reviewType: 'security', fixType: 'security', label: 'Fix Security', Icon: Shield },
+];
+
 export function ReviewProgress({ progress, compact = false }: ReviewProgressProps) {
+  const [fixingTypes, setFixingTypes] = useState<Set<string>>(new Set());
+
   const completedCount = progress.reviews.filter((r) => r.status === 'COMPLETED').length;
   const totalCount = progress.reviews.length;
   const percentComplete = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  // Get score for a specific review type
+  const getReviewScore = (reviewType: ReviewType): number | undefined => {
+    const review = progress.reviews.find((r) => r.reviewType === reviewType);
+    return review?.score;
+  };
+
+  // Check if any fix buttons should be shown
+  const hasFixableReviews = FIX_BUTTONS.some((btn) => {
+    const score = getReviewScore(btn.reviewType);
+    return score !== undefined && score < 100;
+  });
+
+  // Handle fix button click
+  const handleFix = async (fixType: FixType, reviewType: ReviewType) => {
+    if (!progress.taskId) return;
+
+    setFixingTypes((prev) => new Set(prev).add(fixType));
+    try {
+      // Fetch findings for this review type before starting the fix
+      const findings: ReviewFinding[] = await invoke('review:getFindings', {
+        taskId: progress.taskId,
+        reviewType,
+      }) ?? [];
+
+      await invoke('fix:start', { taskId: progress.taskId, fixType, findings });
+    } catch (err) {
+      console.error(`Failed to start ${fixType} fix:`, err);
+    } finally {
+      setFixingTypes((prev) => {
+        const next = new Set(prev);
+        next.delete(fixType);
+        return next;
+      });
+    }
+  };
 
   // Compact mode for inline display
   if (compact) {
@@ -66,6 +121,37 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
           >
             {progress.overallScore}
           </span>
+        </div>
+      )}
+
+      {/* Fix buttons - only show if there are reviews with scores below 100 */}
+      {hasFixableReviews && (
+        <div className="flex flex-row gap-2 pt-2">
+          {FIX_BUTTONS.map(({ reviewType, fixType, label, Icon }) => {
+            const score = getReviewScore(reviewType);
+            // Only show button if score exists and is less than 100
+            if (score === undefined || score >= 100) return null;
+
+            const isFixing = fixingTypes.has(fixType);
+
+            return (
+              <Button
+                key={fixType}
+                size="sm"
+                variant="outline"
+                onClick={() => handleFix(fixType, reviewType)}
+                disabled={isFixing}
+                className="gap-1.5"
+              >
+                {isFixing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Icon className="h-4 w-4" />
+                )}
+                {label}
+              </Button>
+            );
+          })}
         </div>
       )}
     </div>

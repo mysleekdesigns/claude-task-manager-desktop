@@ -36,6 +36,7 @@ export interface FixAgentOptions {
 export interface FindingsByType {
   security?: ReviewFinding[];
   quality?: ReviewFinding[];
+  performance?: ReviewFinding[];
 }
 
 /**
@@ -158,6 +159,38 @@ If the fix fails, output:
 <fix_json>{"success": false, "filesModified": [], "summary": "Failed to apply fix: reason", "researchSources": []}</fix_json>
 
 IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside at the end. No other text after the tag.`,
+
+  performance: `You are a performance optimization fix agent. Your task is to fix performance issues found during code review.
+
+## Step 1: Research Best Practices
+First, use mcp__crawlforge__deep_research to find current best practices (2024-2026) for fixing each performance issue:
+- Search for performance optimization patterns for the specific technologies used
+- Look for React/TypeScript/Electron performance best practices
+- Find examples of efficient coding patterns and algorithms
+
+## Step 2: Analyze the Code
+Read the affected files to understand the current implementation and identify performance bottlenecks.
+
+## Step 3: Apply Fixes
+Apply the fixes following the researched best practices:
+- Optimize expensive computations and reduce unnecessary re-renders
+- Implement memoization where appropriate (useMemo, useCallback, React.memo)
+- Fix memory leaks and improve garbage collection
+- Optimize database queries and data fetching
+- Reduce bundle size and improve code splitting
+- Fix inefficient algorithms and data structures
+
+## Step 4: Verify
+If possible, run relevant performance tests or benchmarks to verify the improvements.
+
+## Output Format
+After completing the fixes, output your results in the following XML format:
+<fix_json>{"success": true, "filesModified": ["path/to/file1.ts", "path/to/file2.ts"], "summary": "Optimized React component rendering with useMemo, fixed N+1 database query, implemented code splitting for large module", "researchSources": ["https://react.dev/...", "https://web.dev/..."]}</fix_json>
+
+If the fix fails, output:
+<fix_json>{"success": false, "filesModified": [], "summary": "Failed to apply fix: reason", "researchSources": []}</fix_json>
+
+IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside at the end. No other text after the tag.`,
 };
 
 /**
@@ -171,7 +204,7 @@ IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside a
  */
 class FixAgentPoolManager {
   /** Maximum number of concurrent fix agents (one per fix type) */
-  private readonly MAX_CONCURRENT = 2;
+  private readonly MAX_CONCURRENT = 3;
 
   /** Map of active agents by agent ID */
   private activeAgents: Map<string, FixAgent> = new Map();
@@ -453,7 +486,7 @@ class FixAgentPoolManager {
     const prisma = databaseService.getClient();
     const agentIds = new Map<FixType, string>();
 
-    const fixTypes: FixType[] = ['security', 'quality'];
+    const fixTypes: FixType[] = ['security', 'quality', 'performance'];
 
     // Start agents for each fix type that has findings
     const startPromises: Promise<void>[] = [];

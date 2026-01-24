@@ -214,7 +214,7 @@ class FixService {
     const findingsObj: {
       security?: ReviewFinding[];
       quality?: ReviewFinding[];
-      testing?: ReviewFinding[];
+      performance?: ReviewFinding[];
     } = {};
     for (const [fixType, findings] of findingsByType) {
       findingsObj[fixType] = findings;

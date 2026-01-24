@@ -175,6 +175,10 @@ const VALID_INVOKE_CHANNELS = [
   'review:cancel',
   'review:getHistory',
   'review:getFindings',
+  // AI Fix Workflow
+  'fix:start',
+  'fix:getProgress',
+  'fix:cancel',
 ] as const;
 
 /**
@@ -202,7 +206,9 @@ type DynamicEventChannel =
   | `terminal:exit:${string}`
   | `terminal:status:${string}`
   | `review:progress:${string}`
-  | `review:complete:${string}`;
+  | `review:complete:${string}`
+  | `fix:progress:${string}:${string}`
+  | `fix:complete:${string}`;
 
 /**
  * All valid event channels (static + dynamic)
@@ -294,6 +300,14 @@ function isValidEventChannel(channel: string): channel is AllValidEventChannels 
   if (
     channel.startsWith('review:progress:') ||
     channel.startsWith('review:complete:')
+  ) {
+    return true;
+  }
+
+  // Check dynamic fix channels
+  if (
+    channel.startsWith('fix:progress:') ||
+    channel.startsWith('fix:complete:')
   ) {
     return true;
   }
