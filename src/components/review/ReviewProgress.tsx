@@ -142,14 +142,14 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
                   disabled={isInProgress}
                   className={cn(
                     'gap-1.5',
-                    isCyan && 'border-cyan-500 text-cyan-400 hover:text-cyan-400 hover:border-cyan-400'
+                    isCyan && '!border-cyan-400 !text-cyan-400 hover:!text-cyan-300 hover:!border-cyan-300 !opacity-100'
                   )}
                   title={isInProgress && activityMessage ? activityMessage : undefined}
                 >
                   {isInProgress ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+                    <Loader2 className="h-4 w-4 animate-spin !text-cyan-400" />
                   ) : (
-                    <Icon className={cn('h-4 w-4', isCyan && 'text-cyan-400')} />
+                    <Icon className={cn('h-4 w-4', isCyan && '!text-cyan-400')} />
                   )}
                   {label}
                 </Button>
