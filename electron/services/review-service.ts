@@ -71,6 +71,12 @@ export interface TaskHistoryResponse {
 }
 
 /**
+ * Valid review types that the system supports.
+ * Any TaskReview records with reviewType not in this list will be cleaned up.
+ */
+const VALID_REVIEW_TYPES: ReviewType[] = ['security', 'quality', 'performance', 'documentation', 'research'];
+
+/**
  * ReviewService provides a high-level interface for AI code reviews.
  *
  * Features:
@@ -84,35 +90,8 @@ class ReviewService {
   /** Reference to main window for IPC events */
   private mainWindow: BrowserWindow | null = null;
 
-  /**
-   * Check if CrawlForge MCP is configured and enabled for a project.
-   *
-   * SQLite LIKE is case-insensitive by default for ASCII characters,
-   * so we use multiple patterns to match variations.
-   *
-   * @param projectId - The project ID to check
-   * @returns True if CrawlForge is available
-   */
-  private async isCrawlForgeAvailable(projectId: string): Promise<boolean> {
-    const prisma = databaseService.getClient();
-
-    // SQLite LIKE is case-insensitive for ASCII, check for common patterns
-    const crawlForgeConfig = await prisma.mcpConfig.findFirst({
-      where: {
-        projectId,
-        enabled: true,
-        OR: [
-          { name: { contains: 'crawlforge' } },
-          { name: { contains: 'CrawlForge' } },
-          { name: { contains: 'crawl-forge' } },
-          { name: { contains: 'Crawl-Forge' } },
-          { type: { contains: 'crawlforge' } },
-          { type: { contains: 'CrawlForge' } },
-        ],
-      },
-    });
-    return crawlForgeConfig !== null;
-  }
+  /** Whether cleanup has been performed this session */
+  private cleanupPerformed = false;
 
   /**
    * Set the main window for IPC events.
@@ -122,6 +101,35 @@ class ReviewService {
   setMainWindow(window: BrowserWindow): void {
     this.mainWindow = window;
     reviewAgentPool.setMainWindow(window);
+
+    // Perform one-time database cleanup on startup
+    if (!this.cleanupPerformed) {
+      this.cleanupPerformed = true;
+      void this.cleanupInvalidReviewTypes();
+    }
+  }
+
+  /**
+   * Clean up TaskReview records with invalid review types.
+   * This handles legacy records from old review type configurations.
+   */
+  private async cleanupInvalidReviewTypes(): Promise<void> {
+    try {
+      const prisma = databaseService.getClient();
+      const result = await prisma.taskReview.deleteMany({
+        where: {
+          reviewType: {
+            notIn: VALID_REVIEW_TYPES,
+          },
+        },
+      });
+
+      if (result.count > 0) {
+        logger.info(`Cleaned up ${String(result.count)} TaskReview records with invalid review types`);
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup invalid review types:', error);
+    }
   }
 
   /**
@@ -160,17 +168,8 @@ class ReviewService {
       throw new Error(`Task's project has no target path: ${taskId}`);
     }
 
-    // Determine review types based on available MCPs
-    let finalReviewTypes: ReviewType[] = reviewTypes || ['security', 'quality', 'performance'];
-
-    // Add research if CrawlForge is available and not already included
-    if (!finalReviewTypes.includes('research')) {
-      const hasCrawlForge = await this.isCrawlForgeAvailable(task.project.id);
-      if (hasCrawlForge) {
-        finalReviewTypes = [...finalReviewTypes, 'research'];
-        logger.info(`CrawlForge available for project, adding research review`);
-      }
-    }
+    // Determine review types - use provided types or default to security, quality, performance
+    const finalReviewTypes: ReviewType[] = reviewTypes || ['security', 'quality', 'performance'];
 
     // Flush any pending activities before starting review
     if (activityLogger.hasPendingActivities(taskId)) {

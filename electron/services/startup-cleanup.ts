@@ -11,6 +11,7 @@ import { getPrismaClient } from './database';
 export interface StartupCleanupResult {
   staleTasks: number;
   orphanedTerminals: number;
+  orphanedReviews: number;
 }
 
 /**
@@ -32,6 +33,7 @@ export async function performStartupCleanup(): Promise<StartupCleanupResult> {
 
   let staleTasks = 0;
   let orphanedTerminals = 0;
+  let orphanedReviews = 0;
 
   try {
     // Step 1: Reset stale tasks (RUNNING or STARTING -> FAILED)
@@ -95,21 +97,56 @@ export async function performStartupCleanup(): Promise<StartupCleanupResult> {
       staleTasks += inProgressTaskResult.count;
     }
 
+    // Step 4: Clean up orphaned reviews (IN_PROGRESS -> FAILED)
+    // When the app closes during a review, the review agents are killed but
+    // TaskReview records remain with status 'IN_PROGRESS'. Mark them as failed.
+    const orphanedReviewResult = await prisma.taskReview.updateMany({
+      where: {
+        status: 'IN_PROGRESS',
+      },
+      data: {
+        status: 'FAILED',
+        summary: 'Review interrupted - app was closed',
+        completedAt: now,
+      },
+    });
+
+    orphanedReviews = orphanedReviewResult.count;
+
+    if (orphanedReviews > 0) {
+      console.log(`[Startup Cleanup] Marked ${orphanedReviews} orphaned review(s) as FAILED`);
+
+      // Step 5: Reset tasks that were in AI_REVIEW status back to IN_PROGRESS
+      // This allows users to manually re-trigger reviews
+      const aiReviewTasksResult = await prisma.task.updateMany({
+        where: {
+          status: 'AI_REVIEW',
+        },
+        data: {
+          status: 'IN_PROGRESS',
+        },
+      });
+
+      if (aiReviewTasksResult.count > 0) {
+        console.log(`[Startup Cleanup] Reset ${aiReviewTasksResult.count} task(s) from AI_REVIEW to IN_PROGRESS`);
+      }
+    }
+
     // Log summary if any cleanup was performed
-    if (staleTasks > 0 || orphanedTerminals > 0) {
-      console.log(`[Startup Cleanup] Completed: cleaned up ${staleTasks} stale task(s) and ${orphanedTerminals} orphaned terminal(s)`);
+    if (staleTasks > 0 || orphanedTerminals > 0 || orphanedReviews > 0) {
+      console.log(`[Startup Cleanup] Completed: cleaned up ${staleTasks} stale task(s), ${orphanedTerminals} orphaned terminal(s), and ${orphanedReviews} orphaned review(s)`);
     } else {
       console.log('[Startup Cleanup] No stale states found - database is clean');
     }
 
-    return { staleTasks, orphanedTerminals };
+    return { staleTasks, orphanedTerminals, orphanedReviews };
   } catch (error) {
     // Log error but don't crash the app
     console.error('[Startup Cleanup] Error during cleanup:', error);
 
     // Return zeros to indicate no cleanup was performed
     // The app should continue to function even if cleanup fails
-    return { staleTasks: 0, orphanedTerminals: 0 };
+    return { staleTasks: 0, orphanedTerminals: 0, orphanedReviews: 0 };
   }
 }
 
@@ -123,7 +160,7 @@ export async function hasStaleStates(): Promise<boolean> {
   const prisma = getPrismaClient();
 
   try {
-    const [staleTasks, runningTerminals] = await Promise.all([
+    const [staleTasks, runningTerminals, orphanedReviews] = await Promise.all([
       prisma.task.count({
         where: {
           claudeStatus: {
@@ -136,9 +173,14 @@ export async function hasStaleStates(): Promise<boolean> {
           status: 'running',
         },
       }),
+      prisma.taskReview.count({
+        where: {
+          status: 'IN_PROGRESS',
+        },
+      }),
     ]);
 
-    return staleTasks > 0 || runningTerminals > 0;
+    return staleTasks > 0 || runningTerminals > 0 || orphanedReviews > 0;
   } catch {
     return false;
   }

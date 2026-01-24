@@ -406,6 +406,28 @@ class ReviewAgentPoolManager {
             agent.timeoutHandle = undefined;
           }
 
+          // Set a new activity timeout - if no more data received within 120 seconds after last output,
+          // consider the process as stalled and handle graceful completion
+          agent.timeoutHandle = setTimeout(() => {
+            if (agent.status === 'running') {
+              logger.warn(
+                `[${options.reviewType}] WARN: No output received for 120 seconds after last data - attempting graceful completion`
+              );
+
+              // Try to complete the review with whatever output we have
+              void this.handleGracefulCompletion(agentId).catch((err) => {
+                logger.error(`[${options.reviewType}] Failed graceful completion:`, err);
+              });
+
+              // Kill the process if it's still running
+              try {
+                claudeProcess.kill();
+              } catch {
+                // Process may already be dead
+              }
+            }
+          }, 120000);
+
           agent.outputBuffer += data;
 
           // Parse stream-json lines for real-time status
@@ -493,19 +515,33 @@ class ReviewAgentPoolManager {
    * @param projectPath - Project directory path
    * @param taskDescription - Task description for context
    * @param mainWindow - BrowserWindow for IPC events
-   * @param reviewTypes - Types of reviews to run (default: security, quality, performance, research)
+   * @param reviewTypes - Types of reviews to run (default: security, quality, performance)
    */
   async startAllReviews(
     taskId: string,
     projectPath: string,
     taskDescription: string,
     mainWindow: BrowserWindow,
-    reviewTypes: ReviewType[] = ['security', 'quality', 'performance', 'research']
+    reviewTypes: ReviewType[] = ['security', 'quality', 'performance']
   ): Promise<void> {
+    // Clear any previous review agents for this task to prevent duplication
+    this.taskReviewMap.delete(taskId);
+
     logger.info(`Starting ${String(reviewTypes.length)} reviews for task ${taskId}`);
 
-    // Update task status to AI_REVIEW
+    // Delete any existing TaskReview records for this task that are not in the requested types
+    // This ensures the UI shows only the correct number of review icons
     const prisma = databaseService.getClient();
+    await prisma.taskReview.deleteMany({
+      where: {
+        taskId,
+        reviewType: {
+          notIn: reviewTypes,
+        },
+      },
+    });
+
+    // Update task status to AI_REVIEW
     await prisma.task.update({
       where: { id: taskId },
       data: { status: 'AI_REVIEW' },
@@ -817,6 +853,90 @@ class ReviewAgentPoolManager {
   }
 
   /**
+   * Handle graceful completion when process is stalled but has output.
+   * Attempts to parse whatever output we have and complete the review.
+   */
+  private async handleGracefulCompletion(agentId: string): Promise<void> {
+    const agent = this.activeAgents.get(agentId);
+    if (!agent) {
+      return;
+    }
+
+    // Prevent double-handling if already completed or failed
+    if (agent.status !== 'running') {
+      logger.warn(`[${agent.reviewType}] Agent already ${agent.status}, skipping graceful completion`);
+      return;
+    }
+
+    const prisma = databaseService.getClient();
+
+    // Include any remaining partial line in the output buffer
+    const fullOutput = agent.outputBuffer + agent.partialLineBuffer;
+
+    logger.info(`[${agent.reviewType}] Attempting graceful completion with ${String(fullOutput.length)} chars of output`);
+
+    // Try to parse the output
+    const result = this.parseReviewOutput(fullOutput);
+
+    if (result.score >= 0) {
+      // Successfully parsed - mark as completed
+      await prisma.taskReview.update({
+        where: { id: agent.reviewId },
+        data: {
+          status: 'COMPLETED',
+          score: result.score,
+          summary: `Found ${String(result.findings.length)} issue(s) (graceful completion)`,
+          findings: JSON.stringify(result.findings),
+          completedAt: new Date(),
+        },
+      });
+
+      agent.status = 'completed';
+      logger.info(
+        `${agent.reviewType} review gracefully completed for task ${agent.taskId} (score: ${String(result.score)})`
+      );
+    } else {
+      // Could not parse - mark as failed with informative message
+      const summary = fullOutput.length > 0
+        ? `Review stalled after receiving output (${String(fullOutput.length)} chars) - parsing failed`
+        : 'Review stalled without producing parseable output';
+
+      await prisma.taskReview.update({
+        where: { id: agent.reviewId },
+        data: {
+          status: 'FAILED',
+          summary,
+          completedAt: new Date(),
+        },
+      });
+
+      agent.status = 'failed';
+      logger.warn(
+        `${agent.reviewType} review failed for task ${agent.taskId} (graceful completion - parse failure)`
+      );
+    }
+
+    agent.currentMessage = agent.status === 'completed'
+      ? `${agent.reviewType}: Completed`
+      : `${agent.reviewType}: Failed (stalled)`;
+
+    // Emit progress update
+    void this.emitDetailedProgress(
+      agent.taskId,
+      agent.reviewType,
+      agent.currentMessage
+    ).catch((err) => logger.error('Failed to emit progress:', err));
+
+    void this.emitProgress(agent.taskId)
+      .catch((err) => logger.error('Failed to emit progress:', err));
+
+    // Check if all reviews are complete
+    if (this.areAllReviewsComplete(agent.taskId)) {
+      this.emitComplete(agent.taskId);
+    }
+  }
+
+  /**
    * Extract JSON with balanced braces from text starting at a given position.
    * Handles nested objects and arrays properly.
    *
@@ -1098,9 +1218,9 @@ class ReviewAgentPoolManager {
       }
     }
 
-    // Handle result events
+    // Handle result events - this means Claude has finished and is returning the final result
     if (data['type'] === 'result') {
-      return `${reviewType}: Processing results...`;
+      return `${reviewType}: Finalizing review...`;
     }
 
     return null;

@@ -453,7 +453,7 @@ model TaskActivity {
 model TaskReview {
   id          String    @id @default(cuid())
   taskId      String
-  reviewType  String    // security, quality, testing, performance, documentation
+  reviewType  String    // Valid types: security, quality, performance, documentation, research
   status      String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED
   score       Int?      // 0-100
   summary     String?

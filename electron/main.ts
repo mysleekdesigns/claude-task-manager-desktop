@@ -312,12 +312,13 @@ async function initializeApp(): Promise<void> {
     logger.info('Database migrations completed successfully');
 
     // Step 3: Clean up stale states from previous session (crash recovery)
-    // This resets tasks that were RUNNING/STARTING to FAILED and removes orphaned terminals
+    // This resets tasks that were RUNNING/STARTING to FAILED, removes orphaned terminals,
+    // and marks orphaned reviews as FAILED
     logger.info('Running startup cleanup...');
     const cleanupResult = await performStartupCleanup();
-    if (cleanupResult.staleTasks > 0 || cleanupResult.orphanedTerminals > 0) {
+    if (cleanupResult.staleTasks > 0 || cleanupResult.orphanedTerminals > 0 || cleanupResult.orphanedReviews > 0) {
       logger.info(
-        `Startup cleanup completed: ${cleanupResult.staleTasks} stale task(s), ${cleanupResult.orphanedTerminals} orphaned terminal(s)`
+        `Startup cleanup completed: ${cleanupResult.staleTasks} stale task(s), ${cleanupResult.orphanedTerminals} orphaned terminal(s), ${cleanupResult.orphanedReviews} orphaned review(s)`
       );
     } else {
       logger.info('Startup cleanup completed: no stale states found');
