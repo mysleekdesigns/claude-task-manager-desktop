@@ -311,11 +311,11 @@ class ReviewAgentPoolManager {
       taskAgents.add(agentId);
 
       // IMMEDIATELY emit progress so UI shows RUNNING status
-      this.emitDetailedProgress(
+      void this.emitDetailedProgress(
         options.taskId,
         options.reviewType,
         `${options.reviewType}: Initializing review agent...`
-      );
+      ).catch((err) => logger.error('Failed to emit progress:', err));
 
       // Handle the 'spawn' event to confirm process actually started
       claudeProcess.on('spawn', () => {
@@ -332,11 +332,11 @@ class ReviewAgentPoolManager {
 
         // Update status to show process is running
         agent.currentMessage = `${options.reviewType}: Review agent running...`;
-        this.emitDetailedProgress(
+        void this.emitDetailedProgress(
           options.taskId,
           options.reviewType,
           agent.currentMessage
-        );
+        ).catch((err) => logger.error('Failed to emit progress:', err));
       });
 
       // Set up spawn confirmation timeout (5 seconds)
@@ -437,7 +437,8 @@ class ReviewAgentPoolManager {
               const statusMessage = this.extractStatusMessage(parsed, options.reviewType);
               if (statusMessage) {
                 agent.currentMessage = statusMessage;
-                this.emitDetailedProgress(options.taskId, options.reviewType, statusMessage);
+                void this.emitDetailedProgress(options.taskId, options.reviewType, statusMessage)
+                  .catch((err) => logger.error('Failed to emit progress:', err));
               }
             } catch {
               // Non-JSON or partial line, skip
@@ -484,7 +485,8 @@ class ReviewAgentPoolManager {
       });
 
       // Send progress event to confirm agent is running
-      this.emitProgress(options.taskId);
+      void this.emitProgress(options.taskId)
+        .catch((err) => logger.error('Failed to emit progress:', err));
 
       return agentId;
     } catch (error) {
@@ -522,7 +524,8 @@ class ReviewAgentPoolManager {
     });
 
     // Emit initial progress
-    this.emitProgress(taskId);
+    void this.emitProgress(taskId)
+      .catch((err) => logger.error('Failed to emit progress:', err));
 
     // Start agents respecting MAX_CONCURRENT
     const pending = [...reviewTypes];
@@ -747,7 +750,8 @@ class ReviewAgentPoolManager {
     }
 
     // Emit progress event
-    this.emitProgress(agent.taskId);
+    void this.emitProgress(agent.taskId)
+      .catch((err) => logger.error('Failed to emit progress:', err));
 
     // Check if all reviews are complete
     if (this.areAllReviewsComplete(agent.taskId)) {
@@ -790,14 +794,15 @@ class ReviewAgentPoolManager {
     agent.currentMessage = `${agent.reviewType}: Failed - ${error.message}`;
 
     // Emit detailed progress with failure status so UI updates
-    this.emitDetailedProgress(
+    void this.emitDetailedProgress(
       agent.taskId,
       agent.reviewType,
       agent.currentMessage
-    );
+    ).catch((err) => logger.error('Failed to emit progress:', err));
 
     // Also emit general progress
-    this.emitProgress(agent.taskId);
+    void this.emitProgress(agent.taskId)
+      .catch((err) => logger.error('Failed to emit progress:', err));
 
     // Check if all reviews are complete (including failures)
     if (this.areAllReviewsComplete(agent.taskId)) {
@@ -937,44 +942,203 @@ class ReviewAgentPoolManager {
   }
 
   /**
-   * Emit detailed progress event with current activity to renderer.
+   * Calculate the overall review workflow status based on agent states.
+   * @param agents - Array of review agents for a task
+   * @returns Overall status: 'pending' | 'in_progress' | 'completed' | 'failed'
    */
-  private emitDetailedProgress(
+  private calculateOverallStatus(
+    agents: ReviewAgent[]
+  ): 'pending' | 'in_progress' | 'completed' | 'failed' {
+    if (agents.length === 0) {
+      return 'pending';
+    }
+
+    const hasRunning = agents.some((a) => a.status === 'running');
+    const hasFailed = agents.some((a) => a.status === 'failed');
+    const allCompleted = agents.every((a) => a.status === 'completed');
+
+    if (hasRunning) {
+      return 'in_progress';
+    }
+    if (allCompleted) {
+      return 'completed';
+    }
+    if (hasFailed) {
+      return 'failed';
+    }
+    return 'in_progress';
+  }
+
+  /**
+   * Map internal agent status to ReviewStatus type expected by frontend.
+   * @param status - Internal agent status ('running' | 'completed' | 'failed')
+   * @returns ReviewStatus ('PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED')
+   */
+  private mapAgentStatusToReviewStatus(
+    status: 'running' | 'completed' | 'failed'
+  ): 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' {
+    switch (status) {
+      case 'running':
+        return 'RUNNING';
+      case 'completed':
+        return 'COMPLETED';
+      case 'failed':
+        return 'FAILED';
+      default:
+        return 'PENDING';
+    }
+  }
+
+  /**
+   * Build the reviews array matching ReviewProgressResponse interface.
+   * Fetches additional data from database for completed reviews.
+   * @param agents - Array of review agents for a task
+   * @returns Promise resolving to reviews array for ReviewProgressResponse
+   */
+  private async buildReviewsArray(
+    agents: ReviewAgent[]
+  ): Promise<
+    Array<{
+      reviewType: ReviewType;
+      status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+      score?: number;
+      summary?: string;
+      findingsCount: number;
+    }>
+  > {
+    const prisma = databaseService.getClient();
+    const reviews: Array<{
+      reviewType: ReviewType;
+      status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+      score?: number;
+      summary?: string;
+      findingsCount: number;
+    }> = [];
+
+    for (const agent of agents) {
+      let score: number | null = null;
+      let summary: string | null = null;
+      let findingsCount = 0;
+
+      // For completed or failed reviews, fetch data from database
+      if (agent.status === 'completed' || agent.status === 'failed') {
+        try {
+          const dbReview = await prisma.taskReview.findUnique({
+            where: { id: agent.reviewId },
+          });
+          if (dbReview) {
+            score = dbReview.score;
+            summary = dbReview.summary;
+            const findings = JSON.parse(dbReview.findings || '[]') as unknown[];
+            findingsCount = findings.length;
+          }
+        } catch {
+          // If we can't fetch, continue with defaults
+        }
+      }
+
+      // Build review object, only including optional properties if they have values
+      const reviewItem: {
+        reviewType: ReviewType;
+        status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+        score?: number;
+        summary?: string;
+        findingsCount: number;
+      } = {
+        reviewType: agent.reviewType,
+        status: this.mapAgentStatusToReviewStatus(agent.status),
+        findingsCount,
+      };
+
+      if (score !== null) {
+        reviewItem.score = score;
+      }
+      if (summary !== null) {
+        reviewItem.summary = summary;
+      }
+
+      reviews.push(reviewItem);
+    }
+
+    return reviews;
+  }
+
+  /**
+   * Calculate overall score from completed reviews.
+   * @param agents - Array of review agents for a task
+   * @returns Promise resolving to average score or undefined if no scores available
+   */
+  private async calculateOverallScore(agents: ReviewAgent[]): Promise<number | undefined> {
+    const prisma = databaseService.getClient();
+    const scores: number[] = [];
+
+    for (const agent of agents) {
+      if (agent.status === 'completed') {
+        try {
+          const dbReview = await prisma.taskReview.findUnique({
+            where: { id: agent.reviewId },
+          });
+          if (dbReview?.score != null) {
+            scores.push(dbReview.score);
+          }
+        } catch {
+          // Continue if fetch fails
+        }
+      }
+    }
+
+    if (scores.length === 0) {
+      return undefined;
+    }
+
+    return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+  }
+
+  /**
+   * Emit detailed progress event with current activity to renderer.
+   * Matches ReviewProgressResponse interface from src/types/ipc.ts
+   */
+  private async emitDetailedProgress(
     taskId: string,
     reviewType: ReviewType,
     message: string
-  ): void {
+  ): Promise<void> {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const agents = this.getActiveReviewsForTask(taskId);
+      const status = this.calculateOverallStatus(agents);
+      const reviews = await this.buildReviewsArray(agents);
+      const overallScore = await this.calculateOverallScore(agents);
+
       this.mainWindow.webContents.send(`review:progress:${taskId}`, {
         taskId,
+        status,
+        reviews,
+        overallScore,
         currentActivity: {
           reviewType,
           message,
           timestamp: Date.now(),
         },
-        agents: this.getActiveReviewsForTask(taskId).map((a) => ({
-          id: a.id,
-          reviewType: a.reviewType,
-          status: a.status,
-          currentMessage: a.currentMessage,
-        })),
       });
     }
   }
 
   /**
    * Emit progress event to renderer.
+   * Matches ReviewProgressResponse interface from src/types/ipc.ts
    */
-  private emitProgress(taskId: string): void {
+  private async emitProgress(taskId: string): Promise<void> {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const agents = this.getActiveReviewsForTask(taskId);
+      const status = this.calculateOverallStatus(agents);
+      const reviews = await this.buildReviewsArray(agents);
+      const overallScore = await this.calculateOverallScore(agents);
+
       this.mainWindow.webContents.send(`review:progress:${taskId}`, {
         taskId,
-        agents: this.getActiveReviewsForTask(taskId).map((a) => ({
-          id: a.id,
-          reviewType: a.reviewType,
-          status: a.status,
-          currentMessage: a.currentMessage,
-        })),
+        status,
+        reviews,
+        overallScore,
       });
     }
   }
