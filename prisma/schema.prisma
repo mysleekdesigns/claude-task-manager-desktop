@@ -486,6 +486,15 @@ model TaskFix {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Verification fields
+  preFixScore         Int?      // Score before fix
+  postFixScore        Int?      // Score after verification
+  scoreImprovement    Int?      // Delta (can be negative)
+  verificationSummary String?   // Verification result summary
+  postFixFindings     String    @default("[]") // Remaining findings after fix (JSON array)
+  retryCount          Int       @default(0)
+  verifiedAt          DateTime?
+
   task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, fixType])

@@ -17,6 +17,7 @@ import {
 import type {
   StartFixInput,
   FixProgressResponse,
+  FixVerificationResult,
 } from '../../src/types/ipc.js';
 
 /**
@@ -78,6 +79,43 @@ async function handleCancelFix(
 }
 
 /**
+ * Retry a fix with remaining findings after a failed verification
+ */
+async function handleRetryFix(
+  _event: IpcMainInvokeEvent,
+  data: { taskId: string; fixType: FixType }
+): Promise<{ success: boolean }> {
+  if (!data.taskId) {
+    throw IPCErrors.invalidArguments('Task ID is required');
+  }
+
+  if (!data.fixType) {
+    throw IPCErrors.invalidArguments('Fix type is required');
+  }
+
+  await fixService.retryFix(data.taskId, data.fixType);
+  return { success: true };
+}
+
+/**
+ * Get verification result for a fix
+ */
+async function handleGetVerification(
+  _event: IpcMainInvokeEvent,
+  data: { taskId: string; fixType: FixType }
+): Promise<FixVerificationResult | null> {
+  if (!data.taskId) {
+    throw IPCErrors.invalidArguments('Task ID is required');
+  }
+
+  if (!data.fixType) {
+    throw IPCErrors.invalidArguments('Fix type is required');
+  }
+
+  return fixService.getVerificationResult(data.taskId, data.fixType);
+}
+
+/**
  * Wrap a handler with logging
  */
 function wrapWithLogging<TArgs extends unknown[], TReturn>(
@@ -130,6 +168,18 @@ export function registerFixHandlers(mainWindow: BrowserWindow): void {
     'fix:cancel',
     wrapWithLogging('fix:cancel', wrapHandler(handleCancelFix))
   );
+
+  // fix:retry - Retry a fix with remaining findings
+  ipcMain.handle(
+    'fix:retry',
+    wrapWithLogging('fix:retry', wrapHandler(handleRetryFix))
+  );
+
+  // fix:getVerification - Get verification result for a fix
+  ipcMain.handle(
+    'fix:getVerification',
+    wrapWithLogging('fix:getVerification', wrapHandler(handleGetVerification))
+  );
 }
 
 /**
@@ -139,4 +189,6 @@ export function unregisterFixHandlers(): void {
   ipcMain.removeHandler('fix:start');
   ipcMain.removeHandler('fix:getProgress');
   ipcMain.removeHandler('fix:cancel');
+  ipcMain.removeHandler('fix:retry');
+  ipcMain.removeHandler('fix:getVerification');
 }

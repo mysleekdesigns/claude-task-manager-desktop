@@ -17,6 +17,29 @@ import type { FixType, FixStatus } from '@/types/ipc';
 // ============================================================================
 
 /**
+ * Verification result data for a fix operation
+ */
+export interface FixVerification {
+  /** Score before the fix was applied */
+  preFixScore: number;
+  /** Score after the fix was applied */
+  postFixScore: number;
+  /** Improvement in score (postFixScore - preFixScore) */
+  scoreImprovement: number;
+  /** Number of findings remaining after the fix */
+  remainingFindingsCount: number;
+  /** Whether the verification passed */
+  passed: boolean;
+  /** Human-readable summary of the verification */
+  summary: string;
+}
+
+/**
+ * Current phase of the fix workflow
+ */
+export type FixPhase = 'research' | 'fix' | 'verify';
+
+/**
  * State for an individual fix operation
  */
 export interface FixOperationState {
@@ -28,6 +51,14 @@ export interface FixOperationState {
   startedAt: number;
   /** Error message if fix failed */
   error?: string;
+  /** Current phase of the fix workflow */
+  phase?: FixPhase;
+  /** Verification result data */
+  verification?: FixVerification;
+  /** Number of retry attempts made */
+  retryCount?: number;
+  /** Whether another retry is allowed */
+  canRetry?: boolean;
 }
 
 /**
@@ -105,6 +136,21 @@ interface FixState {
    * Get all active fixes for a specific task
    */
   getTaskFixes: (taskId: string) => Array<{ fixType: FixType; state: FixOperationState }>;
+
+  /**
+   * Set the current phase of a fix operation
+   */
+  setFixPhase: (taskId: string, fixType: FixType, phase: FixPhase) => void;
+
+  /**
+   * Mark a fix as verified with verification results
+   */
+  setFixVerified: (
+    taskId: string,
+    fixType: FixType,
+    verification: FixVerification,
+    canRetry: boolean
+  ) => void;
 }
 
 // ============================================================================
@@ -224,4 +270,35 @@ export const useFixStore = create<FixState>((set, get) => ({
 
     return result;
   },
+
+  setFixPhase: (taskId, fixType, phase) =>
+    set((state) => {
+      const key = createFixKey(taskId, fixType);
+      const existing = state.activeFixes.get(key);
+      if (!existing) return state;
+
+      const newMap = new Map(state.activeFixes);
+      newMap.set(key, {
+        ...existing,
+        phase,
+      });
+      return { activeFixes: newMap };
+    }),
+
+  setFixVerified: (taskId, fixType, verification, canRetry) =>
+    set((state) => {
+      const key = createFixKey(taskId, fixType);
+      const existing = state.activeFixes.get(key);
+      if (!existing) return state;
+
+      const newMap = new Map(state.activeFixes);
+      newMap.set(key, {
+        ...existing,
+        status: verification.passed ? 'VERIFIED_SUCCESS' : 'VERIFIED_FAILED',
+        verification,
+        canRetry,
+        retryCount: existing.retryCount ?? 0,
+      });
+      return { activeFixes: newMap };
+    }),
 }));

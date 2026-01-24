@@ -179,6 +179,8 @@ const VALID_INVOKE_CHANNELS = [
   'fix:start',
   'fix:getProgress',
   'fix:cancel',
+  'fix:retry',
+  'fix:getVerification',
 ] as const;
 
 /**
@@ -208,7 +210,8 @@ type DynamicEventChannel =
   | `review:progress:${string}`
   | `review:complete:${string}`
   | `fix:progress:${string}:${string}`
-  | `fix:complete:${string}`;
+  | `fix:complete:${string}`
+  | `fix:verified:${string}:${string}`;
 
 /**
  * All valid event channels (static + dynamic)
@@ -307,7 +310,8 @@ function isValidEventChannel(channel: string): channel is AllValidEventChannels 
   // Check dynamic fix channels
   if (
     channel.startsWith('fix:progress:') ||
-    channel.startsWith('fix:complete:')
+    channel.startsWith('fix:complete:') ||
+    channel.startsWith('fix:verified:')
   ) {
     return true;
   }

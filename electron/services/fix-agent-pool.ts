@@ -12,6 +12,16 @@ import { databaseService } from './database.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { FixType, ReviewFinding } from '../../src/types/ipc.js';
 
+// Import fixService lazily to avoid circular dependency
+// The actual import is done at call time in handleAgentExit
+let fixServiceModule: typeof import('./fix-service.js') | null = null;
+async function getFixService() {
+  if (!fixServiceModule) {
+    fixServiceModule = await import('./fix-service.js');
+  }
+  return fixServiceModule.fixService;
+}
+
 const logger = createIPCLogger('FixAgentPool');
 
 /** Flag to track if the pool is shutting down (prevents database operations) */
@@ -100,84 +110,29 @@ export interface FixActivity {
  * Fix prompts for each fix type
  */
 const FIX_PROMPTS: Record<FixType, string> = {
-  security: `You are a security fix agent. Your task is to fix security vulnerabilities found during code review.
+  security: `You are a security fix specialist. Fix EACH vulnerability thoroughly.
 
-## Step 1: Research Best Practices
-First, use mcp__crawlforge__deep_research to find current best practices (2024-2026) for fixing each security issue:
-- Search for OWASP recommendations for the specific vulnerability types
-- Look for security advisories and official fix patterns
-- Find examples of proper secure coding patterns
+## Step 1: Research (REQUIRED)
+For EACH finding, use mcp__crawlforge__deep_research to find:
+- OWASP recommended fix for this specific vulnerability
+- Current best practices (2024-2026)
+- Code examples of proper implementation
 
-## Step 2: Analyze the Code
-Read the affected files to understand the current implementation and context.
+## Step 2: Fix Each Issue
+For EACH finding:
+1. Read the affected file
+2. Apply the researched fix following OWASP guidelines
+3. Ensure proper input validation/output encoding
 
-## Step 3: Apply Fixes
-Apply the fixes following the researched best practices:
-- Fix injection vulnerabilities (XSS, SQL injection, command injection)
-- Fix authentication/authorization issues
-- Fix sensitive data exposure
-- Apply proper input validation and output encoding
-- Update insecure configurations
+## Quality Criteria (ALL must be met):
+- [ ] Input is validated/sanitized before use
+- [ ] User data is escaped/encoded in output
+- [ ] No eval(), innerHTML, or dangerouslySetInnerHTML with user data
+- [ ] Authentication checks are present where needed
 
-## Step 4: Verify
-If possible, run relevant security-related tests to verify the fixes.
-
-REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
-
-===========================================
-CRITICAL: REQUIRED OUTPUT FORMAT
-===========================================
-
-After completing ALL steps above, you MUST end your response with EXACTLY this format:
-
-<fix_json>
-{
-  "success": true or false,
-  "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
-  "summary": "Brief description of changes made",
-  "researchSources": ["url1", "url2"]
-}
-</fix_json>
-
-If you could not make changes, use:
-<fix_json>
-{
-  "success": false,
-  "filesModified": [],
-  "summary": "Explanation of why fixes could not be applied",
-  "researchSources": [],
-  "error": "Error description"
-}
-</fix_json>
-
-CRITICAL RULES:
-1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
-2. Output NOTHING after the closing </fix_json> tag
-3. The JSON must be valid - no trailing commas, no comments
-4. This output format is MANDATORY - your response will be marked as FAILED without it`,
-
-  quality: `You are a code quality fix agent. Your task is to improve code quality based on review findings.
-
-## Step 1: Research Best Practices
-First, use mcp__crawlforge__deep_research to find current best practices (2024-2026) for the quality issues:
-- Search for modern TypeScript/JavaScript patterns and conventions
-- Look for official style guides (e.g., Airbnb, Google)
-- Find examples of clean code patterns and SOLID principles
-
-## Step 2: Analyze the Code
-Read the affected files to understand the current implementation and context.
-
-## Step 3: Apply Fixes
-Apply the fixes following the researched best practices:
-- Improve code readability and maintainability
-- Apply SOLID principles where appropriate
-- Improve error handling patterns
-- Reduce code duplication (DRY principle)
-- Fix naming conventions
-- Reduce function/method complexity
-
-## Step 4: Verify
-If possible, run linting and type checking to verify the fixes don't break anything.
+## Step 3: Verify
+Run: npm run typecheck
+Check for any remaining vulnerable patterns
 
 REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
@@ -213,28 +168,86 @@ CRITICAL RULES:
 3. The JSON must be valid - no trailing commas, no comments
 4. This output format is MANDATORY - your response will be marked as FAILED without it`,
 
-  performance: `You are a performance optimization fix agent. Your task is to fix performance issues found during code review.
+  quality: `You are a code quality specialist. Fix EACH issue thoroughly.
 
-## Step 1: Research Best Practices
-First, use mcp__crawlforge__deep_research to find current best practices (2024-2026) for fixing each performance issue:
-- Search for performance optimization patterns for the specific technologies used
-- Look for React/TypeScript/Electron performance best practices
-- Find examples of efficient coding patterns and algorithms
+## Step 1: Research (REQUIRED)
+For EACH finding, use mcp__crawlforge__deep_research to find:
+- Modern TypeScript/React patterns for this issue
+- SOLID principle application examples
+- Clean code patterns
 
-## Step 2: Analyze the Code
-Read the affected files to understand the current implementation and identify performance bottlenecks.
+## Step 2: Fix Each Issue
+For EACH finding:
+1. Read the affected file and understand context
+2. Apply the fix following researched best practices
+3. Ensure the fix follows project conventions
 
-## Step 3: Apply Fixes
-Apply the fixes following the researched best practices:
-- Optimize expensive computations and reduce unnecessary re-renders
-- Implement memoization where appropriate (useMemo, useCallback, React.memo)
-- Fix memory leaks and improve garbage collection
-- Optimize database queries and data fetching
-- Reduce bundle size and improve code splitting
-- Fix inefficient algorithms and data structures
+## Quality Criteria (ALL must be met):
+- [ ] Functions have single responsibility
+- [ ] Magic numbers/strings are constants
+- [ ] Error handling is explicit
+- [ ] No code duplication
 
-## Step 4: Verify
-If possible, run relevant performance tests or benchmarks to verify the improvements.
+## Step 3: Verify
+Run: npm run lint && npm run typecheck
+
+REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
+
+===========================================
+CRITICAL: REQUIRED OUTPUT FORMAT
+===========================================
+
+After completing ALL steps above, you MUST end your response with EXACTLY this format:
+
+<fix_json>
+{
+  "success": true or false,
+  "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
+  "summary": "Brief description of changes made",
+  "researchSources": ["url1", "url2"]
+}
+</fix_json>
+
+If you could not make changes, use:
+<fix_json>
+{
+  "success": false,
+  "filesModified": [],
+  "summary": "Explanation of why fixes could not be applied",
+  "researchSources": [],
+  "error": "Error description"
+}
+</fix_json>
+
+CRITICAL RULES:
+1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
+2. Output NOTHING after the closing </fix_json> tag
+3. The JSON must be valid - no trailing commas, no comments
+4. This output format is MANDATORY - your response will be marked as FAILED without it`,
+
+  performance: `You are a performance optimization specialist. Fix EACH issue thoroughly.
+
+## Step 1: Research (REQUIRED)
+For EACH finding, use mcp__crawlforge__deep_research to find:
+- React/TypeScript performance patterns for this issue
+- Memoization best practices (useMemo, useCallback, React.memo)
+- Optimization examples from 2024-2026
+
+## Step 2: Fix Each Issue
+For EACH finding:
+1. Read the affected file
+2. Apply the optimization following researched patterns
+3. Ensure dependencies are correctly specified for memoization
+
+## Quality Criteria (ALL must be met):
+- [ ] Expensive computations are memoized
+- [ ] useEffect cleanup functions prevent memory leaks
+- [ ] Event listeners are properly cleaned up
+- [ ] No unnecessary re-renders
+
+## Step 3: Verify
+Run: npm run typecheck
+Review that memoization dependencies are correct
 
 REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
@@ -951,7 +964,6 @@ class FixAgentPoolManager {
     }
 
     // Variables to track result for emitComplete
-    let success = false;
     let errorMessage: string | undefined;
     let summaryMessage: string | undefined;
 
@@ -963,11 +975,11 @@ class FixAgentPoolManager {
         const result = this.parseFixOutput(agent.outputBuffer);
 
         if (result.success) {
-          // Update TaskFix with results
+          // Update TaskFix with FIX_APPLIED status (not COMPLETED - verification pending)
           await prisma.taskFix.update({
             where: { id: agent.fixId },
             data: {
-              status: 'COMPLETED',
+              status: 'FIX_APPLIED',
               summary: result.summary,
               patch: result.filesModified.join(', '),
               researchNotes: result.researchSources.join('\n'),
@@ -976,11 +988,27 @@ class FixAgentPoolManager {
           });
 
           agent.status = 'completed';
-          success = true;
           summaryMessage = result.summary;
           logger.info(
-            `${agent.fixType} fix completed for task ${agent.taskId} (files modified: ${String(result.filesModified.length)})`
+            `${agent.fixType} fix applied for task ${agent.taskId} (files modified: ${String(result.filesModified.length)}), starting verification...`
           );
+
+          // Emit progress showing fix applied, awaiting verification
+          this.emitProgress(
+            agent.taskId,
+            agent.fixType,
+            `${agent.fixType}: Fix applied, starting verification...`,
+            'FIX_APPLIED'
+          );
+
+          // Trigger verification
+          try {
+            const fixSvc = await getFixService();
+            await fixSvc.startVerification(agent.taskId, agent.fixType);
+          } catch (verifyError) {
+            logger.error(`Failed to start verification for ${agent.fixType} fix on task ${agent.taskId}:`, verifyError);
+            // Don't fail the fix if verification fails to start - the fix itself succeeded
+          }
         } else {
           // Mark as failed due to fix failure
           const failureSummary = result.error || result.summary || 'Fix failed';
@@ -994,7 +1022,6 @@ class FixAgentPoolManager {
           });
 
           agent.status = 'failed';
-          success = false;
           errorMessage = result.error;
           summaryMessage = failureSummary;
           logger.warn(
@@ -1014,7 +1041,6 @@ class FixAgentPoolManager {
         });
 
         agent.status = 'failed';
-        success = false;
         errorMessage = exitFailureSummary;
         summaryMessage = exitFailureSummary;
         logger.warn(
@@ -1024,22 +1050,24 @@ class FixAgentPoolManager {
     } catch (dbError) {
       logger.error(`[${agent.fixType}] Failed to update database on exit:`, dbError);
       agent.status = 'failed';
-      success = false;
       errorMessage = dbError instanceof Error ? dbError.message : 'Database update failed';
     }
 
-    // Emit progress event with final status
-    this.emitProgress(
-      agent.taskId,
-      agent.fixType,
-      agent.status === 'completed'
-        ? `${agent.fixType}: Fix completed`
-        : `${agent.fixType}: Fix failed`,
-      agent.status === 'completed' ? 'COMPLETED' : 'FAILED'
-    );
-
-    // Emit completion event for this specific fix
-    this.emitComplete(agent.taskId, agent.fixType, success, errorMessage, summaryMessage);
+    // For failed fixes, emit progress and completion events
+    // Note: Successful fixes emit their own FIX_APPLIED status and trigger verification above
+    if (agent.status === 'failed') {
+      this.emitProgress(
+        agent.taskId,
+        agent.fixType,
+        `${agent.fixType}: Fix failed`,
+        'FAILED'
+      );
+      this.emitComplete(agent.taskId, agent.fixType, false, errorMessage, summaryMessage);
+    }
+    // For successful fixes, emit completion event (verification will send its own progress updates)
+    else if (agent.status === 'completed') {
+      this.emitComplete(agent.taskId, agent.fixType, true, undefined, summaryMessage);
+    }
   }
 
   /**
@@ -1431,7 +1459,7 @@ class FixAgentPoolManager {
     taskId: string,
     fixType: FixType,
     message: string,
-    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' = 'IN_PROGRESS'
+    status: 'PENDING' | 'IN_PROGRESS' | 'FIX_APPLIED' | 'COMPLETED' | 'FAILED' = 'IN_PROGRESS'
   ): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(`fix:progress:${taskId}:${fixType}`, {

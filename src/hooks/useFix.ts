@@ -12,7 +12,7 @@
 import { useCallback, useEffect } from 'react';
 import { useFixStore, type FixOperationState } from '@/store/useFixStore';
 import { invoke } from '@/lib/ipc';
-import type { FixType, ReviewFinding, FixProgressResponse, AllEventChannels } from '@/types/ipc';
+import type { FixType, ReviewFinding, FixProgressResponse, FixVerificationResult, AllEventChannels } from '@/types/ipc';
 
 // ============================================================================
 // Constants
@@ -57,7 +57,7 @@ const FIX_TYPES: FixType[] = ['performance', 'quality', 'security'];
  * ```
  */
 export function useFixSubscription(taskId: string | null): void {
-  const { setFixProgress, setFixComplete, setFixFailed, clearFix } = useFixStore();
+  const { setFixProgress, setFixComplete, setFixFailed, setFixVerified, clearFix } = useFixStore();
 
   useEffect(() => {
     if (!taskId) return;
@@ -77,6 +77,25 @@ export function useFixSubscription(taskId: string | null): void {
           } else if (data.status === 'FAILED') {
             setFixFailed(taskId, fixType, data.summary ?? 'Fix failed');
           }
+        }
+      });
+      unsubscribers.push(unsubscribe);
+    }
+
+    // Subscribe to verification events for each fix type
+    for (const fixType of FIX_TYPES) {
+      const verifyChannel = `fix:verified:${taskId}:${fixType}` as AllEventChannels;
+      const unsubscribe = window.electron.on(verifyChannel, (...args: unknown[]) => {
+        const data = args[0] as (FixVerificationResult & { canRetry: boolean }) | undefined;
+        if (data) {
+          setFixVerified(taskId, fixType, {
+            preFixScore: data.preFixScore,
+            postFixScore: data.postFixScore,
+            scoreImprovement: data.scoreImprovement,
+            remainingFindingsCount: data.remainingFindings.length,
+            passed: data.passed,
+            summary: data.summary,
+          }, data.canRetry);
         }
       });
       unsubscribers.push(unsubscribe);
@@ -112,7 +131,7 @@ export function useFixSubscription(taskId: string | null): void {
         unsubscribe();
       }
     };
-  }, [taskId, setFixProgress, setFixComplete, setFixFailed, clearFix]);
+  }, [taskId, setFixProgress, setFixComplete, setFixFailed, setFixVerified, clearFix]);
 }
 
 // ============================================================================
@@ -235,12 +254,37 @@ export function useFix(taskId: string) {
     store.clearTaskFixes(taskId);
   }, [taskId, store]);
 
+  /**
+   * Retry a fix with remaining findings after failed verification
+   */
+  const retryFix = useCallback(
+    async (fixType: FixType) => {
+      if (!taskId) return;
+      store.startFix(taskId, fixType);
+      await invoke('fix:retry', { taskId, fixType });
+    },
+    [taskId, store]
+  );
+
+  /**
+   * Get the verification result for a specific fix type
+   */
+  const getVerification = useCallback(
+    async (fixType: FixType): Promise<FixVerificationResult | null> => {
+      if (!taskId) return null;
+      return await invoke('fix:getVerification', { taskId, fixType });
+    },
+    [taskId]
+  );
+
   return {
     // Actions
     startFix,
     cancelFix,
     clearFix,
     clearAllFixes,
+    retryFix,
+    getVerification,
 
     // Status checks
     isFixing,
@@ -338,6 +382,8 @@ export function useFixManager(taskId: string) {
     cancelFix: fix.cancelFix,
     clearFix: fix.clearFix,
     clearAllFixes: fix.clearAllFixes,
+    retryFix: fix.retryFix,
+    getVerification: fix.getVerification,
 
     // Individual status checks
     isFixingSecurity: fix.isFixing('security'),

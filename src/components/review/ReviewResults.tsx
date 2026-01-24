@@ -19,6 +19,9 @@ import {
   Loader2,
   Wand2,
   HelpCircle,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import {
   Accordion,
@@ -30,6 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { invoke } from '@/lib/ipc';
 import { useFix } from '@/hooks/useFix';
+import { ScoreComparison } from '@/components/review/ScoreComparison';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type {
   ReviewType,
   ReviewFinding,
@@ -37,11 +42,15 @@ import type {
   ReviewStatus,
   FixType,
 } from '@/types/ipc';
+import type { FixOperationState } from '@/store/useFixStore';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
 // Constants
 // ============================================================================
+
+/** Maximum number of retries allowed for a fix */
+const MAX_RETRIES = 2;
 
 const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string }>> = {
   security: Shield,
@@ -128,6 +137,124 @@ function FindingItem({ finding }: FindingItemProps) {
 }
 
 // ============================================================================
+// Verification Results Component
+// ============================================================================
+
+interface VerificationResultsProps {
+  fixStatus: FixOperationState;
+  onRetry: () => void;
+}
+
+function VerificationResults({ fixStatus, onRetry }: VerificationResultsProps) {
+  const { status, verification, canRetry, retryCount } = fixStatus;
+
+  // Only show for verification-related statuses
+  const showVerification =
+    status === 'VERIFYING' ||
+    status === 'VERIFIED_SUCCESS' ||
+    status === 'VERIFIED_FAILED';
+
+  if (!showVerification) return null;
+
+  // Verifying state - show spinner
+  if (status === 'VERIFYING') {
+    return (
+      <Card className="mt-4 border-cyan-500/30 bg-cyan-500/5">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-cyan-500" />
+            <span className="text-sm text-cyan-500 font-medium">
+              Verifying fix...
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Verified state - show results
+  if (!verification) return null;
+
+  const isSuccess = status === 'VERIFIED_SUCCESS';
+  const retriesUsed = retryCount ?? 0;
+  const retriesRemaining = MAX_RETRIES - retriesUsed;
+  const canRetryFix = canRetry && retriesRemaining > 0;
+
+  return (
+    <Card className={cn(
+      'mt-4',
+      isSuccess
+        ? 'border-green-500/30 bg-green-500/5'
+        : 'border-amber-500/30 bg-amber-500/5'
+    )}>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          {isSuccess ? (
+            <>
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <span className="text-green-500">Verification Passed</span>
+            </>
+          ) : (
+            <>
+              <XCircle className="h-5 w-5 text-amber-500" />
+              <span className="text-amber-500">Verification Failed</span>
+            </>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Score Comparison */}
+        <ScoreComparison
+          preFixScore={verification.preFixScore}
+          postFixScore={verification.postFixScore}
+          scoreImprovement={verification.scoreImprovement}
+          passed={verification.passed}
+        />
+
+        {/* Summary */}
+        {verification.summary && (
+          <p className="text-sm text-muted-foreground">
+            {verification.summary}
+          </p>
+        )}
+
+        {/* Remaining Findings */}
+        {!isSuccess && verification.remainingFindingsCount > 0 && (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            {verification.remainingFindingsCount} issue
+            {verification.remainingFindingsCount !== 1 ? 's' : ''} remaining
+          </p>
+        )}
+
+        {/* Retry Button */}
+        {!isSuccess && (
+          <div className="pt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRetry}
+              disabled={!canRetryFix}
+              className={cn(
+                'gap-2',
+                canRetryFix && 'border-cyan-500 text-cyan-500 hover:bg-cyan-500/10'
+              )}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry Fix ({retriesUsed}/{MAX_RETRIES})
+            </Button>
+            {!canRetryFix && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Maximum retries reached
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -138,7 +265,7 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
   const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
 
   // Use the fix hook for managing fix operations
-  const { startFix, isFixing, getFixStatus } = useFix(taskId);
+  const { startFix, isFixing, getFixStatus, retryFix } = useFix(taskId);
 
   useEffect(() => {
     setIsLoading(true);
@@ -348,32 +475,58 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
                   const fixStatus = getFixStatus(fixType);
                   const activityMessage = fixStatus?.currentActivity || 'Fixing issues...';
 
+                  // Check if fix has verification results
+                  const hasVerification = fixStatus && (
+                    fixStatus.status === 'VERIFYING' ||
+                    fixStatus.status === 'VERIFIED_SUCCESS' ||
+                    fixStatus.status === 'VERIFIED_FAILED'
+                  );
+
+                  // Determine if the fix button should be shown
+                  // Hide button if verification succeeded
+                  const showFixButton = !fixStatus || (
+                    fixStatus.status !== 'VERIFIED_SUCCESS' &&
+                    fixStatus.status !== 'VERIFYING' &&
+                    fixStatus.status !== 'VERIFIED_FAILED'
+                  );
+
                   return (
                     <div className="mt-4 pt-3 border-t border-border">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          handleFixIssues(review.reviewType, review.findings || [])
-                        }
-                        disabled={fixing}
-                        className={cn(
-                          "gap-2",
-                          fixing && "border-cyan-500 text-cyan-500 bg-cyan-500/10"
-                        )}
-                      >
-                        {fixing ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
-                            <span className="text-cyan-500">{activityMessage}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Wand2 className="h-4 w-4" />
-                            Fix Issues
-                          </>
-                        )}
-                      </Button>
+                      {/* Fix Button */}
+                      {showFixButton && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleFixIssues(review.reviewType, review.findings || [])
+                          }
+                          disabled={fixing}
+                          className={cn(
+                            "gap-2",
+                            fixing && "border-cyan-500 text-cyan-500 bg-cyan-500/10"
+                          )}
+                        >
+                          {fixing ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
+                              <span className="text-cyan-500">{activityMessage}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="h-4 w-4" />
+                              Fix Issues
+                            </>
+                          )}
+                        </Button>
+                      )}
+
+                      {/* Verification Results */}
+                      {hasVerification && fixStatus && (
+                        <VerificationResults
+                          fixStatus={fixStatus}
+                          onRetry={() => retryFix(fixType)}
+                        />
+                      )}
                     </div>
                   );
                 })()}

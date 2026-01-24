@@ -1424,6 +1424,8 @@ export interface IpcChannels {
   'fix:start': (data: StartFixInput) => Promise<void>;
   'fix:getProgress': (data: { taskId: string; fixType: FixType }) => Promise<FixProgressResponse | null>;
   'fix:cancel': (data: { taskId: string; fixType: FixType }) => Promise<void>;
+  'fix:retry': (data: { taskId: string; fixType: FixType }) => Promise<void>;
+  'fix:getVerification': (data: { taskId: string; fixType: FixType }) => Promise<FixVerificationResult | null>;
 }
 
 /**
@@ -1512,7 +1514,8 @@ export type DynamicReviewEventChannel =
  */
 export type DynamicFixEventChannel =
   | `fix:progress:${string}:${string}`
-  | `fix:complete:${string}`;
+  | `fix:complete:${string}`
+  | `fix:verified:${string}:${string}`;
 
 // ============================================================================
 // Claude Status Display Types
@@ -1680,7 +1683,25 @@ export interface StartReviewInput {
 export type FixType = 'security' | 'quality' | 'performance';
 
 /** Status of a fix operation */
-export type FixStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+export type FixStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'FIX_APPLIED'      // Fix changes made, awaiting verification
+  | 'VERIFYING'        // Running verification review
+  | 'VERIFIED_SUCCESS' // Verification passed
+  | 'VERIFIED_FAILED'  // Verification showed insufficient improvement
+  | 'COMPLETED'        // Keep existing for backwards compat
+  | 'FAILED';
+
+/** Result of fix verification comparing pre/post fix scores */
+export interface FixVerificationResult {
+  preFixScore: number;
+  postFixScore: number;
+  scoreImprovement: number;
+  remainingFindings: ReviewFinding[];
+  summary: string;
+  passed: boolean;
+}
 
 /** Input for starting a fix */
 export interface StartFixInput {
@@ -1699,6 +1720,14 @@ export interface FixProgressResponse {
     message: string;
     timestamp: number;
   };
+  /** Current phase of the fix workflow */
+  phase?: 'research' | 'fix' | 'verify';
+  /** Verification result if verification has completed */
+  verification?: FixVerificationResult;
+  /** Number of retry attempts made */
+  retryCount?: number;
+  /** Whether another retry is allowed */
+  canRetry?: boolean;
 }
 
 /** Result of a completed fix */
@@ -1878,6 +1907,8 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'fix:start',
   'fix:getProgress',
   'fix:cancel',
+  'fix:retry',
+  'fix:getVerification',
 ] as const;
 
 /**
