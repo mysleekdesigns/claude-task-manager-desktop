@@ -162,7 +162,7 @@ Focus on:
 For each issue, research the latest solutions and provide specific recommendations with source links.
 
 Output your findings wrapped in XML tags with this exact format:
-<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string with source links where applicable", "file": "optional string", "line": "optional number"}]}</review_json>
+<review_json>{"score": 0-100, "findings": [{"severity": "critical|high|medium|low", "title": "string", "description": "string", "file": "optional string", "line": "optional number"}]}</review_json>
 
 IMPORTANT: Output ONLY the <review_json>...</review_json> tag with valid JSON inside. No other text.`,
 };
@@ -715,13 +715,13 @@ class ReviewAgentPoolManager {
    */
   private buildClaudeArgs(prompt: string): string[] {
     return [
-      '-p', // Print mode
+      '-p',
       '--dangerously-skip-permissions',
       '--output-format',
       'stream-json',
-      '--verbose', // Required when using --print with --output-format=stream-json
+      '--verbose',
       '--max-turns',
-      '5', // Limit turns for review
+      '15', // Increased from 5 to allow Claude to complete analysis before outputting results
       prompt,
     ];
   }
@@ -1104,7 +1104,7 @@ class ReviewAgentPoolManager {
       // Step 1: Extract all text content from stream-json NDJSON format
       const concatenatedText = this.extractTextFromStreamJson(output);
 
-      // Step 2: Look for <review_json>...</review_json> tags in concatenated text
+      // Step 2: Look for <review_json>...</review_json> tags in concatenated text (legacy support)
       const xmlJsonContent = this.extractFromXmlTags(concatenatedText, 'review_json');
       if (xmlJsonContent) {
         try {
