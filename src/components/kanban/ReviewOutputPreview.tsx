@@ -6,8 +6,9 @@
  * and the current activity message.
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Shield, Code, Zap, FileText, Search } from 'lucide-react';
+import { useReviewStore } from '@/store/useReviewStore';
 import type { ReviewType, ReviewProgressResponse, ReviewStatus } from '@/types/ipc';
 
 // ============================================================================
@@ -66,6 +67,7 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   const [progress, setProgress] = useState<ReviewProgressEvent | null>(null);
   const [currentMessage, setCurrentMessage] = useState<string>('Starting review...');
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const { isReviewTypeVerifying } = useReviewStore();
 
   const handleProgress = useCallback((data: ReviewProgressEvent) => {
     // Debounce rapid updates
@@ -131,6 +133,25 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
     };
   }, [taskId, handleProgress]);
 
+  // Deduplicate reviews by reviewType to prevent duplicate icons during re-review
+  // When a verification review runs for a single category, we want to show only one icon
+  // Prefer RUNNING status over COMPLETED (latest state), then latest entry
+  const uniqueReviews = useMemo(() => {
+    if (!progress?.reviews) return [];
+    const reviewMap = new Map<ReviewType, (typeof progress.reviews)[0]>();
+    for (const review of progress.reviews) {
+      const existing = reviewMap.get(review.reviewType);
+      // Keep the entry if:
+      // 1. We don't have one yet
+      // 2. New entry is RUNNING (prefer showing active state)
+      // 3. Existing is not RUNNING and we have a new entry (take latest)
+      if (!existing || review.status === 'RUNNING' || existing.status !== 'RUNNING') {
+        reviewMap.set(review.reviewType, review);
+      }
+    }
+    return Array.from(reviewMap.values());
+  }, [progress?.reviews]);
+
   // Show loading state when progress hasn't been fetched yet
   if (!progress) {
     return (
@@ -143,11 +164,13 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
     );
   }
 
-  // Count completed/total
-  const completedCount = progress.reviews.filter((r) => r.status === 'COMPLETED').length;
-  const totalCount = progress.reviews.length;
-  const hasRunning = progress.reviews.some((r) => r.status === 'RUNNING');
-  const hasFailed = progress.reviews.some((r) => r.status === 'FAILED');
+  // Count completed/total using deduplicated reviews
+  const completedCount = uniqueReviews.filter((r) => r.status === 'COMPLETED').length;
+  const totalCount = uniqueReviews.length;
+  // Check if any review is running OR any review type is being re-verified
+  const hasRunning = uniqueReviews.some((r) => r.status === 'RUNNING') ||
+    uniqueReviews.some((r) => isReviewTypeVerifying(taskId, r.reviewType));
+  const hasFailed = uniqueReviews.some((r) => r.status === 'FAILED');
   const isAllCompleted = progress.status === 'completed';
 
   return (
@@ -155,22 +178,26 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
       {/* Progress indicator with review agent icons */}
       <div className="flex items-center gap-2 mb-1.5">
         <div className="flex gap-1">
-          {progress.reviews.map((review) => {
+          {uniqueReviews.map((review) => {
             // Safely get the icon - fallback to Shield if the review type is not recognized
             const AgentIcon = REVIEW_ICONS[review.reviewType] ?? Shield;
+            // Check if this review type is being re-verified (fix verification)
+            const isVerifying = isReviewTypeVerifying(taskId, review.reviewType);
             return (
               <div
                 key={review.reviewType}
                 className={`w-5 h-5 rounded flex items-center justify-center ${
-                  review.status === 'COMPLETED'
-                    ? 'bg-green-500/20 text-green-400'
-                    : review.status === 'FAILED'
-                      ? 'bg-red-500/20 text-red-400'
-                      : review.status === 'RUNNING'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-zinc-700/50 text-zinc-500'
+                  isVerifying
+                    ? 'bg-blue-500/20 text-blue-400' // Blue during re-verification
+                    : review.status === 'COMPLETED'
+                      ? 'bg-green-500/20 text-green-400'
+                      : review.status === 'FAILED'
+                        ? 'bg-red-500/20 text-red-400'
+                        : review.status === 'RUNNING'
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-zinc-700/50 text-zinc-500'
                 }`}
-                title={`${REVIEW_LABELS[review.reviewType] ?? review.reviewType}: ${review.status.toLowerCase()}`}
+                title={`${REVIEW_LABELS[review.reviewType] ?? review.reviewType}: ${isVerifying ? 'verifying' : review.status.toLowerCase()}`}
               >
                 <AgentIcon className="w-3 h-3" />
               </div>

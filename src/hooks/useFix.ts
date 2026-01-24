@@ -11,8 +11,9 @@
 
 import { useCallback, useEffect } from 'react';
 import { useFixStore, type FixOperationState } from '@/store/useFixStore';
+import { useReviewStore } from '@/store/useReviewStore';
 import { invoke } from '@/lib/ipc';
-import type { FixType, ReviewFinding, FixProgressResponse, FixVerificationResult, AllEventChannels } from '@/types/ipc';
+import type { FixType, ReviewFinding, FixProgressResponse, FixVerificationResult, AllEventChannels, ReviewType } from '@/types/ipc';
 
 // ============================================================================
 // Constants
@@ -28,18 +29,35 @@ const FIX_TYPES: FixType[] = ['performance', 'quality', 'security'];
 // ============================================================================
 
 /**
+ * Options for the fix subscription hook
+ */
+export interface UseFixSubscriptionOptions {
+  /**
+   * Callback fired when verification starts (status becomes VERIFYING)
+   * Useful for closing modals when re-review begins
+   */
+  onVerificationStart?: (fixType: FixType) => void;
+}
+
+/**
  * Hook for subscribing to fix events for a specific task
  *
  * Automatically subscribes to progress and completion events,
  * and cleans up subscriptions on unmount.
  *
  * @param taskId - The ID of the task to track (null to disable)
+ * @param options - Optional callbacks for fix events
  *
  * @example
  * ```tsx
  * function TaskFixMonitor({ taskId }: { taskId: string }) {
  *   // This will automatically update the fix store when events arrive
- *   useFixSubscription(taskId);
+ *   useFixSubscription(taskId, {
+ *     onVerificationStart: (fixType) => {
+ *       // Close modal when verification/re-review starts
+ *       closeModal();
+ *     }
+ *   });
  *
  *   const { getTaskFixes } = useFixStore();
  *   const fixes = getTaskFixes(taskId);
@@ -56,8 +74,12 @@ const FIX_TYPES: FixType[] = ['performance', 'quality', 'security'];
  * }
  * ```
  */
-export function useFixSubscription(taskId: string | null): void {
+export function useFixSubscription(
+  taskId: string | null,
+  options?: UseFixSubscriptionOptions
+): void {
   const { setFixProgress, setFixComplete, setFixFailed, setFixVerified, clearFix } = useFixStore();
+  const { setVerifyingReviewType, clearVerifyingReviewType } = useReviewStore();
 
   useEffect(() => {
     if (!taskId) return;
@@ -72,10 +94,23 @@ export function useFixSubscription(taskId: string | null): void {
         if (data) {
           if (data.status === 'IN_PROGRESS') {
             setFixProgress(taskId, fixType, data.currentActivity?.message ?? 'Fixing...');
+            // Clear verifying state when fix moves back to in_progress
+            clearVerifyingReviewType(taskId, fixType as ReviewType);
+          } else if (data.status === 'VERIFYING') {
+            // Update status to show verifying state
+            setFixProgress(taskId, fixType, data.currentActivity?.message ?? 'Verifying fix...');
+            // Mark review type as being re-verified (shows blue icon)
+            setVerifyingReviewType(taskId, fixType as ReviewType);
+            // Fire callback when verification starts (e.g., to close modals)
+            options?.onVerificationStart?.(fixType);
           } else if (data.status === 'COMPLETED') {
             setFixComplete(taskId, fixType);
+            // Clear verifying state when fix completes
+            clearVerifyingReviewType(taskId, fixType as ReviewType);
           } else if (data.status === 'FAILED') {
             setFixFailed(taskId, fixType, data.summary ?? 'Fix failed');
+            // Clear verifying state when fix fails
+            clearVerifyingReviewType(taskId, fixType as ReviewType);
           }
         }
       });
@@ -96,6 +131,8 @@ export function useFixSubscription(taskId: string | null): void {
             passed: data.passed,
             summary: data.summary,
           }, data.canRetry);
+          // Clear verifying state when verification completes
+          clearVerifyingReviewType(taskId, fixType as ReviewType);
         }
       });
       unsubscribers.push(unsubscribe);
@@ -120,6 +157,8 @@ export function useFixSubscription(taskId: string | null): void {
             const errorMessage = data.error || data.summary || 'Fix failed';
             setFixFailed(taskId, data.fixType, errorMessage);
           }
+          // Clear verifying state on any completion
+          clearVerifyingReviewType(taskId, data.fixType as ReviewType);
         }
       }
     );
@@ -131,7 +170,7 @@ export function useFixSubscription(taskId: string | null): void {
         unsubscribe();
       }
     };
-  }, [taskId, setFixProgress, setFixComplete, setFixFailed, setFixVerified, clearFix]);
+  }, [taskId, setFixProgress, setFixComplete, setFixFailed, setFixVerified, clearFix, setVerifyingReviewType, clearVerifyingReviewType, options]);
 }
 
 // ============================================================================

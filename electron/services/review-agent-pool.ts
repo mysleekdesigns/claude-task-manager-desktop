@@ -1580,6 +1580,7 @@ class ReviewAgentPoolManager {
   /**
    * Build the reviews array matching ReviewProgressResponse interface.
    * Fetches additional data from database for completed reviews.
+   * Deduplicates by reviewType to prevent duplicate entries during re-reviews.
    * @param agents - Array of review agents for a task
    * @returns Promise resolving to reviews array for ReviewProgressResponse
    */
@@ -1595,13 +1596,19 @@ class ReviewAgentPoolManager {
     }>
   > {
     const prisma = databaseService.getClient();
-    const reviews: Array<{
-      reviewType: ReviewType;
-      status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-      score?: number;
-      summary?: string;
-      findingsCount: number;
-    }> = [];
+
+    // Use a Map to deduplicate by reviewType
+    // Prefer RUNNING status, then most recent entry
+    const reviewMap = new Map<
+      ReviewType,
+      {
+        reviewType: ReviewType;
+        status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+        score?: number;
+        summary?: string;
+        findingsCount: number;
+      }
+    >();
 
     for (const agent of agents) {
       let score: number | null = null;
@@ -1645,10 +1652,14 @@ class ReviewAgentPoolManager {
         reviewItem.summary = summary;
       }
 
-      reviews.push(reviewItem);
+      // Deduplicate: prefer RUNNING status, otherwise take latest entry
+      const existing = reviewMap.get(agent.reviewType);
+      if (!existing || reviewItem.status === 'RUNNING' || existing.status !== 'RUNNING') {
+        reviewMap.set(agent.reviewType, reviewItem);
+      }
     }
 
-    return reviews;
+    return Array.from(reviewMap.values());
   }
 
   /**

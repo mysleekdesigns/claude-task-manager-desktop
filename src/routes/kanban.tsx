@@ -9,6 +9,7 @@ import { useCallback, useState } from 'react';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useTaskManager } from '@/hooks/useTasks';
 import { useTaskPolling } from '@/hooks/useTaskPolling';
+import { useFixSubscription } from '@/hooks/useFix';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { TaskModal } from '@/components/task/TaskModal';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
@@ -108,6 +109,15 @@ export function KanbanPage() {
   const handleCloseTaskModal = useCallback(() => {
     setSelectedTaskId(null);
   }, []);
+
+  // Subscribe to fix events for the selected task
+  // Auto-close modal when verification review starts
+  useFixSubscription(selectedTaskId, {
+    onVerificationStart: () => {
+      // Close the modal when verification starts so user can see the AI reviewing
+      setSelectedTaskId(null);
+    },
+  });
 
   // Handle close CreateTaskModal
   const handleCloseCreateModal = useCallback(() => {
