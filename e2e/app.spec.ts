@@ -57,25 +57,35 @@ test.describe('Window Management', () => {
   });
 
   test('should not open external links in new windows', async ({ electronApp, window }) => {
-    // Store initial window count
-    const initialWindowCount = electronApp.windows().length;
-
-    // Try to open an external link (this should be blocked)
-    await window.evaluate(() => {
-      const link = document.createElement('a');
-      link.href = 'https://example.com';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
-
-    // Wait a bit for any window that might open
+    // Wait for app to stabilize (DevTools may be opening in dev mode)
     await window.waitForTimeout(1000);
 
-    // Verify no new windows were opened
+    // Store initial window count (may include DevTools in dev mode)
+    const initialWindowCount = electronApp.windows().length;
+
+    // Try to open an external URL using window.open (this should be blocked by setWindowOpenHandler)
+    const windowOpenResult = await window.evaluate(() => {
+      // Try window.open - should return null if blocked
+      const newWindow = globalThis.open('https://example.com', '_blank');
+      return newWindow !== null;
+    });
+
+    // The window.open should return null when blocked by setWindowOpenHandler
+    expect(windowOpenResult).toBe(false);
+
+    // Wait a bit for any window that might open
+    await window.waitForTimeout(500);
+
+    // Verify no new windows were opened beyond what we started with
     const currentWindowCount = electronApp.windows().length;
     expect(currentWindowCount).toBe(initialWindowCount);
+
+    // Additionally verify no window has navigated to the external URL
+    const allWindows = electronApp.windows();
+    for (const win of allWindows) {
+      const url = win.url();
+      expect(url).not.toContain('example.com');
+    }
   });
 });
 
@@ -105,7 +115,7 @@ test.describe('IPC Communication', () => {
   });
 
   test('should be able to get platform info', async ({ window }) => {
-    const platform = await window.evaluate(async () => {
+    const platformInfo = await window.evaluate(async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const electron = (globalThis as any).electron;
       if (electron && typeof electron.invoke === 'function') {
@@ -114,10 +124,13 @@ test.describe('IPC Communication', () => {
       return null;
     });
 
-    // Platform should be one of the valid Node.js platforms
-    const validPlatforms = ['darwin', 'win32', 'linux'];
-    if (platform) {
-      expect(validPlatforms).toContain(platform);
+    // Platform info should be an object with platform, arch, and osVersion
+    expect(platformInfo).not.toBeNull();
+    if (platformInfo) {
+      const validPlatforms = ['darwin', 'win32', 'linux'];
+      expect(validPlatforms).toContain(platformInfo.platform);
+      expect(typeof platformInfo.arch).toBe('string');
+      expect(typeof platformInfo.osVersion).toBe('string');
     }
   });
 });

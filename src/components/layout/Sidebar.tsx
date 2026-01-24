@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
   Terminal,
@@ -90,10 +90,6 @@ export function Sidebar({ onNewTask }: SidebarProps) {
     return () => { window.removeEventListener('keydown', handleKeyDown); };
   }, [navigate, onNewTask]);
 
-  const handleNavigate = (path: string) => {
-    void navigate(path);
-  };
-
   const handleClaudeCodeClick = () => {
     window.open('https://claude.ai/code', '_blank');
   };
@@ -101,6 +97,7 @@ export function Sidebar({ onNewTask }: SidebarProps) {
   return (
     <TooltipProvider delayDuration={0}>
       <aside
+        data-testid="sidebar"
         className={cn(
           'flex h-screen flex-col border-r border-border bg-card transition-all duration-300',
           collapsed ? 'w-16' : 'w-64'
@@ -172,18 +169,20 @@ export function Sidebar({ onNewTask }: SidebarProps) {
                           isActive && 'bg-accent text-accent-foreground',
                           collapsed && 'justify-center px-0'
                         )}
-                        onClick={() => { handleNavigate(item.path); }}
+                        asChild
                       >
-                        <Icon className={cn('size-4', !collapsed && 'mr-3')} />
-                        {!collapsed && (
-                          <span className="flex-1 text-left">{item.label}</span>
-                        )}
-                        {!collapsed && (
-                          <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-                            <span className="text-xs">⌘⇧</span>
-                            {item.shortcut}
-                          </kbd>
-                        )}
+                        <Link to={item.path} data-testid={`nav-${item.id}`}>
+                          <Icon className={cn('size-4', !collapsed && 'mr-3')} />
+                          {!collapsed && (
+                            <span className="flex-1 text-left">{item.label}</span>
+                          )}
+                          {!collapsed && (
+                            <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+                              <span className="text-xs">⌘⇧</span>
+                              {item.shortcut}
+                            </kbd>
+                          )}
+                        </Link>
                       </Button>
                     </TooltipTrigger>
                     {collapsed && (
@@ -233,10 +232,12 @@ export function Sidebar({ onNewTask }: SidebarProps) {
                   collapsed && 'justify-center px-0',
                   location.pathname === '/settings' && 'bg-accent text-accent-foreground'
                 )}
-                onClick={() => { handleNavigate('/settings'); }}
+                asChild
               >
-                <Settings className={cn('size-4', !collapsed && 'mr-3')} />
-                {!collapsed && <span className="flex-1 text-left">Settings</span>}
+                <Link to="/settings" data-testid="nav-settings">
+                  <Settings className={cn('size-4', !collapsed && 'mr-3')} />
+                  {!collapsed && <span className="flex-1 text-left">Settings</span>}
+                </Link>
               </Button>
             </TooltipTrigger>
             {collapsed && (

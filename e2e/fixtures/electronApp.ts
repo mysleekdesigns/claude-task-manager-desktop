@@ -46,6 +46,30 @@ export interface ElectronTestFixtures {
 }
 
 /**
+ * Helper to close Electron app with timeout and force-kill fallback
+ */
+async function closeElectronApp(electronApp: ElectronApplication, timeoutMs: number = 10_000): Promise<void> {
+  const closePromise = electronApp.close();
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('App close timeout')), timeoutMs);
+  });
+
+  try {
+    await Promise.race([closePromise, timeoutPromise]);
+  } catch (error) {
+    // If close times out, try to force-kill the process
+    const proc = electronApp.process();
+    if (proc && !proc.killed) {
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // Process may already be dead, ignore
+      }
+    }
+  }
+}
+
+/**
  * Extended test with Electron fixtures
  */
 export const test = base.extend<ElectronTestFixtures>({
@@ -71,8 +95,8 @@ export const test = base.extend<ElectronTestFixtures>({
     // Use the app in the test
     await use(electronApp);
 
-    // Cleanup: close the app after the test
-    await electronApp.close();
+    // Cleanup: close the app after the test with timeout protection
+    await closeElectronApp(electronApp, 10_000);
   },
 
   /**
