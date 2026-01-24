@@ -76,7 +76,7 @@ interface StreamJsonMessage {
  */
 export interface ClaudeStatusMessage {
   /** Type of status message */
-  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system' | 'awaiting_input';
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'command_failed' | 'system' | 'awaiting_input';
   /** Human-readable status message */
   message: string;
   /** Optional details */
@@ -92,7 +92,8 @@ export interface ClaudeStatusMessage {
  */
 class StreamJsonParser {
   private _lineBuffer = '';
-  private _lastToolUse: { name: string; id?: string; input?: Record<string, unknown> } | null = null;
+  private _toolUseMap: Map<string, { name: string; input?: Record<string, unknown> }> = new Map();
+  private _lastToolUseFallback: { name: string; id?: string; input?: Record<string, unknown> } | null = null;
 
   /**
    * Strip ANSI escape sequences from a string.
@@ -248,19 +249,28 @@ class StreamJsonParser {
     switch (msg.type) {
       case 'assistant':
         // Check for tool_use inside the message content
+        // Track ALL tool_use blocks by ID, then return status for the last one
+        let lastToolUseStatus: ClaudeStatusMessage | null = null;
         if (msg.message?.content) {
           for (const item of msg.message.content) {
             if (item.type === 'tool_use' && item.name) {
-              // Store tool info for correlation with tool_result
-              this._lastToolUse = {
+              // Store tool info in map by ID for correlation with tool_result
+              if (item.id) {
+                this._toolUseMap.set(item.id, {
+                  name: item.name,
+                  ...(item.input !== undefined && { input: item.input }),
+                });
+              }
+              // Also keep fallback for legacy correlation (no ID matching)
+              this._lastToolUseFallback = {
                 name: item.name,
                 ...(item.id !== undefined && { id: item.id }),
                 ...(item.input !== undefined && { input: item.input }),
               };
-              // Found a tool use - generate contextual status message
+              // Generate contextual status message for this tool use
               const contextualMessage = this.getContextualToolMessage(item.name, item.input);
-              console.log(`[StreamJsonParser] Tool use detected: ${item.name} -> "${contextualMessage}"`);
-              return {
+              console.log(`[StreamJsonParser] Tool use detected: ${item.name} (id: ${item.id || 'none'}) -> "${contextualMessage}"`);
+              lastToolUseStatus = {
                 type: 'tool_start',
                 message: contextualMessage,
                 tool: item.name,
@@ -273,6 +283,10 @@ class StreamJsonParser {
               // to avoid noise
             }
           }
+        }
+        // Return status for the last tool_use found (if any)
+        if (lastToolUseStatus) {
+          return lastToolUseStatus;
         }
         // Claude is responding with text (legacy format check)
         if (msg.subtype === 'thinking' && msg.content) {
@@ -290,13 +304,24 @@ class StreamJsonParser {
         if (msg.message?.content) {
           for (const item of msg.message.content) {
             if (item.type === 'tool_result') {
+              // Look up tool info by tool_use_id from the Map
+              let toolInfo: { name: string; input?: Record<string, unknown> } | null = null;
+              if (item.tool_use_id) {
+                toolInfo = this._toolUseMap.get(item.tool_use_id) || null;
+                // Delete from map after lookup (one-time correlation)
+                this._toolUseMap.delete(item.tool_use_id);
+              }
+              // Fall back to _lastToolUseFallback if no ID match
+              if (!toolInfo && this._lastToolUseFallback) {
+                toolInfo = this._lastToolUseFallback;
+              }
+
               // Check for AskUserQuestion failure first
-              if (item.is_error && this._lastToolUse?.name === 'AskUserQuestion') {
-                // Extract the question from the tool input
-                const questions = this._lastToolUse.input?.['questions'] as Array<{ question?: string }> | undefined;
-                const questionText = questions?.[0]?.question || 'Claude needs your input';
-                console.log(`[StreamJsonParser] AskUserQuestion detected, returning awaiting_input status`);
-                this._lastToolUse = null;
+              if (item.is_error && toolInfo?.name === 'AskUserQuestion') {
+                // Extract the question from the tool input using helper
+                const questionText = this.extractQuestionText(toolInfo.input);
+                console.log(`[StreamJsonParser] AskUserQuestion detected (id: ${item.tool_use_id || 'none'}), returning awaiting_input status`);
+                this._lastToolUseFallback = null;
                 return {
                   type: 'awaiting_input',
                   message: questionText,
@@ -307,8 +332,8 @@ class StreamJsonParser {
 
               // Tool completed - only show errors
               if (item.is_error) {
-                console.log(`[StreamJsonParser] Tool error detected`);
-                this._lastToolUse = null;  // Clear after processing
+                console.log(`[StreamJsonParser] Tool error detected (tool: ${toolInfo?.name || 'unknown'})`);
+                this._lastToolUseFallback = null;  // Clear after processing
                 // Handle complex error content (could be string, object, or array)
                 let errorContent = item.content || 'Unknown error';
                 if (typeof errorContent === 'object') {
@@ -318,16 +343,32 @@ class StreamJsonParser {
                 const displayError = String(errorContent).length > 500
                   ? String(errorContent).substring(0, 500) + '...'
                   : String(errorContent);
+
+                // Check if this is a Bash command failure (exit code error)
+                const isBashCommandFailure = toolInfo?.name === 'Bash' &&
+                  String(errorContent).includes('Exit code');
+
+                if (isBashCommandFailure) {
+                  console.log(`[StreamJsonParser] Bash command failed`);
+                  return {
+                    type: 'command_failed',
+                    message: `Command failed: ${displayError}`,
+                    tool: 'Bash',
+                    timestamp,
+                  };
+                }
+
                 return {
                   type: 'error',
                   message: `Tool error: ${displayError}`,
+                  ...(toolInfo?.name && { tool: toolInfo.name }),
                   timestamp,
                 };
               }
-              // Success - clear tracking
-              this._lastToolUse = null;
+              // Success - clear fallback tracking
+              this._lastToolUseFallback = null;
               // Success - no status message needed, next tool_use will show progress
-              console.log(`[StreamJsonParser] Tool result (success) - skipping status`);
+              console.log(`[StreamJsonParser] Tool result (success, tool: ${toolInfo?.name || 'unknown'}) - skipping status`);
             }
           }
         }
@@ -423,9 +464,29 @@ class StreamJsonParser {
   private processToolResult(msg: StreamJsonMessage, timestamp: number): ClaudeStatusMessage | null {
     // Only show errors in tool results, success is implicit
     if (msg.error) {
+      const lastTool = this._lastToolUseFallback;
+      this._lastToolUseFallback = null;  // Clear after capturing
+
+      const errorStr = String(msg.error);
+
+      // Check if this is a Bash command failure (exit code error)
+      const isBashCommandFailure = lastTool?.name === 'Bash' &&
+        errorStr.includes('Exit code');
+
+      if (isBashCommandFailure) {
+        console.log(`[StreamJsonParser] Bash command failed (legacy format)`);
+        return {
+          type: 'command_failed',
+          message: `Command failed: ${errorStr}`,
+          tool: 'Bash',
+          timestamp,
+        };
+      }
+
       return {
         type: 'error',
-        message: `Tool error: ${msg.error}`,
+        message: `Tool error: ${errorStr}`,
+        ...(lastTool?.name && { tool: lastTool.name }),
         timestamp,
       };
     }
@@ -668,11 +729,61 @@ class StreamJsonParser {
   }
 
   /**
+   * Extract question text from AskUserQuestion tool input with robust fallback handling.
+   *
+   * @param input - The tool input record (may be undefined or malformed)
+   * @returns The extracted question text or a default message
+   */
+  private extractQuestionText(input: Record<string, unknown> | undefined): string {
+    const defaultMessage = 'Claude needs your input';
+
+    // Handle undefined input
+    if (!input) {
+      return defaultMessage;
+    }
+
+    // Get questions field
+    const questions = input['questions'];
+
+    // Handle missing questions field
+    if (questions === undefined || questions === null) {
+      return defaultMessage;
+    }
+
+    // Handle non-array questions
+    if (!Array.isArray(questions)) {
+      return defaultMessage;
+    }
+
+    // Handle empty array
+    if (questions.length === 0) {
+      return defaultMessage;
+    }
+
+    // Get first question object
+    const firstQuestion = questions[0];
+
+    // Handle malformed question objects (not an object, missing question field, or non-string question)
+    if (
+      typeof firstQuestion !== 'object' ||
+      firstQuestion === null ||
+      !('question' in firstQuestion) ||
+      typeof firstQuestion.question !== 'string'
+    ) {
+      return defaultMessage;
+    }
+
+    // Return the question text, or default if empty string
+    return firstQuestion.question || defaultMessage;
+  }
+
+  /**
    * Reset the parser state
    */
   reset(): void {
     this._lineBuffer = '';
-    this._lastToolUse = null;
+    this._toolUseMap.clear();
+    this._lastToolUseFallback = null;
   }
 }
 

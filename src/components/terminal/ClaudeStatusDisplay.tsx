@@ -46,7 +46,7 @@ function isActiveStatus(status: ClaudeStatusMessage | null): boolean {
  */
 function isErrorStatus(status: ClaudeStatusMessage | null): boolean {
   if (!status) return false;
-  return status.type === 'error';
+  return status.type === 'error' || status.type === 'command_failed';
 }
 
 /**

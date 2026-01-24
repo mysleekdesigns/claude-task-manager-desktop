@@ -1517,7 +1517,7 @@ export type ClaudeToolType =
  */
 export interface ClaudeStatusMessage {
   /** Type of status message */
-  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system' | 'awaiting_input';
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'command_failed' | 'system' | 'awaiting_input';
   /** Human-readable status message (e.g., "Reading package.json...") */
   message: string;
   /** Optional additional details */

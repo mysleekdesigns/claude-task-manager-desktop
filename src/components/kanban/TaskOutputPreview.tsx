@@ -18,7 +18,7 @@ interface TaskOutputPreviewProps {
 }
 
 interface ClaudeStatusMessage {
-  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system' | 'awaiting_input';
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'command_failed' | 'system' | 'awaiting_input';
   message: string;
   details?: string;
   tool?: string;
@@ -56,7 +56,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
     if (data?.message) {
       updateStatus(
         data.message,
-        data.type === 'error',
+        data.type === 'error' || data.type === 'command_failed',
         data.type === 'awaiting_input'
       );
     }
@@ -71,7 +71,7 @@ export function TaskOutputPreview({ terminalId }: TaskOutputPreviewProps) {
         const cached = result as ClaudeStatusMessage | null;
         if (cached?.message) {
           setStatus(cached.message);
-          setIsError(cached.type === 'error');
+          setIsError(cached.type === 'error' || cached.type === 'command_failed');
           setIsAwaitingInput(cached.type === 'awaiting_input');
         }
       })
