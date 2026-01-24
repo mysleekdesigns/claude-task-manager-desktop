@@ -76,7 +76,7 @@ interface StreamJsonMessage {
  */
 export interface ClaudeStatusMessage {
   /** Type of status message */
-  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system';
+  type: 'tool_start' | 'tool_end' | 'thinking' | 'text' | 'error' | 'system' | 'awaiting_input';
   /** Human-readable status message */
   message: string;
   /** Optional details */
@@ -92,6 +92,7 @@ export interface ClaudeStatusMessage {
  */
 class StreamJsonParser {
   private _lineBuffer = '';
+  private _lastToolUse: { name: string; id?: string; input?: Record<string, unknown> } | null = null;
 
   /**
    * Strip ANSI escape sequences from a string.
@@ -250,6 +251,12 @@ class StreamJsonParser {
         if (msg.message?.content) {
           for (const item of msg.message.content) {
             if (item.type === 'tool_use' && item.name) {
+              // Store tool info for correlation with tool_result
+              this._lastToolUse = {
+                name: item.name,
+                ...(item.id !== undefined && { id: item.id }),
+                ...(item.input !== undefined && { input: item.input }),
+              };
               // Found a tool use - generate contextual status message
               const contextualMessage = this.getContextualToolMessage(item.name, item.input);
               console.log(`[StreamJsonParser] Tool use detected: ${item.name} -> "${contextualMessage}"`);
@@ -283,9 +290,25 @@ class StreamJsonParser {
         if (msg.message?.content) {
           for (const item of msg.message.content) {
             if (item.type === 'tool_result') {
+              // Check for AskUserQuestion failure first
+              if (item.is_error && this._lastToolUse?.name === 'AskUserQuestion') {
+                // Extract the question from the tool input
+                const questions = this._lastToolUse.input?.['questions'] as Array<{ question?: string }> | undefined;
+                const questionText = questions?.[0]?.question || 'Claude needs your input';
+                console.log(`[StreamJsonParser] AskUserQuestion detected, returning awaiting_input status`);
+                this._lastToolUse = null;
+                return {
+                  type: 'awaiting_input',
+                  message: questionText,
+                  tool: 'AskUserQuestion',
+                  timestamp,
+                };
+              }
+
               // Tool completed - only show errors
               if (item.is_error) {
                 console.log(`[StreamJsonParser] Tool error detected`);
+                this._lastToolUse = null;  // Clear after processing
                 // Handle complex error content (could be string, object, or array)
                 let errorContent = item.content || 'Unknown error';
                 if (typeof errorContent === 'object') {
@@ -301,6 +324,8 @@ class StreamJsonParser {
                   timestamp,
                 };
               }
+              // Success - clear tracking
+              this._lastToolUse = null;
               // Success - no status message needed, next tool_use will show progress
               console.log(`[StreamJsonParser] Tool result (success) - skipping status`);
             }
@@ -647,6 +672,7 @@ class StreamJsonParser {
    */
   reset(): void {
     this._lineBuffer = '';
+    this._lastToolUse = null;
   }
 }
 
@@ -930,6 +956,11 @@ class ClaudeCodeService {
             console.log(`[ClaudeCodeService] Sending status to renderer: ${status.message}`);
             lastStatusCache.set(terminalId, status);
             mainWindow.webContents.send(`terminal:status:${terminalId}`, status);
+
+            // If awaiting input, update task status in database
+            if (status.type === 'awaiting_input') {
+              void this.updateTaskAwaitingInput(options.taskId, status.message);
+            }
           }
         });
 
@@ -1612,6 +1643,25 @@ class ClaudeCodeService {
         `[ClaudeCodeService] Error handling task exit for ${taskId}:`,
         error
       );
+    }
+  }
+
+  /**
+   * Update task status to AWAITING_INPUT when Claude asks a question.
+   *
+   * @param taskId - The task ID to update
+   * @param question - The question Claude is asking
+   */
+  private async updateTaskAwaitingInput(taskId: string, question: string): Promise<void> {
+    try {
+      const prisma = databaseService.getClient();
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { claudeStatus: 'AWAITING_INPUT' },
+      });
+      console.log(`[ClaudeCodeService] Updated task ${taskId} to AWAITING_INPUT: ${question}`);
+    } catch (error) {
+      console.error(`[ClaudeCodeService] Failed to update task ${taskId} to AWAITING_INPUT:`, error);
     }
   }
 
