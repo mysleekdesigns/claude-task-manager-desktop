@@ -70,9 +70,13 @@ export async function performStartupCleanup(): Promise<StartupCleanupResult> {
 
     // Step 3: Also reset any tasks that were IN_PROGRESS (task status, not claudeStatus)
     // These may have been actively worked on when the app closed
+    // Only reset tasks with active Claude statuses - don't overwrite COMPLETED/FAILED/IDLE
     const inProgressTaskResult = await prisma.task.updateMany({
       where: {
         status: 'IN_PROGRESS',
+        claudeStatus: {
+          notIn: ['COMPLETED', 'FAILED', 'IDLE'], // Don't overwrite completed/failed/idle tasks
+        },
         // Only reset if Claude was involved (has a session or terminal)
         OR: [
           { claudeSessionId: { not: null } },
@@ -87,7 +91,7 @@ export async function performStartupCleanup(): Promise<StartupCleanupResult> {
     });
 
     if (inProgressTaskResult.count > 0) {
-      console.log(`[Startup Cleanup] Reset Claude status on ${inProgressTaskResult.count} in-progress task(s)`);
+      console.log(`[Startup Cleanup] Reset Claude status on ${inProgressTaskResult.count} in-progress task(s) with active Claude sessions`);
       staleTasks += inProgressTaskResult.count;
     }
 
