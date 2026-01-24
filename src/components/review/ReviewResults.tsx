@@ -81,6 +81,7 @@ interface ReviewData {
   score?: number;
   summary?: string;
   findings: ReviewFinding[];
+  findingsCount: number;
 }
 
 interface ReviewResultsProps {
@@ -131,6 +132,7 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
   const [reviews, setReviews] = useState<ReviewData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -145,7 +147,8 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
             const data: ReviewData = {
               reviewType: r.reviewType,
               status: r.status,
-              findings: [], // Findings would be fetched separately if needed
+              findings: [], // Findings are fetched on-demand when accordion is expanded
+              findingsCount: r.findingsCount,
             };
             if (r.score !== undefined) {
               data.score = r.score;
@@ -170,6 +173,33 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
         setIsLoading(false);
       });
   }, [taskId]);
+
+  // Fetch findings when an accordion is expanded
+  const handleAccordionChange = async (values: string[]) => {
+    setExpandedReviews(values);
+
+    // Find newly expanded reviews that don't have findings loaded yet
+    for (const reviewType of values) {
+      const review = reviews.find((r) => r.reviewType === reviewType);
+      if (review && review.findings.length === 0 && review.findingsCount > 0) {
+        try {
+          const findings = await invoke('review:getFindings', {
+            taskId,
+            reviewType: reviewType as ReviewType,
+          });
+          if (findings) {
+            setReviews((prev) =>
+              prev.map((r) =>
+                r.reviewType === reviewType ? { ...r, findings } : r
+              )
+            );
+          }
+        } catch (err) {
+          console.error(`Failed to fetch findings for ${reviewType}:`, err);
+        }
+      }
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -202,10 +232,16 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
   }
 
   return (
-    <Accordion type="multiple" className="space-y-2">
+    <Accordion
+      type="multiple"
+      className="space-y-2"
+      value={expandedReviews}
+      onValueChange={handleAccordionChange}
+    >
       {reviews.map((review) => {
         const Icon = REVIEW_ICONS[review.reviewType];
-        const findingsCount = review.findings?.length || 0;
+        // Use findingsCount from the progress response, not the loaded findings array
+        const findingsCount = review.findingsCount;
         const isComplete = review.status === 'COMPLETED';
 
         // Get score badge variant based on score
@@ -257,7 +293,15 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
               )}
 
               {/* Findings */}
-              {review.findings && review.findings.length > 0 ? (
+              {findingsCount > 0 && review.findings.length === 0 ? (
+                // Findings are being loaded
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    Loading findings...
+                  </span>
+                </div>
+              ) : review.findings.length > 0 ? (
                 <div className="space-y-2">
                   {review.findings.map((finding, i) => (
                     <FindingItem key={i} finding={finding} />

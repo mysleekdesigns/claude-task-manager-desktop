@@ -22,15 +22,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { X, Edit2, Check } from 'lucide-react';
+import { Edit2, Check } from 'lucide-react';
 import { useIPCQuery, useIPCMutation } from '@/hooks/useIPC';
 import { toast } from 'sonner';
 
 import { OverviewTab } from './tabs/OverviewTab';
-import { SubtasksTab } from './tabs/SubtasksTab';
 import { LogsTab } from './tabs/LogsTab';
-import { FilesTab } from './tabs/FilesTab';
-import { ClaudeTab } from './tabs/ClaudeTab';
 import { ActivityTab } from './tabs/ActivityTab';
 import { ReviewProgress } from '@/components/review/ReviewProgress';
 import { ReviewResults } from '@/components/review/ReviewResults';
@@ -132,7 +129,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
   if (loading || !task) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px]">
           <div className="flex items-center justify-center p-8">
             <p className="text-sm text-muted-foreground">Loading task...</p>
           </div>
@@ -143,7 +140,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[85vh] min-h-[500px] overflow-hidden flex flex-col">
         <DialogHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -213,54 +210,23 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
                 </Select>
               </div>
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="flex-shrink-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </DialogHeader>
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="subtasks">
-              Subtasks
-              {task.subtasks && task.subtasks.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {task.subtasks.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="logs">
+          <TabsList className="flex flex-wrap gap-1 w-full h-auto p-1">
+            <TabsTrigger value="overview" className="px-3 text-sm whitespace-nowrap">Overview</TabsTrigger>
+            <TabsTrigger value="logs" className="px-3 text-sm whitespace-nowrap">
               Logs
               {task.logs && task.logs.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
+                <Badge variant="secondary" className="ml-1.5 text-xs">
                   {task.logs.length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="files">
-              Files
-              {task.files && task.files.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {task.files.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="claude" className="gap-1">
-              Claude
-              {task.claudeStatus && task.claudeStatus === 'RUNNING' && (
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-            <TabsTrigger value="reviews" className="gap-1">
+            <TabsTrigger value="activity" className="px-3 text-sm whitespace-nowrap">Activity</TabsTrigger>
+            <TabsTrigger value="reviews" className="px-3 text-sm whitespace-nowrap gap-1.5">
               Reviews
               {reviewProgress && reviewProgress.status === 'in_progress' && (
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -277,20 +243,8 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
               />
             </TabsContent>
 
-            <TabsContent value="subtasks" className="mt-0">
-              <SubtasksTab taskId={taskId} projectId={task.projectId} />
-            </TabsContent>
-
             <TabsContent value="logs" className="mt-0">
               <LogsTab task={task} />
-            </TabsContent>
-
-            <TabsContent value="files" className="mt-0">
-              <FilesTab task={task} />
-            </TabsContent>
-
-            <TabsContent value="claude" className="mt-0">
-              <ClaudeTab task={task} onStatusChange={refetch} />
             </TabsContent>
 
             <TabsContent value="activity" className="mt-0">

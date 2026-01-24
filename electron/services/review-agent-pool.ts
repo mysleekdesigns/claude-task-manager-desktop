@@ -811,20 +811,107 @@ class ReviewAgentPoolManager {
   }
 
   /**
+   * Extract JSON with balanced braces from text starting at a given position.
+   * Handles nested objects and arrays properly.
+   *
+   * @param text - The text to extract JSON from
+   * @param startIndex - The index of the opening brace
+   * @returns The extracted JSON string or null if braces are unbalanced
+   */
+  private extractBalancedJson(text: string, startIndex: number): string | null {
+    if (text[startIndex] !== '{') {
+      return null;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          depth++;
+        } else if (char === '}') {
+          depth--;
+          if (depth === 0) {
+            return text.substring(startIndex, i + 1);
+          }
+        }
+      }
+    }
+
+    return null; // Unbalanced braces
+  }
+
+  /**
+   * Find and extract JSON containing a "score" field from text.
+   * Uses balanced brace matching to handle nested structures.
+   *
+   * @param text - The text to search for JSON
+   * @returns Parsed ReviewOutput or null if not found
+   */
+  private extractScoreJson(text: string): ReviewOutput | null {
+    // Find all potential JSON start positions (opening braces)
+    let searchStart = 0;
+    while (searchStart < text.length) {
+      const braceIndex = text.indexOf('{', searchStart);
+      if (braceIndex === -1) {
+        break;
+      }
+
+      const jsonStr = this.extractBalancedJson(text, braceIndex);
+      if (jsonStr && jsonStr.includes('"score"')) {
+        try {
+          const parsed = JSON.parse(jsonStr) as ReviewOutput;
+          if (typeof parsed.score === 'number') {
+            return {
+              score: Math.max(0, Math.min(100, parsed.score)),
+              findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+            };
+          }
+        } catch {
+          // This JSON didn't parse, continue searching
+        }
+      }
+
+      searchStart = braceIndex + 1;
+    }
+
+    return null;
+  }
+
+  /**
    * Parse review output from Claude Code.
    */
   private parseReviewOutput(output: string): ReviewOutput {
     try {
-      // Try to find JSON in the output
+      // Try to find JSON in the output - first pass: direct JSON lines
       const lines = output.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('{') && trimmed.includes('"score"')) {
-          const parsed = JSON.parse(trimmed) as ReviewOutput;
-          return {
-            score: Math.max(0, Math.min(100, parsed.score)),
-            findings: parsed.findings || [],
-          };
+          const result = this.extractScoreJson(trimmed);
+          if (result) {
+            logger.info(`Parsed review score: ${String(result.score)} with ${String(result.findings.length)} findings`);
+            return result;
+          }
         }
       }
 
@@ -835,13 +922,11 @@ class ReviewAgentPoolManager {
           if (parsed.message?.content) {
             for (const item of parsed.message.content) {
               if (item.text && item.text.includes('"score"')) {
-                const match = item.text.match(/\{[^{}]*"score"[^{}]*\}/);
-                if (match) {
-                  const reviewData = JSON.parse(match[0]) as ReviewOutput;
-                  return {
-                    score: Math.max(0, Math.min(100, reviewData.score)),
-                    findings: reviewData.findings || [],
-                  };
+                // Use balanced brace extraction instead of regex
+                const result = this.extractScoreJson(item.text);
+                if (result) {
+                  logger.info(`Parsed review score from stream-json: ${String(result.score)} with ${String(result.findings.length)} findings`);
+                  return result;
                 }
               }
             }
@@ -851,11 +936,15 @@ class ReviewAgentPoolManager {
         }
       }
 
-      // Default if parsing fails
+      // Default if parsing fails - log the actual output for debugging
       logger.warn('Failed to parse review output, using default score');
+      logger.warn(`Output buffer length: ${String(output.length)} chars`);
+      logger.warn(`Output buffer preview (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
+      logger.warn(`Output buffer preview (last 500 chars): ${output.substring(Math.max(0, output.length - 500)).replace(/\n/g, '\\n')}`);
       return { score: 50, findings: [] };
     } catch (error) {
       logger.error('Error parsing review output:', error);
+      logger.error(`Output buffer on error (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
       return { score: 50, findings: [] };
     }
   }
