@@ -14,6 +14,9 @@ import type { FixType, ReviewFinding } from '../../src/types/ipc.js';
 
 const logger = createIPCLogger('FixAgentPool');
 
+/** Flag to track if the pool is shutting down (prevents database operations) */
+let isShuttingDown = false;
+
 /**
  * Options for starting a fix agent
  */
@@ -757,6 +760,56 @@ class FixAgentPoolManager {
   }
 
   /**
+   * Clean up all fix agents during shutdown.
+   * Sets the shutdown flag to prevent database operations and kills all running processes.
+   */
+  cleanup(): void {
+    // Set shutdown flag to prevent database operations during exit handlers
+    isShuttingDown = true;
+
+    const runningAgents: string[] = [];
+
+    // Kill all running fix agent processes
+    for (const [agentId, agent] of this.activeAgents) {
+      if (agent.status === 'running') {
+        runningAgents.push(`${agent.fixType}:${agentId}`);
+
+        // Clear any pending timeouts
+        if (agent.timeoutHandle) {
+          clearTimeout(agent.timeoutHandle);
+          agent.timeoutHandle = undefined;
+        }
+        if (agent.spawnTimeoutHandle) {
+          clearTimeout(agent.spawnTimeoutHandle);
+          agent.spawnTimeoutHandle = undefined;
+        }
+
+        // Kill the process
+        try {
+          agent.process.kill('SIGTERM');
+        } catch (error) {
+          // Process may already be dead, try SIGKILL
+          try {
+            agent.process.kill('SIGKILL');
+          } catch {
+            // Ignore - process is already terminated
+          }
+        }
+
+        agent.status = 'failed';
+      }
+    }
+
+    if (runningAgents.length > 0) {
+      logger.info(`Cleaned up ${String(runningAgents.length)} running fix agent(s): ${runningAgents.join(', ')}`);
+    }
+
+    // Clear all tracking maps
+    this.activeAgents.clear();
+    this.taskFixMap.clear();
+  }
+
+  /**
    * Build the fix prompt with findings context.
    */
   private buildFixPrompt(options: FixAgentOptions): string {
@@ -815,60 +868,72 @@ class FixAgentPoolManager {
       return;
     }
 
-    const prisma = databaseService.getClient();
+    // Skip database operations if shutting down or database is disconnected
+    if (isShuttingDown || !databaseService.isConnected()) {
+      logger.info(`[${agent.fixType}] Skipping database update during shutdown`);
+      agent.status = exitCode === 0 ? 'completed' : 'failed';
+      return;
+    }
 
-    if (exitCode === 0) {
-      // Parse the output
-      const result = this.parseFixOutput(agent.outputBuffer);
+    try {
+      const prisma = databaseService.getClient();
 
-      if (result.success) {
-        // Update TaskFix with results
-        await prisma.taskFix.update({
-          where: { id: agent.fixId },
-          data: {
-            status: 'COMPLETED',
-            summary: result.summary,
-            patch: result.filesModified.join(', '),
-            researchNotes: result.researchSources.join('\n'),
-            completedAt: new Date(),
-          },
-        });
+      if (exitCode === 0) {
+        // Parse the output
+        const result = this.parseFixOutput(agent.outputBuffer);
 
-        agent.status = 'completed';
-        logger.info(
-          `${agent.fixType} fix completed for task ${agent.taskId} (files modified: ${String(result.filesModified.length)})`
-        );
+        if (result.success) {
+          // Update TaskFix with results
+          await prisma.taskFix.update({
+            where: { id: agent.fixId },
+            data: {
+              status: 'COMPLETED',
+              summary: result.summary,
+              patch: result.filesModified.join(', '),
+              researchNotes: result.researchSources.join('\n'),
+              completedAt: new Date(),
+            },
+          });
+
+          agent.status = 'completed';
+          logger.info(
+            `${agent.fixType} fix completed for task ${agent.taskId} (files modified: ${String(result.filesModified.length)})`
+          );
+        } else {
+          // Mark as failed due to fix failure
+          await prisma.taskFix.update({
+            where: { id: agent.fixId },
+            data: {
+              status: 'FAILED',
+              summary: result.error || result.summary || 'Fix failed',
+              completedAt: new Date(),
+            },
+          });
+
+          agent.status = 'failed';
+          logger.warn(
+            `${agent.fixType} fix failed for task ${agent.taskId}: ${result.error || result.summary || 'Unknown error'}`
+          );
+        }
       } else {
-        // Mark as failed due to fix failure
+        // Mark as failed
         await prisma.taskFix.update({
           where: { id: agent.fixId },
           data: {
             status: 'FAILED',
-            summary: result.error || result.summary || 'Fix failed',
+            summary: `Process exited with code ${String(exitCode)}`,
             completedAt: new Date(),
           },
         });
 
         agent.status = 'failed';
         logger.warn(
-          `${agent.fixType} fix failed for task ${agent.taskId}: ${result.error || result.summary || 'Unknown error'}`
+          `${agent.fixType} fix failed for task ${agent.taskId} (exit code: ${String(exitCode)})`
         );
       }
-    } else {
-      // Mark as failed
-      await prisma.taskFix.update({
-        where: { id: agent.fixId },
-        data: {
-          status: 'FAILED',
-          summary: `Process exited with code ${String(exitCode)}`,
-          completedAt: new Date(),
-        },
-      });
-
+    } catch (dbError) {
+      logger.error(`[${agent.fixType}] Failed to update database on exit:`, dbError);
       agent.status = 'failed';
-      logger.warn(
-        `${agent.fixType} fix failed for task ${agent.taskId} (exit code: ${String(exitCode)})`
-      );
     }
 
     // Emit progress event

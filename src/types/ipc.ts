@@ -1506,6 +1506,14 @@ export type DynamicReviewEventChannel =
   | `review:progress:${string}`
   | `review:complete:${string}`;
 
+/**
+ * Dynamic fix event channels
+ * These use template literal types to support task/type-specific fix events
+ */
+export type DynamicFixEventChannel =
+  | `fix:progress:${string}:${string}`
+  | `fix:complete:${string}`;
+
 // ============================================================================
 // Claude Status Display Types
 // ============================================================================
@@ -1551,7 +1559,7 @@ export interface ClaudeStatusMessage {
 /**
  * Combined event channels (static + dynamic)
  */
-export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel | DynamicClaudeEventChannel | DynamicReviewEventChannel;
+export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel | DynamicClaudeEventChannel | DynamicReviewEventChannel | DynamicFixEventChannel;
 
 /**
  * Update information for auto-updater events

@@ -18,6 +18,7 @@ import { databaseService } from './services/database.js';
 import { performStartupCleanup } from './services/startup-cleanup.js';
 import { terminalManager } from './services/terminal.js';
 import { claudeCodeService } from './services/claude-code.js';
+import { fixAgentPool } from './services/fix-agent-pool.js';
 
 const logger = createIPCLogger('Main');
 
@@ -367,7 +368,17 @@ app.on('before-quit', async (event) => {
   trayService.setQuitting(true);
 
   try {
-    // Kill all active Claude Code processes first (spawn-based)
+    // Kill all active fix agents first (they have database operations in exit handlers)
+    // This MUST happen before database disconnect to avoid race conditions
+    try {
+      logger.info('Cleaning up fix agent processes...');
+      fixAgentPool.cleanup();
+      logger.info('Fix agent processes cleaned up successfully');
+    } catch (error) {
+      logger.error('Error cleaning up fix agent processes:', error);
+    }
+
+    // Kill all active Claude Code processes (spawn-based)
     try {
       logger.info('Cleaning up Claude Code processes...');
       claudeCodeService.killAllProcesses();
@@ -410,6 +421,7 @@ app.on('before-quit', async (event) => {
 
 // Backup cleanup in case before-quit didn't fully clean up
 app.on('will-quit', () => {
+  fixAgentPool.cleanup(); // Backup cleanup for fix agent processes
   claudeCodeService.killAllProcesses(); // Backup cleanup for Claude processes
   terminalManager.killAll(); // Backup cleanup for terminal processes
 });

@@ -29,6 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { invoke } from '@/lib/ipc';
+import { useFix } from '@/hooks/useFix';
 import type {
   ReviewType,
   ReviewFinding,
@@ -135,7 +136,9 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
-  const [fixingTypes, setFixingTypes] = useState<Set<string>>(new Set());
+
+  // Use the fix hook for managing fix operations
+  const { startFix, isFixing, getFixStatus } = useFix(taskId);
 
   useEffect(() => {
     setIsLoading(true);
@@ -215,17 +218,10 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
       return;
     }
 
-    setFixingTypes((prev) => new Set(prev).add(reviewType));
     try {
-      await invoke('fix:start', { taskId, fixType: reviewType as FixType, findings });
+      await startFix(reviewType as FixType, findings);
     } catch (err) {
       console.error('Failed to start fix:', err);
-    } finally {
-      setFixingTypes((prev) => {
-        const next = new Set(prev);
-        next.delete(reviewType);
-        return next;
-      });
     }
   };
 
@@ -346,31 +342,38 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
               {/* Fix Issues Button - only for fixable review types */}
               {review.findingsCount > 0 &&
                 review.status === 'COMPLETED' &&
-                ['security', 'quality'].includes(review.reviewType) && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleFixIssues(review.reviewType, review.findings || [])
-                    }
-                    disabled={fixingTypes.has(review.reviewType)}
-                    className="gap-2"
-                  >
-                    {fixingTypes.has(review.reviewType) ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Fixing Issues...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="h-4 w-4" />
-                        Fix Issues
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
+                ['security', 'quality', 'performance'].includes(review.reviewType) && (() => {
+                  const fixType = review.reviewType as FixType;
+                  const fixing = isFixing(fixType);
+                  const fixStatus = getFixStatus(fixType);
+                  const activityMessage = fixStatus?.currentActivity || 'Fixing issues...';
+
+                  return (
+                    <div className="mt-4 pt-3 border-t border-border">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleFixIssues(review.reviewType, review.findings || [])
+                        }
+                        disabled={fixing}
+                        className="gap-2"
+                      >
+                        {fixing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {activityMessage}
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-4 w-4" />
+                            Fix Issues
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })()}
             </AccordionContent>
           </AccordionItem>
         );

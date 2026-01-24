@@ -6,11 +6,11 @@
  * Includes fix buttons for review types with scores below 100.
  */
 
-import { useState } from 'react';
 import { Zap, Code, Shield, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { invoke } from '@/lib/ipc';
+import { useFix } from '@/hooks/useFix';
 import type { ReviewProgressResponse, ReviewType, FixType, ReviewFinding } from '@/types/ipc';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +36,8 @@ const FIX_BUTTONS: Array<{
 ];
 
 export function ReviewProgress({ progress, compact = false }: ReviewProgressProps) {
-  const [fixingTypes, setFixingTypes] = useState<Set<string>>(new Set());
+  // Use the fix hook for managing fix operations - only if taskId is available
+  const fixHook = progress.taskId ? useFix(progress.taskId) : null;
 
   const completedCount = progress.reviews.filter((r) => r.status === 'COMPLETED').length;
   const totalCount = progress.reviews.length;
@@ -56,9 +57,8 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
 
   // Handle fix button click
   const handleFix = async (fixType: FixType, reviewType: ReviewType) => {
-    if (!progress.taskId) return;
+    if (!progress.taskId || !fixHook) return;
 
-    setFixingTypes((prev) => new Set(prev).add(fixType));
     try {
       // Fetch findings for this review type before starting the fix
       const findings: ReviewFinding[] = await invoke('review:getFindings', {
@@ -66,15 +66,9 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
         reviewType,
       }) ?? [];
 
-      await invoke('fix:start', { taskId: progress.taskId, fixType, findings });
+      await fixHook.startFix(fixType, findings);
     } catch (err) {
       console.error(`Failed to start ${fixType} fix:`, err);
-    } finally {
-      setFixingTypes((prev) => {
-        const next = new Set(prev);
-        next.delete(fixType);
-        return next;
-      });
     }
   };
 
@@ -125,14 +119,16 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
       )}
 
       {/* Fix buttons - only show if there are reviews with scores below 100 */}
-      {hasFixableReviews && (
+      {hasFixableReviews && fixHook && (
         <div className="flex flex-row gap-2 pt-2">
           {FIX_BUTTONS.map(({ reviewType, fixType, label, Icon }) => {
             const score = getReviewScore(reviewType);
             // Only show button if score exists and is less than 100
             if (score === undefined || score >= 100) return null;
 
-            const isFixing = fixingTypes.has(fixType);
+            const fixing = fixHook.isFixing(fixType);
+            const fixStatus = fixHook.getFixStatus(fixType);
+            const activityMessage = fixStatus?.currentActivity;
 
             return (
               <Button
@@ -140,15 +136,16 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
                 size="sm"
                 variant="outline"
                 onClick={() => handleFix(fixType, reviewType)}
-                disabled={isFixing}
+                disabled={fixing}
                 className="gap-1.5"
+                title={fixing && activityMessage ? activityMessage : undefined}
               >
-                {isFixing ? (
+                {fixing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Icon className="h-4 w-4" />
                 )}
-                {label}
+                {fixing && activityMessage ? 'Fixing...' : label}
               </Button>
             );
           })}
