@@ -357,12 +357,15 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
                           handleFixIssues(review.reviewType, review.findings || [])
                         }
                         disabled={fixing}
-                        className="gap-2"
+                        className={cn(
+                          "gap-2",
+                          fixing && "border-cyan-500 text-cyan-500 bg-cyan-500/10"
+                        )}
                       >
                         {fixing ? (
                           <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            {activityMessage}
+                            <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
+                            <span className="text-cyan-500">{activityMessage}</span>
                           </>
                         ) : (
                           <>

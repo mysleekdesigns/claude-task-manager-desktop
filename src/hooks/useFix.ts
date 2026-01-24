@@ -87,12 +87,19 @@ export function useFixSubscription(taskId: string | null): void {
     const unsubscribeComplete = window.electron.on(
       completeChannel,
       (...args: unknown[]) => {
-        const data = args[0] as { fixType?: FixType; success?: boolean; error?: string } | undefined;
+        const data = args[0] as {
+          fixType?: FixType;
+          success?: boolean;
+          error?: string;
+          summary?: string;
+        } | undefined;
         if (data?.fixType) {
           if (data.success) {
             setFixComplete(taskId, data.fixType);
-          } else if (data.error) {
-            setFixFailed(taskId, data.fixType, data.error);
+          } else {
+            // Handle failure - check both 'error' and 'summary' fields
+            const errorMessage = data.error || data.summary || 'Fix failed';
+            setFixFailed(taskId, data.fixType, errorMessage);
           }
         }
       }

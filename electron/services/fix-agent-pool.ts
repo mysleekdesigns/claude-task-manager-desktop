@@ -122,14 +122,39 @@ Apply the fixes following the researched best practices:
 ## Step 4: Verify
 If possible, run relevant security-related tests to verify the fixes.
 
-## Output Format
-After completing the fixes, output your results in the following XML format:
-<fix_json>{"success": true, "filesModified": ["path/to/file1.ts", "path/to/file2.ts"], "summary": "Fixed XSS vulnerability by adding proper output encoding, updated SQL queries to use parameterized statements", "researchSources": ["https://owasp.org/...", "https://cheatsheetseries.owasp.org/..."]}</fix_json>
+REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
-If the fix fails, output:
-<fix_json>{"success": false, "filesModified": [], "summary": "Failed to apply fix: reason", "researchSources": []}</fix_json>
+===========================================
+CRITICAL: REQUIRED OUTPUT FORMAT
+===========================================
 
-IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside at the end. No other text after the tag.`,
+After completing ALL steps above, you MUST end your response with EXACTLY this format:
+
+<fix_json>
+{
+  "success": true or false,
+  "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
+  "summary": "Brief description of changes made",
+  "researchSources": ["url1", "url2"]
+}
+</fix_json>
+
+If you could not make changes, use:
+<fix_json>
+{
+  "success": false,
+  "filesModified": [],
+  "summary": "Explanation of why fixes could not be applied",
+  "researchSources": [],
+  "error": "Error description"
+}
+</fix_json>
+
+CRITICAL RULES:
+1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
+2. Output NOTHING after the closing </fix_json> tag
+3. The JSON must be valid - no trailing commas, no comments
+4. This output format is MANDATORY - your response will be marked as FAILED without it`,
 
   quality: `You are a code quality fix agent. Your task is to improve code quality based on review findings.
 
@@ -154,14 +179,39 @@ Apply the fixes following the researched best practices:
 ## Step 4: Verify
 If possible, run linting and type checking to verify the fixes don't break anything.
 
-## Output Format
-After completing the fixes, output your results in the following XML format:
-<fix_json>{"success": true, "filesModified": ["path/to/file1.ts", "path/to/file2.ts"], "summary": "Refactored complex function into smaller units, improved error handling with proper try-catch blocks, applied consistent naming conventions", "researchSources": ["https://typescript-eslint.io/...", "https://refactoring.guru/..."]}</fix_json>
+REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
-If the fix fails, output:
-<fix_json>{"success": false, "filesModified": [], "summary": "Failed to apply fix: reason", "researchSources": []}</fix_json>
+===========================================
+CRITICAL: REQUIRED OUTPUT FORMAT
+===========================================
 
-IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside at the end. No other text after the tag.`,
+After completing ALL steps above, you MUST end your response with EXACTLY this format:
+
+<fix_json>
+{
+  "success": true or false,
+  "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
+  "summary": "Brief description of changes made",
+  "researchSources": ["url1", "url2"]
+}
+</fix_json>
+
+If you could not make changes, use:
+<fix_json>
+{
+  "success": false,
+  "filesModified": [],
+  "summary": "Explanation of why fixes could not be applied",
+  "researchSources": [],
+  "error": "Error description"
+}
+</fix_json>
+
+CRITICAL RULES:
+1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
+2. Output NOTHING after the closing </fix_json> tag
+3. The JSON must be valid - no trailing commas, no comments
+4. This output format is MANDATORY - your response will be marked as FAILED without it`,
 
   performance: `You are a performance optimization fix agent. Your task is to fix performance issues found during code review.
 
@@ -186,14 +236,39 @@ Apply the fixes following the researched best practices:
 ## Step 4: Verify
 If possible, run relevant performance tests or benchmarks to verify the improvements.
 
-## Output Format
-After completing the fixes, output your results in the following XML format:
-<fix_json>{"success": true, "filesModified": ["path/to/file1.ts", "path/to/file2.ts"], "summary": "Optimized React component rendering with useMemo, fixed N+1 database query, implemented code splitting for large module", "researchSources": ["https://react.dev/...", "https://web.dev/..."]}</fix_json>
+REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
-If the fix fails, output:
-<fix_json>{"success": false, "filesModified": [], "summary": "Failed to apply fix: reason", "researchSources": []}</fix_json>
+===========================================
+CRITICAL: REQUIRED OUTPUT FORMAT
+===========================================
 
-IMPORTANT: Output ONLY the <fix_json>...</fix_json> tag with valid JSON inside at the end. No other text after the tag.`,
+After completing ALL steps above, you MUST end your response with EXACTLY this format:
+
+<fix_json>
+{
+  "success": true or false,
+  "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
+  "summary": "Brief description of changes made",
+  "researchSources": ["url1", "url2"]
+}
+</fix_json>
+
+If you could not make changes, use:
+<fix_json>
+{
+  "success": false,
+  "filesModified": [],
+  "summary": "Explanation of why fixes could not be applied",
+  "researchSources": [],
+  "error": "Error description"
+}
+</fix_json>
+
+CRITICAL RULES:
+1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
+2. Output NOTHING after the closing </fix_json> tag
+3. The JSON must be valid - no trailing commas, no comments
+4. This output format is MANDATORY - your response will be marked as FAILED without it`,
 };
 
 /**
@@ -854,7 +929,7 @@ class FixAgentPoolManager {
       'stream-json',
       '--verbose', // Required when using --print with --output-format=stream-json
       '--max-turns',
-      '15', // More turns for fixes since they include research
+      '50', // More turns for complex fixes that include research, file reads, and synthesis
       prompt,
     ];
   }
@@ -874,6 +949,11 @@ class FixAgentPoolManager {
       agent.status = exitCode === 0 ? 'completed' : 'failed';
       return;
     }
+
+    // Variables to track result for emitComplete
+    let success = false;
+    let errorMessage: string | undefined;
+    let summaryMessage: string | undefined;
 
     try {
       const prisma = databaseService.getClient();
@@ -896,37 +976,47 @@ class FixAgentPoolManager {
           });
 
           agent.status = 'completed';
+          success = true;
+          summaryMessage = result.summary;
           logger.info(
             `${agent.fixType} fix completed for task ${agent.taskId} (files modified: ${String(result.filesModified.length)})`
           );
         } else {
           // Mark as failed due to fix failure
+          const failureSummary = result.error || result.summary || 'Fix failed';
           await prisma.taskFix.update({
             where: { id: agent.fixId },
             data: {
               status: 'FAILED',
-              summary: result.error || result.summary || 'Fix failed',
+              summary: failureSummary,
               completedAt: new Date(),
             },
           });
 
           agent.status = 'failed';
+          success = false;
+          errorMessage = result.error;
+          summaryMessage = failureSummary;
           logger.warn(
-            `${agent.fixType} fix failed for task ${agent.taskId}: ${result.error || result.summary || 'Unknown error'}`
+            `${agent.fixType} fix failed for task ${agent.taskId}: ${failureSummary}`
           );
         }
       } else {
         // Mark as failed
+        const exitFailureSummary = `Process exited with code ${String(exitCode)}`;
         await prisma.taskFix.update({
           where: { id: agent.fixId },
           data: {
             status: 'FAILED',
-            summary: `Process exited with code ${String(exitCode)}`,
+            summary: exitFailureSummary,
             completedAt: new Date(),
           },
         });
 
         agent.status = 'failed';
+        success = false;
+        errorMessage = exitFailureSummary;
+        summaryMessage = exitFailureSummary;
         logger.warn(
           `${agent.fixType} fix failed for task ${agent.taskId} (exit code: ${String(exitCode)})`
         );
@@ -934,21 +1024,22 @@ class FixAgentPoolManager {
     } catch (dbError) {
       logger.error(`[${agent.fixType}] Failed to update database on exit:`, dbError);
       agent.status = 'failed';
+      success = false;
+      errorMessage = dbError instanceof Error ? dbError.message : 'Database update failed';
     }
 
-    // Emit progress event
+    // Emit progress event with final status
     this.emitProgress(
       agent.taskId,
       agent.fixType,
       agent.status === 'completed'
         ? `${agent.fixType}: Fix completed`
-        : `${agent.fixType}: Fix failed`
+        : `${agent.fixType}: Fix failed`,
+      agent.status === 'completed' ? 'COMPLETED' : 'FAILED'
     );
 
-    // Check if all fixes are complete
-    if (this.areAllFixesComplete(agent.taskId)) {
-      this.emitComplete(agent.taskId);
-    }
+    // Emit completion event for this specific fix
+    this.emitComplete(agent.taskId, agent.fixType, success, errorMessage, summaryMessage);
   }
 
   /**
@@ -986,12 +1077,10 @@ class FixAgentPoolManager {
     agent.currentMessage = `${agent.fixType}: Failed - ${error.message}`;
 
     // Emit progress with failure status
-    this.emitProgress(agent.taskId, agent.fixType, agent.currentMessage);
+    this.emitProgress(agent.taskId, agent.fixType, agent.currentMessage, 'FAILED');
 
-    // Check if all fixes are complete (including failures)
-    if (this.areAllFixesComplete(agent.taskId)) {
-      this.emitComplete(agent.taskId);
-    }
+    // Emit completion event for this specific fix (with failure)
+    this.emitComplete(agent.taskId, agent.fixType, false, error.message, error.message);
   }
 
   /**
@@ -1021,15 +1110,22 @@ class FixAgentPoolManager {
 
   /**
    * Concatenate all text content from stream-json NDJSON output.
-   * Handles both "type": "assistant" messages with content arrays
-   * and "type": "result" events.
+   * Handles various message types from Claude's stream-json format:
+   * - "type": "assistant" messages with content arrays
+   * - "type": "result" events
+   * - "type": "content_block_delta" with delta.text
+   * - "type": "text" events
+   *
+   * Skips metadata messages like:
+   * - "type": "system" (hooks, metadata)
    *
    * @param output - The raw NDJSON output from Claude's stream-json format
-   * @returns Concatenated text content from all messages
+   * @returns Object with concatenated text and message type counts for debugging
    */
-  extractTextFromStreamJson(output: string): string {
+  extractTextFromStreamJson(output: string): { text: string; typeCounts: Record<string, number> } {
     const textParts: string[] = [];
     const lines = output.split('\n');
+    const typeCounts: Record<string, number> = {};
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -1039,9 +1135,21 @@ class FixAgentPoolManager {
 
       try {
         const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        const messageType = parsed['type'] as string | undefined;
+
+        // Track message type counts for debugging
+        if (messageType) {
+          typeCounts[messageType] = (typeCounts[messageType] || 0) + 1;
+        }
+
+        // Skip system messages (hooks, metadata, etc.)
+        // These include subtype: "hook_started" and subtype: "hook_response"
+        if (messageType === 'system') {
+          continue;
+        }
 
         // Handle "type": "assistant" messages with content array
-        if (parsed['type'] === 'assistant' && parsed['message']) {
+        if (messageType === 'assistant' && parsed['message']) {
           const message = parsed['message'] as Record<string, unknown>;
           const content = message['content'] as Array<Record<string, unknown>> | undefined;
 
@@ -1055,15 +1163,28 @@ class FixAgentPoolManager {
         }
 
         // Handle "type": "result" events
-        if (parsed['type'] === 'result' && typeof parsed['result'] === 'string') {
+        if (messageType === 'result' && typeof parsed['result'] === 'string') {
           textParts.push(parsed['result']);
+        }
+
+        // Handle "type": "content_block_delta" with delta.text
+        if (messageType === 'content_block_delta' && parsed['delta']) {
+          const delta = parsed['delta'] as Record<string, unknown>;
+          if (delta['type'] === 'text_delta' && typeof delta['text'] === 'string') {
+            textParts.push(delta['text']);
+          }
+        }
+
+        // Handle "type": "text" events (direct text output)
+        if (messageType === 'text' && typeof parsed['text'] === 'string') {
+          textParts.push(parsed['text']);
         }
       } catch {
         // Non-JSON line, skip
       }
     }
 
-    return textParts.join('\n');
+    return { text: textParts.join('\n'), typeCounts };
   }
 
   /**
@@ -1081,7 +1202,10 @@ class FixAgentPoolManager {
 
     try {
       // Step 1: Extract all text content from stream-json NDJSON format
-      const concatenatedText = this.extractTextFromStreamJson(output);
+      const { text: concatenatedText, typeCounts } = this.extractTextFromStreamJson(output);
+
+      // Log message type distribution for debugging
+      logger.info(`Message type distribution: ${JSON.stringify(typeCounts)}`);
 
       // Step 2: Look for <fix_json>...</fix_json> tags in concatenated text
       const xmlJsonContent = this.extractFromXmlTags(concatenatedText, 'fix_json');
@@ -1129,11 +1253,77 @@ class FixAgentPoolManager {
         }
       }
 
-      // Parsing failed
-      logger.error('Failed to parse fix output - no valid JSON found');
+      // Step 4: Fallback - Try to synthesize result from concatenated text
+      // Claude did work but didn't output the required <fix_json> tags
+      if (concatenatedText.length > 100) {
+        const filesModified: string[] = [];
+
+        // Look for file paths in the text (e.g., "Hero.tsx", "src/components/...")
+        const fileMatches = concatenatedText.match(/[\w\/.-]+\.(tsx?|jsx?|css|scss|json|md)/g);
+        if (fileMatches) {
+          // Deduplicate and filter out common false positives
+          const uniqueFiles = [...new Set(fileMatches)].filter(f =>
+            !f.startsWith('.') && // Not hidden files like .tsx
+            f.length > 3 && // Not just extensions
+            !f.includes('package.json') && // Common non-target files
+            !f.includes('tsconfig.json')
+          );
+          filesModified.push(...uniqueFiles.slice(0, 10)); // Limit to 10 files
+        }
+
+        // Determine success based on keywords indicating work was done
+        const looksSuccessful = /(?:fixed|optimized|improved|updated|applied|already\s*(?:optimized|done|implemented|in\s*place)|changes?\s*made|modified|refactored|implemented|added|removed|replaced)/i.test(concatenatedText);
+
+        // Check for explicit failure indicators
+        const looksLikeFailed = /(?:could\s*not|unable\s*to|failed\s*to|error|cannot|can't|won't|impossible)/i.test(concatenatedText);
+
+        // Success if looks successful and doesn't look failed
+        const synthesizedSuccess = looksSuccessful && !looksLikeFailed;
+
+        logger.warn('Using fallback result synthesis - Claude did not output <fix_json> tags');
+        logger.warn(`Synthesized success: ${String(synthesizedSuccess)}, files found: ${String(filesModified.length)}`);
+
+        const result: FixOutput = {
+          success: synthesizedSuccess,
+          filesModified,
+          summary: concatenatedText.substring(0, 500) + (concatenatedText.length > 500 ? '...' : ''),
+          researchSources: [],
+        };
+        if (!synthesizedSuccess) {
+          result.error = 'Claude did not complete the fix process or output required format';
+        }
+        return result;
+      }
+
+      // Parsing failed - provide detailed diagnostic information
+      logger.error('Failed to parse fix output - no valid JSON found and insufficient text for fallback');
       logger.error(`Output buffer length: ${String(output.length)} chars`);
       logger.error(`Concatenated text length: ${String(concatenatedText.length)} chars`);
-      logger.error(`Output buffer preview (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
+      logger.error(`Message type counts: ${JSON.stringify(typeCounts)}`);
+
+      // Check if any assistant messages were found
+      const assistantCount = typeCounts['assistant'] || 0;
+      const systemCount = typeCounts['system'] || 0;
+      const resultCount = typeCounts['result'] || 0;
+      const contentBlockDeltaCount = typeCounts['content_block_delta'] || 0;
+
+      if (assistantCount === 0) {
+        logger.error('WARNING: No "assistant" type messages found in output!');
+        logger.error(`Found ${String(systemCount)} system messages (hooks/metadata)`);
+        logger.error(`Found ${String(resultCount)} result messages`);
+        logger.error(`Found ${String(contentBlockDeltaCount)} content_block_delta messages`);
+      } else {
+        logger.error(`Found ${String(assistantCount)} assistant messages but no <fix_json> tags`);
+      }
+
+      // Log sample of concatenated text (actual content, not raw output)
+      if (concatenatedText.length > 0) {
+        logger.error(`Concatenated text preview (first 500 chars): ${concatenatedText.substring(0, 500).replace(/\n/g, '\\n')}`);
+      } else {
+        logger.error('Concatenated text is EMPTY - no text content was extracted from messages');
+        // Show raw output preview as fallback
+        logger.error(`Raw output preview (first 500 chars): ${output.substring(0, 500).replace(/\n/g, '\\n')}`);
+      }
 
       return defaultResult;
     } catch (error) {
@@ -1234,25 +1424,52 @@ class FixAgentPoolManager {
 
   /**
    * Emit progress event to renderer.
-   * Sends to fix:progress:{taskId}:{fixType} channel
+   * Sends to fix:progress:{taskId}:{fixType} channel.
+   * Format matches FixProgressResponse interface expected by renderer.
    */
-  emitProgress(taskId: string, fixType: FixType, message: string): void {
+  emitProgress(
+    taskId: string,
+    fixType: FixType,
+    message: string,
+    status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' = 'IN_PROGRESS'
+  ): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(`fix:progress:${taskId}:${fixType}`, {
         taskId,
         fixType,
-        message,
-        timestamp: Date.now(),
+        status,
+        currentActivity: {
+          message,
+          timestamp: Date.now(),
+        },
       });
     }
   }
 
   /**
-   * Emit completion event to renderer.
+   * Emit completion event to renderer for a specific fix.
+   *
+   * @param taskId - Task ID
+   * @param fixType - Type of fix that completed
+   * @param success - Whether the fix succeeded
+   * @param error - Optional error message if failed
+   * @param summary - Optional summary of the fix result
    */
-  private emitComplete(taskId: string): void {
+  private emitComplete(
+    taskId: string,
+    fixType: FixType,
+    success: boolean,
+    error?: string,
+    summary?: string
+  ): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send(`fix:complete:${taskId}`, { taskId });
+      this.mainWindow.webContents.send(`fix:complete:${taskId}`, {
+        taskId,
+        fixType,
+        success,
+        error,
+        summary,
+      });
     }
   }
 }
