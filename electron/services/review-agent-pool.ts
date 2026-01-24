@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { spawn, type ChildProcess } from 'child_process';
 import { databaseService } from './database.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
+import type { FixType } from '../../src/types/ipc.js';
 
 const logger = createIPCLogger('ReviewAgentPool');
 
@@ -952,6 +953,47 @@ class ReviewAgentPoolManager {
         logger.info(
           `${agent.reviewType} review completed for task ${agent.taskId} (score: ${String(result.score)})`
         );
+
+        // Check if this review is a verification for a pending fix
+        // FixType is a subset of ReviewType (security, quality, performance)
+        const fixTypes: FixType[] = ['security', 'quality', 'performance'];
+        if (fixTypes.includes(agent.reviewType as FixType)) {
+          const fixType = agent.reviewType as FixType;
+          try {
+            // Check for a TaskFix with status='VERIFYING' for this task/fixType
+            const verifyingFix = await prisma.taskFix.findFirst({
+              where: {
+                taskId: agent.taskId,
+                fixType: fixType,
+                status: 'VERIFYING',
+              },
+            });
+
+            if (verifyingFix) {
+              logger.info(
+                `Found VERIFYING fix for ${fixType} on task ${agent.taskId}, notifying fix service`
+              );
+              // Import fix service dynamically to avoid circular dependency
+              const { fixService } = await import('./fix-service.js');
+              await fixService.handleVerificationComplete(
+                agent.taskId,
+                fixType,
+                result.score,
+                result.findings
+              );
+            } else {
+              // Log that no VERIFYING fix was found - helps debug timing issues
+              logger.info(
+                `No VERIFYING fix found for ${fixType} on task ${agent.taskId} - this review was not a verification`
+              );
+            }
+          } catch (verifyError) {
+            logger.error(
+              `Failed to check/notify verification completion for ${fixType} on task ${agent.taskId}:`,
+              verifyError
+            );
+          }
+        }
       }
     } else {
       // Mark as failed

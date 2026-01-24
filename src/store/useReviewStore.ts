@@ -119,6 +119,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   setVerifyingReviewType: (taskId, reviewType) =>
     set((state) => {
+      console.log('[useReviewStore] setVerifyingReviewType called:', { taskId, reviewType });
       const newMap = new Map(state.verifyingReviewTypes);
       const existingSet = newMap.get(taskId) ?? new Set();
       const newSet = new Set(existingSet);
@@ -129,11 +130,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   clearVerifyingReviewType: (taskId, reviewType) =>
     set((state) => {
+      console.log('[useReviewStore] clearVerifyingReviewType called:', { taskId, reviewType });
       const newMap = new Map(state.verifyingReviewTypes);
       const existingSet = newMap.get(taskId);
       if (existingSet) {
         const newSet = new Set(existingSet);
         newSet.delete(reviewType);
+        console.log('[useReviewStore] After clearing:', { remaining: Array.from(newSet) });
         if (newSet.size === 0) {
           newMap.delete(taskId);
         } else {

@@ -110,31 +110,46 @@ export interface FixActivity {
  * Fix prompts for each fix type
  */
 const FIX_PROMPTS: Record<FixType, string> = {
-  security: `You are a security fix specialist. Fix EACH vulnerability thoroughly.
+  security: `You are a security fix specialist. Your goal is to fix ONLY the specific vulnerabilities listed below.
 
-## Step 1: Research (REQUIRED)
-For EACH finding, use mcp__crawlforge__deep_research to find:
-- OWASP recommended fix for this specific vulnerability
-- Current best practices (2024-2026)
-- Code examples of proper implementation
+===========================================
+CRITICAL INSTRUCTIONS - READ FIRST
+===========================================
+1. Fix ONLY the specific issues listed in the findings - nothing else
+2. Make MINIMAL changes - do not refactor, reorganize, or "improve" code that is not flagged
+3. Preserve existing patterns, naming conventions, and code structure
+4. Do NOT add features, change APIs, or modify behavior beyond the security fix
+5. If a file is not listed in the findings, do NOT modify it
+6. Focus on the EXACT line/location specified - do not expand scope
 
-## Step 2: Fix Each Issue
+## Step 1: Read the Flagged Code
 For EACH finding:
-1. Read the affected file
-2. Apply the researched fix following OWASP guidelines
-3. Ensure proper input validation/output encoding
+1. Read the file at the specified location
+2. Understand the specific vulnerable pattern
+3. Identify the minimal change needed to fix it
 
-## Quality Criteria (ALL must be met):
-- [ ] Input is validated/sanitized before use
-- [ ] User data is escaped/encoded in output
-- [ ] No eval(), innerHTML, or dangerouslySetInnerHTML with user data
-- [ ] Authentication checks are present where needed
+## Step 2: Apply Targeted Fixes
+For EACH finding:
+1. Apply the fix at the EXACT location specified
+2. Keep changes as small as possible
+3. Do NOT change surrounding code that is working correctly
+4. Preserve comments, formatting, and structure
+
+## What to Fix (Security):
+- Input validation/sanitization gaps at the flagged location
+- XSS vulnerabilities via innerHTML, dangerouslySetInnerHTML at flagged lines
+- Authentication/authorization bypasses at flagged locations
+- Injection vulnerabilities (SQL, command, etc.) at flagged locations
+
+## What NOT to Do:
+- Do NOT refactor functions that are not flagged
+- Do NOT rename variables for "clarity"
+- Do NOT add new error handling beyond what is needed for the fix
+- Do NOT reorganize imports or code structure
+- Do NOT "improve" code that is not part of the finding
 
 ## Step 3: Verify
 Run: npm run typecheck
-Check for any remaining vulnerable patterns
-
-REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
 
 ===========================================
 CRITICAL: REQUIRED OUTPUT FORMAT
@@ -146,19 +161,19 @@ After completing ALL steps above, you MUST end your response with EXACTLY this f
 {
   "success": true or false,
   "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
-  "summary": "Brief description of changes made",
-  "researchSources": ["url1", "url2"]
+  "summary": "Brief description of specific security fixes applied",
+  "researchSources": []
 }
 </fix_json>
 
-If you could not make changes, use:
+If the code is already secure or no changes are needed:
 <fix_json>
 {
   "success": false,
   "filesModified": [],
-  "summary": "Explanation of why fixes could not be applied",
+  "summary": "Code at [file:line] is already secure because [specific reason]",
   "researchSources": [],
-  "error": "Error description"
+  "error": "No changes needed - code already meets security requirements"
 }
 </fix_json>
 
@@ -166,33 +181,50 @@ CRITICAL RULES:
 1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
-4. This output format is MANDATORY - your response will be marked as FAILED without it`,
+4. This output format is MANDATORY - your response will be marked as FAILED without it
+5. Only report success:true if you actually modified files to fix vulnerabilities`,
 
-  quality: `You are a code quality specialist. Fix EACH issue thoroughly.
+  quality: `You are a code quality specialist. Your goal is to fix ONLY the specific quality issues listed below.
 
-## Step 1: Research (REQUIRED)
-For EACH finding, use mcp__crawlforge__deep_research to find:
-- Modern TypeScript/React patterns for this issue
-- SOLID principle application examples
-- Clean code patterns
+===========================================
+CRITICAL INSTRUCTIONS - READ FIRST
+===========================================
+1. Fix ONLY the specific issues listed in the findings - nothing else
+2. Make MINIMAL changes - do not refactor, reorganize, or "improve" code that is not flagged
+3. Preserve existing patterns, naming conventions, and code structure
+4. Do NOT add features, change APIs, or modify behavior beyond the quality fix
+5. If a file is not listed in the findings, do NOT modify it
+6. Focus on the EXACT line/location specified - do not expand scope
 
-## Step 2: Fix Each Issue
+## Step 1: Read the Flagged Code
 For EACH finding:
-1. Read the affected file and understand context
-2. Apply the fix following researched best practices
-3. Ensure the fix follows project conventions
+1. Read the file at the specified location
+2. Understand the specific quality issue
+3. Identify the minimal change needed to fix it
 
-## Quality Criteria (ALL must be met):
-- [ ] Functions have single responsibility
-- [ ] Magic numbers/strings are constants
-- [ ] Error handling is explicit
-- [ ] No code duplication
+## Step 2: Apply Targeted Fixes
+For EACH finding:
+1. Apply the fix at the EXACT location specified
+2. Keep changes as small as possible
+3. Do NOT change surrounding code that is working correctly
+4. Preserve comments, formatting, and structure
+
+## What to Fix (Quality):
+- Magic numbers/strings at flagged locations -> extract to named constants
+- Missing error handling at flagged locations -> add specific error handling
+- Code duplication at flagged locations -> extract to helper function if cited multiple times
+- Type safety issues at flagged locations -> add proper types
+
+## What NOT to Do:
+- Do NOT refactor entire functions when only one line is flagged
+- Do NOT rename variables for "clarity" unless specifically flagged
+- Do NOT change code organization or file structure
+- Do NOT add new features or enhance functionality
+- Do NOT "improve" code that is not part of the finding
 
 ## Step 3: Verify
 Run: npm run lint && npm run typecheck
 
-REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
-
 ===========================================
 CRITICAL: REQUIRED OUTPUT FORMAT
 ===========================================
@@ -203,19 +235,19 @@ After completing ALL steps above, you MUST end your response with EXACTLY this f
 {
   "success": true or false,
   "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
-  "summary": "Brief description of changes made",
-  "researchSources": ["url1", "url2"]
+  "summary": "Brief description of specific quality fixes applied",
+  "researchSources": []
 }
 </fix_json>
 
-If you could not make changes, use:
+If the code already meets quality standards or no changes are needed:
 <fix_json>
 {
   "success": false,
   "filesModified": [],
-  "summary": "Explanation of why fixes could not be applied",
+  "summary": "Code at [file:line] already meets quality standards because [specific reason]",
   "researchSources": [],
-  "error": "Error description"
+  "error": "No changes needed - code already meets quality requirements"
 }
 </fix_json>
 
@@ -223,33 +255,50 @@ CRITICAL RULES:
 1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
-4. This output format is MANDATORY - your response will be marked as FAILED without it`,
+4. This output format is MANDATORY - your response will be marked as FAILED without it
+5. Only report success:true if you actually modified files to fix quality issues`,
 
-  performance: `You are a performance optimization specialist. Fix EACH issue thoroughly.
+  performance: `You are a performance optimization specialist. Your goal is to fix ONLY the specific performance issues listed below.
 
-## Step 1: Research (REQUIRED)
-For EACH finding, use mcp__crawlforge__deep_research to find:
-- React/TypeScript performance patterns for this issue
-- Memoization best practices (useMemo, useCallback, React.memo)
-- Optimization examples from 2024-2026
+===========================================
+CRITICAL INSTRUCTIONS - READ FIRST
+===========================================
+1. Fix ONLY the specific issues listed in the findings - nothing else
+2. Make MINIMAL changes - do not refactor, reorganize, or "improve" code that is not flagged
+3. Preserve existing patterns, naming conventions, and code structure
+4. Do NOT add features, change APIs, or modify behavior beyond the performance fix
+5. If a file is not listed in the findings, do NOT modify it
+6. Focus on the EXACT line/location specified - do not expand scope
 
-## Step 2: Fix Each Issue
+## Step 1: Read the Flagged Code
 For EACH finding:
-1. Read the affected file
-2. Apply the optimization following researched patterns
-3. Ensure dependencies are correctly specified for memoization
+1. Read the file at the specified location
+2. Understand the specific performance issue
+3. Identify the minimal change needed to fix it
 
-## Quality Criteria (ALL must be met):
-- [ ] Expensive computations are memoized
-- [ ] useEffect cleanup functions prevent memory leaks
-- [ ] Event listeners are properly cleaned up
-- [ ] No unnecessary re-renders
+## Step 2: Apply Targeted Fixes
+For EACH finding:
+1. Apply the fix at the EXACT location specified
+2. Keep changes as small as possible
+3. Do NOT change surrounding code that is working correctly
+4. Preserve comments, formatting, and structure
+
+## What to Fix (Performance):
+- Missing memoization at flagged locations -> add useMemo/useCallback/React.memo
+- Missing cleanup in useEffect at flagged locations -> add cleanup function
+- Expensive operations in render at flagged locations -> memoize or move to effect
+- Memory leaks at flagged locations -> add proper cleanup
+
+## What NOT to Do:
+- Do NOT add memoization to components/hooks that are not flagged
+- Do NOT refactor entire components when only one hook is flagged
+- Do NOT change component structure or hierarchy
+- Do NOT optimize code that is not specifically flagged
+- Do NOT "improve" code that is not part of the finding
 
 ## Step 3: Verify
 Run: npm run typecheck
-Review that memoization dependencies are correct
-
-REMINDER: After completing these steps, you MUST output results in <fix_json> format at the end.
+Ensure memoization dependencies are correct for any changes made.
 
 ===========================================
 CRITICAL: REQUIRED OUTPUT FORMAT
@@ -261,19 +310,19 @@ After completing ALL steps above, you MUST end your response with EXACTLY this f
 {
   "success": true or false,
   "filesModified": ["path/to/file1.ts", "path/to/file2.ts"],
-  "summary": "Brief description of changes made",
-  "researchSources": ["url1", "url2"]
+  "summary": "Brief description of specific performance fixes applied",
+  "researchSources": []
 }
 </fix_json>
 
-If you could not make changes, use:
+If the code is already optimized or no changes are needed:
 <fix_json>
 {
   "success": false,
   "filesModified": [],
-  "summary": "Explanation of why fixes could not be applied",
+  "summary": "Code at [file:line] is already optimized because [specific reason]",
   "researchSources": [],
-  "error": "Error description"
+  "error": "No changes needed - code already meets performance requirements"
 }
 </fix_json>
 
@@ -281,7 +330,8 @@ CRITICAL RULES:
 1. You MUST include the <fix_json>...</fix_json> tags - this is REQUIRED
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
-4. This output format is MANDATORY - your response will be marked as FAILED without it`,
+4. This output format is MANDATORY - your response will be marked as FAILED without it
+5. Only report success:true if you actually modified files to fix performance issues`,
 };
 
 /**
@@ -899,6 +949,7 @@ class FixAgentPoolManager {
 
   /**
    * Build the fix prompt with findings context.
+   * Includes explicit preservation instructions and structured finding details.
    */
   private buildFixPrompt(options: FixAgentOptions): string {
     const basePrompt = FIX_PROMPTS[options.fixType];
@@ -908,24 +959,70 @@ class FixAgentPoolManager {
     lines.push('');
     lines.push(`## Fix Type: ${options.fixType.toUpperCase()}`);
     lines.push('');
+
+    // Add critical scope instructions at the top
+    lines.push('## SCOPE RESTRICTION');
+    lines.push('');
+    lines.push('You MUST only fix the specific findings listed below. Do NOT:');
+    lines.push('- Modify any code that is not directly related to these findings');
+    lines.push('- Refactor, reorganize, or "improve" code beyond fixing the listed issues');
+    lines.push('- Add new features, change APIs, or modify behavior unnecessarily');
+    lines.push('- Change files that are not listed in the findings');
+    lines.push('');
+
     lines.push('## Findings to Fix');
+    lines.push('');
+    lines.push(`Total: ${String(options.findings.length)} finding(s) to address`);
     lines.push('');
 
     for (let i = 0; i < options.findings.length; i++) {
       const finding = options.findings[i]!;
       lines.push(`### Finding ${String(i + 1)}: ${finding.title}`);
-      lines.push(`- **Severity:** ${finding.severity}`);
-      lines.push(`- **Description:** ${finding.description}`);
+      lines.push('');
+      lines.push(`**Severity:** ${finding.severity}`);
+      lines.push('');
+
+      // Location information
       if (finding.file) {
-        lines.push(`- **File:** ${finding.file}`);
+        const locationStr = finding.line
+          ? `${finding.file}:${String(finding.line)}`
+          : finding.file;
+        lines.push(`**Location:** \`${locationStr}\``);
+        lines.push('');
+        lines.push('**Action Required:** Read this file to see the flagged code, then apply a minimal fix at this exact location.');
+        lines.push('');
       }
-      if (finding.line) {
-        lines.push(`- **Line:** ${String(finding.line)}`);
+
+      // What's wrong
+      lines.push('**Issue Description:**');
+      lines.push(finding.description);
+      lines.push('');
+
+      // Fix guidance based on type
+      lines.push('**Fix Approach:**');
+      if (options.fixType === 'security') {
+        lines.push('1. Read the file at the specified location');
+        lines.push('2. Identify the vulnerable pattern in the flagged code');
+        lines.push('3. Apply the minimal security fix (validation, sanitization, or encoding)');
+        lines.push('4. Do NOT change any surrounding code');
+      } else if (options.fixType === 'quality') {
+        lines.push('1. Read the file at the specified location');
+        lines.push('2. Understand the quality issue in the flagged code');
+        lines.push('3. Apply the minimal fix (extract constant, add type, etc.)');
+        lines.push('4. Do NOT refactor beyond the specific issue');
+      } else if (options.fixType === 'performance') {
+        lines.push('1. Read the file at the specified location');
+        lines.push('2. Identify the performance issue in the flagged code');
+        lines.push('3. Apply the minimal optimization (add memoization, cleanup, etc.)');
+        lines.push('4. Do NOT optimize other parts of the component');
       }
+      lines.push('');
+      lines.push('---');
       lines.push('');
     }
 
     lines.push('## Instructions');
+    lines.push('');
     lines.push(basePrompt);
 
     return lines.join('\n');
@@ -1281,45 +1378,69 @@ class FixAgentPoolManager {
         }
       }
 
-      // Step 4: Fallback - Try to synthesize result from concatenated text
-      // Claude did work but didn't output the required <fix_json> tags
+      // Step 4: Fallback - CONSERVATIVE handling when <fix_json> tags are missing
+      // This is now more strict: we default to FAILURE because proper fixes should include the required output format.
+      // The agent was explicitly instructed to output <fix_json> tags, so missing them indicates incomplete work.
+      logger.warn('=== FALLBACK SYNTHESIS WARNING ===');
+      logger.warn('Claude did not output the required <fix_json> tags. This indicates incomplete or failed fix work.');
+      logger.warn('Defaulting to FAILURE - proper fixes must include structured output.');
+
       if (concatenatedText.length > 100) {
-        const filesModified: string[] = [];
+        // Look for evidence that Edit/Write tools were actually used to modify files
+        // This is a stronger signal than just keyword matching
+        const hasEditToolUsage = /Editing\s+[\w./-]+|Writing\s+[\w./-]+|The file.*has been updated/i.test(concatenatedText);
+        const hasWriteConfirmation = /successfully|written|saved|updated.*file/i.test(concatenatedText);
 
-        // Look for file paths in the text (e.g., "Hero.tsx", "src/components/...")
-        const fileMatches = concatenatedText.match(/[\w\/.-]+\.(tsx?|jsx?|css|scss|json|md)/g);
-        if (fileMatches) {
-          // Deduplicate and filter out common false positives
-          const uniqueFiles = [...new Set(fileMatches)].filter(f =>
-            !f.startsWith('.') && // Not hidden files like .tsx
-            f.length > 3 && // Not just extensions
-            !f.includes('package.json') && // Common non-target files
-            !f.includes('tsconfig.json')
-          );
-          filesModified.push(...uniqueFiles.slice(0, 10)); // Limit to 10 files
-        }
-
-        // Determine success based on keywords indicating work was done
-        const looksSuccessful = /(?:fixed|optimized|improved|updated|applied|already\s*(?:optimized|done|implemented|in\s*place)|changes?\s*made|modified|refactored|implemented|added|removed|replaced)/i.test(concatenatedText);
+        // Check for "already optimized/secure" claims - these should report success:false
+        const claimsAlreadyDone = /already\s*(?:optimized|secure|implemented|in\s*place|done|fixed|has|using|uses)/i.test(concatenatedText);
 
         // Check for explicit failure indicators
-        const looksLikeFailed = /(?:could\s*not|unable\s*to|failed\s*to|error|cannot|can't|won't|impossible)/i.test(concatenatedText);
+        const hasFailureIndicators = /(?:could\s*not|unable\s*to|failed\s*to|error occurred|cannot|can't|won't|impossible|no\s*changes?\s*(?:needed|required|made))/i.test(concatenatedText);
 
-        // Success if looks successful and doesn't look failed
-        const synthesizedSuccess = looksSuccessful && !looksLikeFailed;
+        // Extract file paths that appear to have been modified (look for edit tool patterns)
+        const filesModified: string[] = [];
+        const editPatterns = concatenatedText.match(/(?:Editing|Writing|updated)\s+([\w\/.-]+\.(?:tsx?|jsx?|css|scss))/gi);
+        if (editPatterns) {
+          for (const match of editPatterns) {
+            const fileMatch = match.match(/([\w\/.-]+\.(?:tsx?|jsx?|css|scss))/i);
+            if (fileMatch?.[1]) {
+              filesModified.push(fileMatch[1]);
+            }
+          }
+        }
 
-        logger.warn('Using fallback result synthesis - Claude did not output <fix_json> tags');
-        logger.warn(`Synthesized success: ${String(synthesizedSuccess)}, files found: ${String(filesModified.length)}`);
+        // CONSERVATIVE SUCCESS CRITERIA:
+        // Only synthesize success if:
+        // 1. There's evidence of actual file edits (Edit/Write tool usage)
+        // 2. AND there are no failure indicators
+        // 3. AND it's not just claiming "already done" without making changes
+        const hasActualEdits = (hasEditToolUsage || hasWriteConfirmation) && filesModified.length > 0;
+        const synthesizedSuccess = hasActualEdits && !hasFailureIndicators && !claimsAlreadyDone;
 
+        logger.warn(`Fallback analysis:`);
+        logger.warn(`  - Edit tool usage detected: ${String(hasEditToolUsage)}`);
+        logger.warn(`  - Write confirmation found: ${String(hasWriteConfirmation)}`);
+        logger.warn(`  - Files modified detected: ${String(filesModified.length)}`);
+        logger.warn(`  - Claims already done: ${String(claimsAlreadyDone)}`);
+        logger.warn(`  - Has failure indicators: ${String(hasFailureIndicators)}`);
+        logger.warn(`  - Synthesized success: ${String(synthesizedSuccess)}`);
+
+        // Even if we detect edits, mark as failure because the agent didn't follow instructions
+        // This ensures proper verification happens
         const result: FixOutput = {
           success: synthesizedSuccess,
-          filesModified,
-          summary: concatenatedText.substring(0, 500) + (concatenatedText.length > 500 ? '...' : ''),
+          filesModified: synthesizedSuccess ? filesModified : [],
+          summary: synthesizedSuccess
+            ? `[FALLBACK] Fix applied but agent did not output required format. Files: ${filesModified.join(', ')}`
+            : `[FALLBACK] Fix incomplete - agent did not output required <fix_json> format`,
           researchSources: [],
         };
+
+        // Only add error property if not successful
         if (!synthesizedSuccess) {
-          result.error = 'Claude did not complete the fix process or output required format';
+          result.error = 'Agent did not complete fix process - missing required <fix_json> output tags';
         }
+
         return result;
       }
 

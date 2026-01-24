@@ -111,6 +111,23 @@ export function useFixSubscription(
             setFixFailed(taskId, fixType, data.summary ?? 'Fix failed');
             // Clear verifying state when fix fails
             clearVerifyingReviewType(taskId, fixType as ReviewType);
+          } else if (data.status === 'VERIFIED_SUCCESS' || data.status === 'VERIFIED_FAILED') {
+            // Handle verification completion via progress event
+            // The fix:verified event handler also handles this, but we process here too
+            // to ensure state is updated regardless of event ordering
+            if (data.verification) {
+              const v = data.verification;
+              setFixVerified(taskId, fixType, {
+                preFixScore: v.preFixScore,
+                postFixScore: v.postFixScore,
+                scoreImprovement: v.scoreImprovement,
+                remainingFindingsCount: v.remainingFindings.length,
+                passed: v.passed,
+                summary: v.summary,
+              }, data.canRetry ?? false);
+            }
+            // Clear verifying state when verification completes
+            clearVerifyingReviewType(taskId, fixType as ReviewType);
           }
         }
       });
@@ -121,8 +138,16 @@ export function useFixSubscription(
     for (const fixType of FIX_TYPES) {
       const verifyChannel = `fix:verified:${taskId}:${fixType}` as AllEventChannels;
       const unsubscribe = window.electron.on(verifyChannel, (...args: unknown[]) => {
-        const data = args[0] as (FixVerificationResult & { canRetry: boolean }) | undefined;
+        console.log('[useFix] fix:verified event received:', { taskId, fixType, args });
+        // The event payload has verification data nested in a 'verification' field
+        const payload = args[0] as {
+          verification?: FixVerificationResult;
+          canRetry?: boolean;
+        } | undefined;
+        const data = payload?.verification;
+        const canRetry = payload?.canRetry ?? false;
         if (data) {
+          console.log('[useFix] Calling setFixVerified and clearVerifyingReviewType');
           setFixVerified(taskId, fixType, {
             preFixScore: data.preFixScore,
             postFixScore: data.postFixScore,
@@ -130,9 +155,11 @@ export function useFixSubscription(
             remainingFindingsCount: data.remainingFindings.length,
             passed: data.passed,
             summary: data.summary,
-          }, data.canRetry);
+          }, canRetry);
           // Clear verifying state when verification completes
           clearVerifyingReviewType(taskId, fixType as ReviewType);
+        } else {
+          console.warn('[useFix] fix:verified event missing verification data:', payload);
         }
       });
       unsubscribers.push(unsubscribe);

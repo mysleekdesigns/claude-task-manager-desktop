@@ -448,24 +448,36 @@ class FixService {
       status: 'VERIFYING' as FixStatus,
       phase: 'verify',
       currentActivity: {
-        message: `${fixType}: Running verification review...`,
+        message: `${fixType}: Running targeted verification review...`,
         timestamp: Date.now(),
       },
     });
 
-    // Run a single review of the same type
-    // Note: We directly start the review agent for just this review type
+    // Get original findings from TaskFix for targeted verification
+    const originalFindings = JSON.parse(taskFix.findings || '[]') as ReviewFinding[];
+
+    // Build verification-specific task description with original findings
+    const verificationContext = this.buildVerificationPrompt(
+      fixType,
+      originalFindings,
+      task.description || task.title
+    );
+
+    // Run a single review of the same type with targeted verification context
     await reviewAgentPool.startReviewAgent(
       {
         taskId,
         reviewType,
         projectPath: task.project.targetPath,
-        taskDescription: `Verification review for ${fixType} fix: ${task.description || task.title}`,
+        taskDescription: verificationContext,
       },
       this.mainWindow
     );
 
-    logger.info(`Verification review started for ${fixType} fix on task ${taskId}`);
+    logger.info(
+      `Targeted verification review started for ${fixType} fix on task ${taskId} ` +
+      `(checking ${String(originalFindings.length)} original findings)`
+    );
   }
 
   /**
@@ -489,6 +501,10 @@ class FixService {
     postFixScore: number,
     postFixFindings: ReviewFinding[]
   ): Promise<void> {
+    logger.info(
+      `handleVerificationComplete called for ${fixType} on task ${taskId} with score ${String(postFixScore)}`
+    );
+
     const prisma = databaseService.getClient();
 
     // Get the TaskFix record with pre-fix score
@@ -547,6 +563,10 @@ class FixService {
         passed,
       };
 
+      logger.info(
+        `Emitting fix:verified and fix:progress events for ${fixType} on task ${taskId}`
+      );
+
       this.mainWindow.webContents.send(`fix:verified:${taskId}:${fixType}`, {
         taskId,
         fixType,
@@ -569,6 +589,11 @@ class FixService {
           timestamp: Date.now(),
         },
       });
+    } else {
+      logger.error(
+        `Cannot emit verification events for ${fixType} on task ${taskId}: ` +
+        `mainWindow is ${this.mainWindow ? 'destroyed' : 'null'}`
+      );
     }
   }
 
@@ -675,6 +700,116 @@ class FixService {
       summary: taskFix.verificationSummary ?? '',
       passed,
     };
+  }
+
+  /**
+   * Build a targeted verification prompt that instructs the review agent
+   * to specifically check if the original findings were fixed.
+   *
+   * @param fixType - Type of fix being verified
+   * @param originalFindings - Array of original findings to verify
+   * @param taskContext - Original task description for context
+   * @returns Verification prompt string
+   */
+  private buildVerificationPrompt(
+    fixType: FixType,
+    originalFindings: ReviewFinding[],
+    taskContext: string
+  ): string {
+    // Format each finding for the prompt
+    const findingsText = originalFindings.map((finding, index) => {
+      const lines = [
+        `${String(index + 1)}. [${finding.severity.toUpperCase()}] ${finding.title}`,
+        `   Description: ${finding.description}`,
+      ];
+      if (finding.file) {
+        lines.push(`   Location: ${finding.file}${finding.line ? `:${String(finding.line)}` : ''}`);
+      }
+      return lines.join('\n');
+    }).join('\n\n');
+
+    return `[TARGETED VERIFICATION REVIEW]
+
+This is a TARGETED VERIFICATION review, NOT a general code review.
+Your job is to verify whether the following ${String(originalFindings.length)} specific issue(s) have been fixed.
+
+=============================================================================
+ORIGINAL FINDINGS TO VERIFY (${fixType.toUpperCase()} issues)
+=============================================================================
+
+${findingsText || 'No specific findings recorded.'}
+
+=============================================================================
+VERIFICATION INSTRUCTIONS
+=============================================================================
+
+1. CHECK EACH ORIGINAL FINDING ABOVE
+   - Go to the file/location mentioned
+   - Determine if the specific issue is FIXED or STILL PRESENT
+   - Do NOT do a general code review - focus ONLY on these specific issues
+
+2. FOR EACH FINDING, DETERMINE:
+   - FIXED: The specific issue described is no longer present
+   - STILL PRESENT: The issue still exists (include in findings array)
+   - PARTIALLY FIXED: The issue is reduced but not eliminated (include with updated description)
+
+3. CHECK FOR REGRESSION
+   - Did the fix introduce any OBVIOUS new issues in the same files?
+   - Only report critical new issues, don't do a full review
+
+4. CALCULATE SCORE BASED ON FIX SUCCESS RATE:
+   - Score = (number of FIXED issues / total original issues) * 100
+   - If 3 of 4 issues fixed: score = 75
+   - If all issues fixed: score = 100
+   - If no issues fixed: score = 0
+   - Subtract 10 points for each critical new issue introduced
+
+TASK CONTEXT: ${taskContext}
+
+=============================================================================
+REQUIRED OUTPUT FORMAT
+=============================================================================
+
+After verification, output your results in this EXACT format:
+
+<review_json>
+{
+  "score": <0-100 based on fix success rate>,
+  "findings": [
+    <ONLY include findings that are STILL PRESENT or NEW issues>
+  ]
+}
+</review_json>
+
+Example if 1 of 3 issues is still present:
+<review_json>
+{
+  "score": 67,
+  "findings": [
+    {
+      "severity": "high",
+      "title": "SQL Injection Risk",
+      "description": "STILL PRESENT: User input is still concatenated directly into SQL query",
+      "file": "src/db/queries.ts",
+      "line": 42
+    }
+  ]
+}
+</review_json>
+
+Example if all issues are fixed:
+<review_json>
+{
+  "score": 100,
+  "findings": []
+}
+</review_json>
+
+CRITICAL:
+- You MUST include the <review_json>...</review_json> tags
+- Only include findings that are STILL PRESENT or are NEW issues
+- Score should reflect fix success rate, not a general code quality assessment
+- This is verification of SPECIFIC fixes, not a general review`;
   }
 }
 

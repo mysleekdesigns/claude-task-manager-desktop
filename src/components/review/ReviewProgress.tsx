@@ -130,7 +130,9 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
               const fixStatus = fixHook.getFixStatus(fixType);
               const isInProgress = fixStatus?.status === 'IN_PROGRESS';
               const isCompleted = fixStatus?.status === 'COMPLETED';
-              const isCyan = isInProgress || isCompleted;
+              const isVerified = fixStatus?.status === 'VERIFIED_SUCCESS' || fixStatus?.status === 'VERIFIED_FAILED';
+              // Show cyan styling when in progress, completed, or verified
+              const isCyan = isInProgress || isCompleted || isVerified;
               const activityMessage = fixStatus?.currentActivity;
 
               return (
@@ -157,22 +159,47 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
             })}
           </div>
 
-          {/* Fix progress display - show when any fix is in progress */}
-          {fixHook.hasActiveFix() && (() => {
+          {/* Fix progress display - show when any fix is active or recently verified */}
+          {(() => {
             const activeFixes = fixHook.getTaskFixes();
             const inProgressFix = activeFixes.find((f) => f.state.status === 'IN_PROGRESS');
-            const progressMessage = inProgressFix?.state.currentActivity;
-
-            if (!progressMessage) return null;
-
-            return (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
-                <span className="font-mono truncate" title={progressMessage}>
-                  {progressMessage}
-                </span>
-              </div>
+            const verifiedFix = activeFixes.find((f) =>
+              f.state.status === 'VERIFIED_SUCCESS' || f.state.status === 'VERIFIED_FAILED'
             );
+
+            // Show in-progress message with pulsing indicator
+            if (inProgressFix?.state.currentActivity) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+                  <span className="font-mono truncate" title={inProgressFix.state.currentActivity}>
+                    {inProgressFix.state.currentActivity}
+                  </span>
+                </div>
+              );
+            }
+
+            // Show verification result after completion
+            if (verifiedFix?.state.verification) {
+              const v = verifiedFix.state.verification;
+              const isSuccess = v.passed;
+              return (
+                <div className={cn(
+                  'flex items-center gap-2 text-xs',
+                  isSuccess ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+                )}>
+                  <span className={cn(
+                    'inline-block w-2 h-2 rounded-full flex-shrink-0',
+                    isSuccess ? 'bg-green-500' : 'bg-amber-500'
+                  )} />
+                  <span className="font-mono truncate" title={v.summary}>
+                    {v.summary}
+                  </span>
+                </div>
+              );
+            }
+
+            return null;
           })()}
         </div>
       )}

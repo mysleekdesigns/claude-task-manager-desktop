@@ -9,7 +9,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Shield, Code, Zap, FileText, Search } from 'lucide-react';
 import { useReviewStore } from '@/store/useReviewStore';
-import type { ReviewType, ReviewProgressResponse, ReviewStatus } from '@/types/ipc';
+import { useFixStore } from '@/store/useFixStore';
+import type { ReviewType, ReviewProgressResponse, ReviewStatus, FixType, FixVerificationResult } from '@/types/ipc';
 
 // ============================================================================
 // Constants
@@ -67,7 +68,10 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   const [progress, setProgress] = useState<ReviewProgressEvent | null>(null);
   const [currentMessage, setCurrentMessage] = useState<string>('Starting review...');
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const { isReviewTypeVerifying } = useReviewStore();
+  // Subscribe to verifyingReviewTypes state to trigger re-renders when it changes
+  // The isReviewTypeVerifying method alone doesn't cause re-renders because it uses get()
+  const { isReviewTypeVerifying, verifyingReviewTypes, clearVerifyingReviewType } = useReviewStore();
+  const { setFixVerified } = useFixStore();
 
   const handleProgress = useCallback((data: ReviewProgressEvent) => {
     // Debounce rapid updates
@@ -97,6 +101,8 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   }, []);
 
   useEffect(() => {
+    const disposers: Array<() => void> = [];
+
     // Subscribe to review progress events
     const channel = `review:progress:${taskId}` as const;
     const dispose = window.electron.on(channel, (...args: unknown[]) => {
@@ -105,6 +111,94 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
         handleProgress(data);
       }
     });
+    disposers.push(dispose);
+
+    // Subscribe to fix:verified and fix:progress events for each fixable review type
+    // This ensures the message updates and state is cleared when verification completes
+    const fixableReviewTypes: ReviewType[] = ['security', 'quality', 'performance'];
+    for (const reviewType of fixableReviewTypes) {
+      // Subscribe to fix:verified events
+      const verifyChannel = `fix:verified:${taskId}:${reviewType}` as const;
+      const disposeVerify = window.electron.on(verifyChannel, (...args: unknown[]) => {
+        // The fix:verified event payload has verification data nested in a verification object
+        const payload = args[0] as {
+          verification?: FixVerificationResult;
+          canRetry?: boolean;
+        } | undefined;
+        console.log('[ReviewOutputPreview] fix:verified event received:', { reviewType, payload });
+        const data = payload?.verification;
+        if (data) {
+          // Update the message to show verification result
+          const resultMessage = data.passed
+            ? `${REVIEW_LABELS[reviewType]} verification passed`
+            : `${REVIEW_LABELS[reviewType]} verification: ${data.summary ?? 'Issues remain'}`;
+          console.log('[ReviewOutputPreview] Setting currentMessage to:', resultMessage);
+          setCurrentMessage(resultMessage);
+
+          // Clear the verifying state for this review type
+          console.log('[ReviewOutputPreview] Clearing verifying state for:', reviewType);
+          clearVerifyingReviewType(taskId, reviewType);
+
+          // Update the fix store with the verification result
+          setFixVerified(taskId, reviewType as FixType, {
+            preFixScore: data.preFixScore,
+            postFixScore: data.postFixScore,
+            scoreImprovement: data.scoreImprovement,
+            remainingFindingsCount: data.remainingFindings.length,
+            passed: data.passed,
+            summary: data.summary,
+          }, payload?.canRetry ?? false);
+        } else {
+          console.warn('[ReviewOutputPreview] fix:verified event missing verification data:', payload);
+        }
+      });
+      disposers.push(disposeVerify);
+
+      // Subscribe to fix:progress events to catch VERIFIED_SUCCESS/VERIFIED_FAILED status
+      const progressChannel = `fix:progress:${taskId}:${reviewType}` as const;
+      const disposeProgress = window.electron.on(progressChannel, (...args: unknown[]) => {
+        const data = args[0] as {
+          status?: string;
+          verification?: FixVerificationResult;
+          canRetry?: boolean;
+          currentActivity?: { message?: string };
+        } | undefined;
+        console.log('[ReviewOutputPreview] fix:progress event received:', { reviewType, status: data?.status });
+
+        if (data?.status === 'VERIFIED_SUCCESS' || data?.status === 'VERIFIED_FAILED') {
+          // Verification completed via progress event - clear verifying state
+          console.log('[ReviewOutputPreview] Clearing verifying state via progress event for:', reviewType);
+          clearVerifyingReviewType(taskId, reviewType);
+
+          // Update message from current activity if available
+          if (data.currentActivity?.message) {
+            setCurrentMessage(data.currentActivity.message);
+          }
+
+          // Update fix store if verification data is available
+          if (data.verification) {
+            const v = data.verification;
+            setFixVerified(taskId, reviewType as FixType, {
+              preFixScore: v.preFixScore,
+              postFixScore: v.postFixScore,
+              scoreImprovement: v.scoreImprovement,
+              remainingFindingsCount: v.remainingFindings.length,
+              passed: v.passed,
+              summary: v.summary,
+            }, data.canRetry ?? false);
+          }
+        } else if (data?.status === 'VERIFYING') {
+          // Verification started - mark as verifying
+          console.log('[ReviewOutputPreview] Setting verifying state via progress event for:', reviewType);
+          // Note: We don't set verifying state here as it's handled by the main useFix hook
+          // But we can update the message
+          if (data.currentActivity?.message) {
+            setCurrentMessage(data.currentActivity.message);
+          }
+        }
+      });
+      disposers.push(disposeProgress);
+    }
 
     // Fetch initial progress
     window.electron
@@ -126,12 +220,33 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
       });
 
     return () => {
-      dispose();
+      for (const disposeFunc of disposers) {
+        disposeFunc();
+      }
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [taskId, handleProgress]);
+  }, [taskId, handleProgress, clearVerifyingReviewType, setFixVerified]);
+
+  // Update message when verification state changes
+  // This effect runs when verifyingReviewTypes changes (when setVerifyingReviewType/clearVerifyingReviewType is called)
+  useEffect(() => {
+    const verifyingSet = verifyingReviewTypes.get(taskId);
+    console.log('[ReviewOutputPreview] verifyingReviewTypes changed:', {
+      taskId,
+      verifyingSet: verifyingSet ? Array.from(verifyingSet) : null,
+      size: verifyingSet?.size ?? 0,
+    });
+    if (verifyingSet && verifyingSet.size > 0) {
+      // Get the first verifying review type and show its message
+      const verifyingType = verifyingSet.values().next().value;
+      if (verifyingType) {
+        setCurrentMessage(`Running ${REVIEW_LABELS[verifyingType]} verification review...`);
+      }
+    }
+    // Note: When verification completes, the fix:verified event handler updates the message
+  }, [taskId, verifyingReviewTypes]);
 
   // Deduplicate reviews by reviewType to prevent duplicate icons during re-review
   // When a verification review runs for a single category, we want to show only one icon

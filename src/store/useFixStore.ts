@@ -287,9 +287,13 @@ export const useFixStore = create<FixState>((set, get) => ({
 
   setFixVerified: (taskId, fixType, verification, canRetry) =>
     set((state) => {
+      console.log('[useFixStore] setFixVerified called:', { taskId, fixType, verification, canRetry });
       const key = createFixKey(taskId, fixType);
       const existing = state.activeFixes.get(key);
-      if (!existing) return state;
+      if (!existing) {
+        console.warn('[useFixStore] setFixVerified: No existing fix found for key:', key);
+        return state;
+      }
 
       const newMap = new Map(state.activeFixes);
       newMap.set(key, {
