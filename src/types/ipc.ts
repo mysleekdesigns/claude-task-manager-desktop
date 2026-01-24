@@ -1412,6 +1412,13 @@ export interface IpcChannels {
   'claude:pauseTask': (data: ClaudeCodePauseInput) => Promise<void>;
   'claude:getTaskStatus': (data: ClaudeCodeStatusInput) => Promise<ClaudeCodeStatusResponse>;
   'claude:getActiveTask': (data: ClaudeCodeStatusInput) => Promise<ClaudeCodeActiveTaskResponse>;
+
+  // AI Review Workflow channels
+  'review:start': (data: StartReviewInput) => Promise<void>;
+  'review:getProgress': (taskId: string) => Promise<ReviewProgressResponse | null>;
+  'review:cancel': (taskId: string) => Promise<void>;
+  'review:getHistory': (taskId: string) => Promise<TaskHistoryResponse | null>;
+  'review:getFindings': (data: { taskId: string; reviewType: ReviewType }) => Promise<ReviewFinding[] | null>;
 }
 
 /**
@@ -1486,6 +1493,14 @@ export type DynamicClaudeEventChannel =
   | `claude:failed:${string}`
   | `terminal:status:${string}`;
 
+/**
+ * Dynamic review event channels
+ * These use template literal types to support task-specific review events
+ */
+export type DynamicReviewEventChannel =
+  | `review:progress:${string}`
+  | `review:complete:${string}`;
+
 // ============================================================================
 // Claude Status Display Types
 // ============================================================================
@@ -1531,7 +1546,7 @@ export interface ClaudeStatusMessage {
 /**
  * Combined event channels (static + dynamic)
  */
-export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel | DynamicClaudeEventChannel;
+export type AllEventChannels = keyof IpcEventChannels | DynamicTerminalEventChannel | DynamicClaudeEventChannel | DynamicReviewEventChannel;
 
 /**
  * Update information for auto-updater events
@@ -1550,6 +1565,98 @@ export interface UpdateProgress {
   bytesPerSecond: number;
   total: number;
   transferred: number;
+}
+
+// ============================================================================
+// AI Review Types (Review Workflow)
+// ============================================================================
+
+/**
+ * Type of AI review to perform
+ */
+export type ReviewType = 'security' | 'quality' | 'testing' | 'performance' | 'documentation' | 'research';
+
+/**
+ * Status of an individual review
+ */
+export type ReviewStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+/**
+ * Progress response for an ongoing review workflow
+ */
+export interface ReviewProgressResponse {
+  taskId: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  reviews: Array<{
+    reviewType: ReviewType;
+    status: ReviewStatus;
+    score?: number;
+    summary?: string;
+    findingsCount: number;
+  }>;
+  overallScore?: number;
+}
+
+/**
+ * Activity type in task history
+ */
+export type ActivityType = 'tool_use' | 'text' | 'thinking' | 'error' | 'decision';
+
+/**
+ * Individual activity entry in task history
+ */
+export interface TaskActivity {
+  id: string;
+  type: ActivityType;
+  toolName?: string;
+  summary: string;
+  details?: Record<string, unknown>;
+  duration?: number;
+  createdAt: string;
+}
+
+/**
+ * Summary of task work history
+ */
+export interface TaskHistorySummary {
+  summary: string;
+  keyChanges: string[];
+  filesChanged: number;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
+/**
+ * Complete task history response
+ */
+export interface TaskHistoryResponse {
+  taskId: string;
+  activities: TaskActivity[];
+  summary?: TaskHistorySummary;
+}
+
+/**
+ * Severity level for review findings
+ */
+export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * Individual finding from a code review
+ */
+export interface ReviewFinding {
+  severity: FindingSeverity;
+  title: string;
+  description: string;
+  file?: string;
+  line?: number;
+}
+
+/**
+ * Input for starting a review workflow
+ */
+export interface StartReviewInput {
+  taskId: string;
+  reviewTypes?: ReviewType[];
 }
 
 /**
@@ -1710,6 +1817,12 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'claude:pauseTask',
   'claude:getTaskStatus',
   'claude:getActiveTask',
+  // AI Review Workflow
+  'review:start',
+  'review:getProgress',
+  'review:cancel',
+  'review:getHistory',
+  'review:getFindings',
 ] as const;
 
 /**

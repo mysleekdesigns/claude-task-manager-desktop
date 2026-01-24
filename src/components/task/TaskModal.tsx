@@ -31,6 +31,10 @@ import { SubtasksTab } from './tabs/SubtasksTab';
 import { LogsTab } from './tabs/LogsTab';
 import { FilesTab } from './tabs/FilesTab';
 import { ClaudeTab } from './tabs/ClaudeTab';
+import { ActivityTab } from './tabs/ActivityTab';
+import { ReviewProgress } from '@/components/review/ReviewProgress';
+import { ReviewResults } from '@/components/review/ReviewResults';
+import { useReviewProgress } from '@/hooks/useReview';
 
 import type { Task, TaskStatus } from '@/types/ipc';
 
@@ -56,6 +60,9 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
   // Update task mutation
   const { mutate: updateTask, loading: updating } = useIPCMutation('tasks:update');
+
+  // Get review progress for the Reviews tab
+  const reviewProgress = useReviewProgress(isOpen && taskId ? taskId : null);
 
   // Update title when task loads
   useEffect(() => {
@@ -220,7 +227,7 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="subtasks">
               Subtasks
@@ -252,6 +259,13 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               )}
             </TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="reviews" className="gap-1">
+              Reviews
+              {reviewProgress && reviewProgress.status === 'in_progress' && (
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto">
@@ -277,6 +291,23 @@ export function TaskModal({ taskId, isOpen, onClose, onUpdate }: TaskModalProps)
 
             <TabsContent value="claude" className="mt-0">
               <ClaudeTab task={task} onStatusChange={refetch} />
+            </TabsContent>
+
+            <TabsContent value="activity" className="mt-0">
+              <ActivityTab taskId={taskId} />
+            </TabsContent>
+
+            <TabsContent value="reviews" className="mt-0">
+              {reviewProgress ? (
+                <div className="space-y-6 p-4">
+                  <ReviewProgress progress={reviewProgress} />
+                  <ReviewResults taskId={taskId} />
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  No reviews yet. Reviews will appear here after running the AI review workflow.
+                </div>
+              )}
             </TabsContent>
           </div>
         </Tabs>

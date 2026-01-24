@@ -169,6 +169,12 @@ const VALID_INVOKE_CHANNELS = [
   'claude:pauseTask',
   'claude:getTaskStatus',
   'claude:getActiveTask',
+  // AI Review Workflow
+  'review:start',
+  'review:getProgress',
+  'review:cancel',
+  'review:getHistory',
+  'review:getFindings',
 ] as const;
 
 /**
@@ -194,7 +200,9 @@ type ValidEventChannel = (typeof VALID_EVENT_CHANNELS)[number];
 type DynamicEventChannel =
   | `terminal:output:${string}`
   | `terminal:exit:${string}`
-  | `terminal:status:${string}`;
+  | `terminal:status:${string}`
+  | `review:progress:${string}`
+  | `review:complete:${string}`;
 
 /**
  * All valid event channels (static + dynamic)
@@ -278,6 +286,14 @@ function isValidEventChannel(channel: string): channel is AllValidEventChannels 
     channel.startsWith('terminal:output:') ||
     channel.startsWith('terminal:exit:') ||
     channel.startsWith('terminal:status:')
+  ) {
+    return true;
+  }
+
+  // Check dynamic review channels
+  if (
+    channel.startsWith('review:progress:') ||
+    channel.startsWith('review:complete:')
   ) {
     return true;
   }

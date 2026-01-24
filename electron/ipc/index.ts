@@ -23,6 +23,7 @@ import { registerIdeaHandlers, unregisterIdeaHandlers } from './ideas.js';
 import { registerChangelogHandlers, unregisterChangelogHandlers } from './changelog.js';
 import { registerSettingsHandlers, unregisterSettingsHandlers } from './settings.js';
 import { registerClaudeCodeHandlers, unregisterClaudeCodeHandlers } from './claude-code.js';
+import { registerReviewHandlers, unregisterReviewHandlers } from './review.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -72,6 +73,7 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerChangelogHandlers();
     registerSettingsHandlers();
     registerClaudeCodeHandlers(mainWindow);
+    registerReviewHandlers(mainWindow);
 
     isRegistered = true;
     logger.info('IPC handlers registered successfully.');
@@ -113,6 +115,7 @@ export function unregisterIPCHandlers(): void {
     unregisterChangelogHandlers();
     unregisterSettingsHandlers();
     unregisterClaudeCodeHandlers();
+    unregisterReviewHandlers();
 
     isRegistered = false;
     logger.info('IPC handlers unregistered successfully.');

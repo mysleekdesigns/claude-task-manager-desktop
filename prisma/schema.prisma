@@ -134,6 +134,9 @@ model Task {
   files          TaskFile[]
   terminals      Terminal[]
   changelogEntry ChangelogEntry?
+  activities     TaskActivity[]
+  reviews        TaskReview[]
+  taskSummary    TaskSummary?
 
   @@index([projectId])
   @@index([status])
@@ -426,4 +429,59 @@ model ChangelogEntry {
   @@index([type])
   @@index([version])
   @@index([createdAt])
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  type      String   // tool_use, text, thinking, error, decision
+  toolName  String?  // Read, Write, Bash, etc.
+  summary   String   // Human-readable description
+  details   String?  // JSON with full details
+  duration  Int?     // milliseconds
+  createdAt DateTime @default(now())
+
+  // Relations
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model TaskReview {
+  id          String    @id @default(cuid())
+  taskId      String
+  reviewType  String    // security, quality, testing, performance, documentation
+  status      String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED
+  score       Int?      // 0-100
+  summary     String?
+  findings    String    @default("[]") // JSON array
+  terminalId  String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, reviewType])
+  @@index([taskId])
+  @@index([status])
+}
+
+model TaskSummary {
+  id           String   @id @default(cuid())
+  taskId       String   @unique
+  summary      String
+  keyChanges   String   @default("[]") // JSON array
+  filesChanged Int      @default(0)
+  linesAdded   Int      @default(0)
+  linesRemoved Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }

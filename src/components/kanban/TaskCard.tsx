@@ -23,9 +23,11 @@ import { Button } from '@/components/ui/button';
 import { Clock, MoreVertical, Pencil, Trash2, Terminal } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
 import { TaskCardStartButton } from './TaskCardStartButton';
+import { TaskCardReviewButton } from './TaskCardReviewButton';
 import { ClaudeStatusBadge } from '@/components/task/ClaudeStatusBadge';
 import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus';
 import { TaskOutputPreview } from './TaskOutputPreview';
+import { ReviewOutputPreview } from './ReviewOutputPreview';
 import { PhaseBadge } from './PhaseBadge';
 
 // ============================================================================
@@ -189,6 +191,11 @@ function TaskCardComponent({
           />
         )}
 
+        {/* AI Review Progress Preview - shown when task is in AI_REVIEW status */}
+        {task.status === 'AI_REVIEW' && (
+          <ReviewOutputPreview taskId={task.id} />
+        )}
+
         {/* Bottom Row: Time, Start Button, Menu */}
         <div className="flex items-center justify-between gap-2 pt-1">
           {/* Clock Icon + Relative Time */}
@@ -216,6 +223,12 @@ function TaskCardComponent({
 
             {/* Claude Code Start Button - shows Start/Pause/Resume based on status */}
             <TaskCardStartButton
+              task={task}
+              refetchTasks={refetchTasks}
+            />
+
+            {/* AI Review Button - shows when task work is complete */}
+            <TaskCardReviewButton
               task={task}
               refetchTasks={refetchTasks}
             />

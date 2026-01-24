@@ -13,6 +13,7 @@ import { databaseService } from './database.js';
 import { claudeHooksService } from './claude-hooks.js';
 import { trayService } from './tray.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
+import { activityLogger, type ActivityEntry } from './activity-logger.js';
 import type { BrowserWindow } from 'electron';
 
 const logger = createIPCLogger('ClaudeCode');
@@ -787,6 +788,92 @@ class StreamJsonParser {
   }
 }
 
+// ============================================================================
+// Activity Logging Helper Functions
+// ============================================================================
+
+/**
+ * Generate a human-readable summary for a tool use activity.
+ *
+ * @param toolName - Name of the tool being used
+ * @param input - Tool input parameters
+ * @returns Human-readable summary string
+ */
+function generateToolSummary(toolName: string, input: unknown): string {
+  const params = input as Record<string, unknown> | null | undefined;
+  switch (toolName) {
+    case 'Read': {
+      const filePath = params?.['file_path'] as string | undefined;
+      const fileName = filePath?.split('/').pop() || 'file';
+      return `Read ${fileName}`;
+    }
+    case 'Write': {
+      const filePath = params?.['file_path'] as string | undefined;
+      const fileName = filePath?.split('/').pop() || 'file';
+      return `Write ${fileName}`;
+    }
+    case 'Edit': {
+      const filePath = params?.['file_path'] as string | undefined;
+      const fileName = filePath?.split('/').pop() || 'file';
+      return `Edit ${fileName}`;
+    }
+    case 'Bash': {
+      const command = params?.['command'] as string | undefined;
+      if (command) {
+        const truncated = command.length > 50 ? command.slice(0, 50) + '...' : command;
+        return `Run: ${truncated}`;
+      }
+      return 'Run command';
+    }
+    case 'Glob': {
+      const pattern = params?.['pattern'] as string | undefined;
+      return `Search for ${pattern || 'files'}`;
+    }
+    case 'Grep': {
+      const pattern = params?.['pattern'] as string | undefined;
+      return `Search for "${pattern || 'pattern'}" in code`;
+    }
+    case 'Task': {
+      const description = params?.['description'] as string | undefined;
+      if (description) {
+        const truncated = description.length > 50 ? description.slice(0, 50) + '...' : description;
+        return `Spawn agent: ${truncated}`;
+      }
+      return 'Spawn agent';
+    }
+    case 'WebFetch': {
+      const url = params?.['url'] as string | undefined;
+      if (url) {
+        try {
+          const hostname = new URL(url).hostname;
+          return `Fetch ${hostname}`;
+        } catch {
+          return 'Fetch web content';
+        }
+      }
+      return 'Fetch web content';
+    }
+    case 'WebSearch': {
+      const query = params?.['query'] as string | undefined;
+      if (query) {
+        const truncated = query.length > 40 ? query.slice(0, 40) + '...' : query;
+        return `Search: "${truncated}"`;
+      }
+      return 'Search the web';
+    }
+    case 'NotebookEdit':
+      return 'Edit notebook';
+    case 'TodoWrite':
+      return 'Update task list';
+    case 'Skill': {
+      const skill = params?.['skill'] as string | undefined;
+      return skill ? `Run skill: ${skill}` : 'Run skill';
+    }
+    default:
+      return `Use ${toolName}`;
+  }
+}
+
 /**
  * Options for starting a Claude Code task
  */
@@ -1072,6 +1159,9 @@ class ClaudeCodeService {
             if (status.type === 'awaiting_input') {
               void this.updateTaskAwaitingInput(options.taskId, status.message);
             }
+
+            // Record activity for AI review workflow
+            this.recordActivityFromStatus(options.taskId, status);
           }
         });
 
@@ -1669,6 +1759,15 @@ class ClaudeCodeService {
       return;
     }
 
+    // Flush any pending activities to the database before completing the task
+    try {
+      await activityLogger.flushActivities(taskId);
+      logger.info(`Flushed activities for completed task ${taskId}`);
+    } catch (flushError) {
+      // Log but don't fail the exit handling
+      logger.error(`Failed to flush activities for task ${taskId}:`, flushError);
+    }
+
     try {
       const prisma = databaseService.getClient();
 
@@ -1755,6 +1854,104 @@ class ClaudeCodeService {
         `[ClaudeCodeService] Error handling task exit for ${taskId}:`,
         error
       );
+    }
+  }
+
+  /**
+   * Record an activity from a status message for AI review workflows.
+   *
+   * Maps status message types to activity entries and records them via the
+   * activity logger. This captures tool usage, text responses, and errors
+   * for later review.
+   *
+   * @param taskId - The task ID to record activity for
+   * @param status - The status message to convert to an activity
+   */
+  private recordActivityFromStatus(taskId: string, status: ClaudeStatusMessage): void {
+    let activity: ActivityEntry | null = null;
+
+    switch (status.type) {
+      case 'tool_start': {
+        // For tool_start, we need to extract tool details from the managed process
+        const managedProcess = this.activeProcesses.get(taskId);
+        const toolInfo = managedProcess?.parser['_lastToolUseFallback'] as
+          | { name: string; input?: Record<string, unknown> }
+          | null
+          | undefined;
+        const toolInput = toolInfo?.input;
+
+        const toolStartActivity: ActivityEntry = {
+          type: 'tool_use',
+          summary: status.tool
+            ? generateToolSummary(status.tool, toolInput)
+            : status.message,
+          timestamp: status.timestamp,
+        };
+        if (status.tool) {
+          toolStartActivity.toolName = status.tool;
+        }
+        if (toolInput) {
+          toolStartActivity.details = { input: toolInput };
+        }
+        activity = toolStartActivity;
+        break;
+      }
+
+      case 'thinking':
+        activity = {
+          type: 'thinking',
+          summary: 'Claude is thinking...',
+          timestamp: status.timestamp,
+        };
+        break;
+
+      case 'text':
+        // Text responses from Claude (currently not emitted by parser, but included for completeness)
+        activity = {
+          type: 'text',
+          summary: status.message.slice(0, 200) + (status.message.length > 200 ? '...' : ''),
+          timestamp: status.timestamp,
+        };
+        break;
+
+      case 'error':
+      case 'command_failed': {
+        const errorActivity: ActivityEntry = {
+          type: 'error',
+          summary: status.message,
+          timestamp: status.timestamp,
+        };
+        if (status.tool) {
+          errorActivity.toolName = status.tool;
+        }
+        if (status.details) {
+          errorActivity.details = { error: status.details };
+        }
+        activity = errorActivity;
+        break;
+      }
+
+      case 'awaiting_input':
+        // Record as a decision point when Claude needs user input
+        activity = {
+          type: 'decision',
+          toolName: 'AskUserQuestion',
+          summary: `Awaiting input: ${status.message.slice(0, 150)}${status.message.length > 150 ? '...' : ''}`,
+          timestamp: status.timestamp,
+        };
+        break;
+
+      case 'system':
+        // Skip system messages for activity logging (too noisy)
+        break;
+
+      default:
+        // Skip unknown status types
+        break;
+    }
+
+    if (activity) {
+      activityLogger.recordActivity(taskId, activity);
     }
   }
 
