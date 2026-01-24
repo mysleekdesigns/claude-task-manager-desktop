@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { z } from 'zod';
+import * as v from 'valibot';
 
 // ============================================================================
 // Types
@@ -33,12 +33,15 @@ interface AddIdeaModalProps {
 // Validation Schema
 // ============================================================================
 
-const ideaSchema = z.object({
-  title: z
-    .string()
-    .min(3, 'Title must be at least 3 characters')
-    .max(200, 'Title must be less than 200 characters'),
-  description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
+const ideaSchema = v.object({
+  title: v.pipe(
+    v.string(),
+    v.minLength(3, 'Title must be at least 3 characters'),
+    v.maxLength(200, 'Title must be less than 200 characters')
+  ),
+  description: v.optional(
+    v.pipe(v.string(), v.maxLength(1000, 'Description must be less than 1000 characters'))
+  ),
 });
 
 // ============================================================================
@@ -54,18 +57,21 @@ export function AddIdeaModal({ isOpen, onClose, onSubmit }: AddIdeaModalProps) {
   // Validate form
   const validateForm = useCallback((): boolean => {
     try {
-      ideaSchema.parse({
+      v.parse(ideaSchema, {
         title: title.trim(),
         description: description.trim() || undefined,
       });
       setErrors({});
       return true;
     } catch (error) {
-      if (error instanceof z.ZodError) {
+      if (error instanceof v.ValiError) {
         const newErrors: Record<string, string> = {};
-        error.issues.forEach((err) => {
-          if (err.path[0]) {
-            newErrors[err.path[0].toString()] = err.message;
+        error.issues.forEach((issue) => {
+          if (issue.path?.[0]) {
+            const key = issue.path[0].key;
+            if (typeof key === 'string') {
+              newErrors[key] = issue.message;
+            }
           }
         });
         setErrors(newErrors);

@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import { useIPCMutation } from '@/hooks/useIPC';
 import { toast } from 'sonner';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { Task, Priority, TaskStatus, CreateTaskInput } from '@/types/ipc';
 
 interface CreateTaskModalProps {
@@ -40,15 +40,15 @@ interface CreateTaskModalProps {
 }
 
 // Form validation schema
-const createTaskSchema = z.object({
-  title: z.string().min(2, 'Title must be at least 2 characters').max(200),
-  description: z.string().optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
-  tags: z.array(z.string()),
-  branchName: z.string().optional(),
+const createTaskSchema = v.object({
+  title: v.pipe(v.string(), v.minLength(2, 'Title must be at least 2 characters'), v.maxLength(200)),
+  description: v.optional(v.string()),
+  priority: v.picklist(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
+  tags: v.array(v.string()),
+  branchName: v.optional(v.string()),
 });
 
-type CreateTaskFormData = z.infer<typeof createTaskSchema>;
+type CreateTaskFormData = v.InferOutput<typeof createTaskSchema>;
 
 export function CreateTaskModal({
   projectId,
@@ -78,15 +78,15 @@ export function CreateTaskModal({
         branchName: branchName || undefined,
       };
 
-      createTaskSchema.parse(formData);
+      v.parse(createTaskSchema, formData);
       setErrors({});
       return true;
     } catch (error) {
-      if (error instanceof z.ZodError) {
+      if (error instanceof v.ValiError) {
         const newErrors: Record<string, string> = {};
         error.issues.forEach((err) => {
-          if (err.path[0]) {
-            newErrors[err.path[0].toString()] = err.message;
+          if (err.path?.[0]?.key) {
+            newErrors[err.path[0].key.toString()] = err.message;
           }
         });
         setErrors(newErrors);
