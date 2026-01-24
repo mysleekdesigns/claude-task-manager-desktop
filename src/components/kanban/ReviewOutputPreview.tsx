@@ -65,7 +65,6 @@ interface ReviewOutputPreviewProps {
 export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   const [progress, setProgress] = useState<ReviewProgressEvent | null>(null);
   const [currentMessage, setCurrentMessage] = useState<string>('Starting review...');
-  const [activeReviewType, setActiveReviewType] = useState<ReviewType | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleProgress = useCallback((data: ReviewProgressEvent) => {
@@ -79,19 +78,16 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
 
       if (data.currentActivity) {
         setCurrentMessage(data.currentActivity.message);
-        setActiveReviewType(data.currentActivity.reviewType);
       } else {
         // Find the first running review
         const running = data.reviews.find((r) => r.status === 'RUNNING');
         if (running) {
           setCurrentMessage(`${REVIEW_LABELS[running.reviewType]} review in progress...`);
-          setActiveReviewType(running.reviewType);
         } else {
           // Check if all completed
           const allCompleted = data.reviews.every((r) => r.status === 'COMPLETED');
           if (allCompleted && data.reviews.length > 0) {
             setCurrentMessage('All reviews completed');
-            setActiveReviewType(null);
           }
         }
       }
@@ -154,11 +150,6 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   const hasFailed = progress.reviews.some((r) => r.status === 'FAILED');
   const isAllCompleted = progress.status === 'completed';
 
-  // Safely get the icon - fallback to Shield if the review type is not recognized
-  const Icon = activeReviewType && REVIEW_ICONS[activeReviewType]
-    ? REVIEW_ICONS[activeReviewType]
-    : Shield;
-
   return (
     <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md overflow-hidden">
       {/* Progress indicator with review agent icons */}
@@ -217,17 +208,14 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
                   : 'bg-zinc-500'
           }`}
         />
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Icon className="w-3 h-3 text-zinc-400 flex-shrink-0" />
-          <span
-            className={`text-xs font-mono break-words min-w-0 line-clamp-2 ${
-              hasFailed ? 'text-red-400' : 'text-zinc-300'
-            }`}
-            title={currentMessage}
-          >
-            {currentMessage}
-          </span>
-        </div>
+        <span
+          className={`text-xs font-mono break-words min-w-0 line-clamp-2 ${
+            hasFailed ? 'text-red-400' : 'text-zinc-300'
+          }`}
+          title={currentMessage}
+        >
+          {currentMessage}
+        </span>
       </div>
     </div>
   );

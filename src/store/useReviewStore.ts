@@ -24,6 +24,12 @@ interface ReviewState {
   setReviewProgress: (taskId: string, progress: ReviewProgressResponse) => void;
 
   /**
+   * Reset review progress to 'in_progress' state when starting a new review.
+   * This prevents stale 'completed' status from showing during review restart.
+   */
+  resetReviewProgress: (taskId: string) => void;
+
+  /**
    * Remove a review from tracking
    */
   removeReview: (taskId: string) => void;
@@ -55,6 +61,19 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set((state) => {
       const newMap = new Map(state.activeReviews);
       newMap.set(taskId, progress);
+      return { activeReviews: newMap };
+    }),
+
+  resetReviewProgress: (taskId) =>
+    set((state) => {
+      const newMap = new Map(state.activeReviews);
+      // Create a fresh in_progress state to prevent stale 'completed' status
+      const resetProgress: ReviewProgressResponse = {
+        taskId,
+        status: 'in_progress',
+        reviews: [],
+      };
+      newMap.set(taskId, resetProgress);
       return { activeReviews: newMap };
     }),
 

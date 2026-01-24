@@ -40,11 +40,17 @@ import type {
 export function useReviewWorkflow(taskId: string) {
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const { resetReviewProgress } = useReviewStore();
 
   const startReview = useCallback(
     async (reviewTypes?: ReviewType[]) => {
       setIsStarting(true);
       setError(null);
+
+      // Reset the review progress to 'in_progress' immediately to prevent
+      // stale 'completed' status from showing when restarting a review
+      resetReviewProgress(taskId);
+
       try {
         // Only include reviewTypes if it's defined
         const input = reviewTypes
@@ -60,7 +66,7 @@ export function useReviewWorkflow(taskId: string) {
         setIsStarting(false);
       }
     },
-    [taskId]
+    [taskId, resetReviewProgress]
   );
 
   const cancelReview = useCallback(async () => {

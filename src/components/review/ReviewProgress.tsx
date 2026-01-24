@@ -120,35 +120,60 @@ export function ReviewProgress({ progress, compact = false }: ReviewProgressProp
 
       {/* Fix buttons - only show if there are reviews with scores below 100 */}
       {hasFixableReviews && fixHook && (
-        <div className="flex flex-row gap-2 pt-2">
-          {FIX_BUTTONS.map(({ reviewType, fixType, label, Icon }) => {
-            const score = getReviewScore(reviewType);
-            // Only show button if score exists and is less than 100
-            if (score === undefined || score >= 100) return null;
+        <div className="flex flex-col gap-2 pt-2">
+          <div className="flex flex-row gap-2">
+            {FIX_BUTTONS.map(({ reviewType, fixType, label, Icon }) => {
+              const score = getReviewScore(reviewType);
+              // Only show button if score exists and is less than 100
+              if (score === undefined || score >= 100) return null;
 
-            const fixing = fixHook.isFixing(fixType);
-            const fixStatus = fixHook.getFixStatus(fixType);
-            const activityMessage = fixStatus?.currentActivity;
+              const fixStatus = fixHook.getFixStatus(fixType);
+              const isInProgress = fixStatus?.status === 'IN_PROGRESS';
+              const isCompleted = fixStatus?.status === 'COMPLETED';
+              const isCyan = isInProgress || isCompleted;
+              const activityMessage = fixStatus?.currentActivity;
+
+              return (
+                <Button
+                  key={fixType}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleFix(fixType, reviewType)}
+                  disabled={isInProgress}
+                  className={cn(
+                    'gap-1.5',
+                    isCyan && 'border-cyan-500 text-cyan-400 hover:text-cyan-400 hover:border-cyan-400'
+                  )}
+                  title={isInProgress && activityMessage ? activityMessage : undefined}
+                >
+                  {isInProgress ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+                  ) : (
+                    <Icon className={cn('h-4 w-4', isCyan && 'text-cyan-400')} />
+                  )}
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Fix progress display - show when any fix is in progress */}
+          {fixHook.hasActiveFix() && (() => {
+            const activeFixes = fixHook.getTaskFixes();
+            const inProgressFix = activeFixes.find((f) => f.state.status === 'IN_PROGRESS');
+            const progressMessage = inProgressFix?.state.currentActivity;
+
+            if (!progressMessage) return null;
 
             return (
-              <Button
-                key={fixType}
-                size="sm"
-                variant="outline"
-                onClick={() => handleFix(fixType, reviewType)}
-                disabled={fixing}
-                className="gap-1.5"
-                title={fixing && activityMessage ? activityMessage : undefined}
-              >
-                {fixing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Icon className="h-4 w-4" />
-                )}
-                {fixing && activityMessage ? 'Fixing...' : label}
-              </Button>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+                <span className="font-mono truncate" title={progressMessage}>
+                  {progressMessage}
+                </span>
+              </div>
             );
-          })}
+          })()}
         </div>
       )}
     </div>
