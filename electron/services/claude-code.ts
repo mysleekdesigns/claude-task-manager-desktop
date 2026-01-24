@@ -160,6 +160,12 @@ class StreamJsonParser {
     const chunkPreview = chunk.length > 200 ? `${chunk.substring(0, 200)}... (${String(chunk.length)} bytes)` : chunk;
     console.log(`[StreamJsonParser] Received chunk: ${chunkPreview.replace(/\n/g, '\\n')}`);
 
+    // Add buffer size limit - prevent unbounded buffer growth (1MB max)
+    if (this._lineBuffer.length > 1024 * 1024) {
+      console.error('[StreamJsonParser] Buffer exceeded 1MB limit, resetting');
+      this._lineBuffer = '';
+    }
+
     // Process complete lines (handle all line ending styles: \r\n, \n, or \r)
     const lines = this._lineBuffer.split(/\r?\n|\r/);
     // Keep the last incomplete line in buffer
@@ -280,9 +286,18 @@ class StreamJsonParser {
               // Tool completed - only show errors
               if (item.is_error) {
                 console.log(`[StreamJsonParser] Tool error detected`);
+                // Handle complex error content (could be string, object, or array)
+                let errorContent = item.content || 'Unknown error';
+                if (typeof errorContent === 'object') {
+                  errorContent = JSON.stringify(errorContent);
+                }
+                // Truncate very long error messages for cleaner display
+                const displayError = String(errorContent).length > 500
+                  ? String(errorContent).substring(0, 500) + '...'
+                  : String(errorContent);
                 return {
                   type: 'error',
-                  message: `Tool error: ${item.content || 'Unknown error'}`,
+                  message: `Tool error: ${displayError}`,
                   timestamp,
                 };
               }
@@ -443,6 +458,8 @@ class StreamJsonParser {
       case 'content_block_stop':
       case 'message_start':
       case 'message_stop':
+      case 'message_delta':
+      case 'ping':
         // These events don't need status updates - they're for incremental streaming
         return null;
 
