@@ -523,13 +523,34 @@ class FixService {
     const scoreImprovement = postFixScore - preFixScore;
 
     // Determine if verification passed
-    const passed =
+    // Key rules:
+    // 1. NEVER pass if score dropped (scoreImprovement < 0) - that's a regression
+    // 2. If score stayed same or improved, check thresholds
+    // 3. If pre-fix score was already good (>= 90) and it dropped, that's a clear regression
+    const scoreDropped = scoreImprovement < 0;
+    const meetsThresholds =
       scoreImprovement >= VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT ||
       postFixScore >= VERIFICATION_CONFIG.MIN_POST_FIX_SCORE;
 
-    const verificationSummary = passed
-      ? `Verification passed: Score improved from ${String(preFixScore)} to ${String(postFixScore)} (+${String(scoreImprovement)})`
-      : `Verification failed: Score ${String(preFixScore)} -> ${String(postFixScore)} (${scoreImprovement >= 0 ? '+' : ''}${String(scoreImprovement)}). Minimum improvement: ${String(VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT)} or score >= ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)}`;
+    // Verification only passes if score did not drop AND meets one of the thresholds
+    const passed = !scoreDropped && meetsThresholds;
+
+    // Build accurate verification summary message
+    let verificationSummary: string;
+    if (passed) {
+      if (scoreImprovement > 0) {
+        verificationSummary = `Verification passed: Score improved from ${String(preFixScore)} to ${String(postFixScore)} (+${String(scoreImprovement)})`;
+      } else {
+        // Score stayed the same but meets threshold
+        verificationSummary = `Verification passed: Score maintained at ${String(postFixScore)} (meets minimum threshold of ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)})`;
+      }
+    } else if (scoreDropped) {
+      // Score dropped - this is a regression, never say "improved" or "passed"
+      verificationSummary = `Verification failed: Score decreased from ${String(preFixScore)} to ${String(postFixScore)} (${String(scoreImprovement)}). Fix caused a regression.`;
+    } else {
+      // Score improved or stayed same but didn't meet thresholds
+      verificationSummary = `Verification failed: Score ${String(preFixScore)} -> ${String(postFixScore)} (${scoreImprovement >= 0 ? '+' : ''}${String(scoreImprovement)}). Minimum improvement: ${String(VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT)} or score >= ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)}`;
+    }
 
     // Update TaskFix record with verification results
     await prisma.taskFix.update({

@@ -282,11 +282,13 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   // Count completed/total using deduplicated reviews
   const completedCount = uniqueReviews.filter((r) => r.status === 'COMPLETED').length;
   const totalCount = uniqueReviews.length;
+  // Check if any verification is running for this task
+  const isVerificationRunning = uniqueReviews.some((r) => isReviewTypeVerifying(taskId, r.reviewType));
   // Check if any review is running OR any review type is being re-verified
-  const hasRunning = uniqueReviews.some((r) => r.status === 'RUNNING') ||
-    uniqueReviews.some((r) => isReviewTypeVerifying(taskId, r.reviewType));
+  const hasRunning = uniqueReviews.some((r) => r.status === 'RUNNING') || isVerificationRunning;
   const hasFailed = uniqueReviews.some((r) => r.status === 'FAILED');
-  const isAllCompleted = progress.status === 'completed';
+  // Only mark as completed if progress is completed AND no verification is running
+  const isAllCompleted = progress.status === 'completed' && !isVerificationRunning;
 
   return (
     <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md overflow-hidden">

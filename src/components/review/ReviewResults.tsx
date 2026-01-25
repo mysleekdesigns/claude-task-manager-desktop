@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/button';
 import { invoke } from '@/lib/ipc';
 import { useFix } from '@/hooks/useFix';
 import { ScoreComparison } from '@/components/review/ScoreComparison';
+import { FixProgressPanel } from '@/components/review/FixProgressPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type {
   ReviewType,
@@ -466,32 +467,39 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
                 </div>
               )}
 
-              {/* Fix Issues Button - only for fixable review types */}
+              {/* Fix Issues Section - only for fixable review types */}
               {review.findingsCount > 0 &&
                 review.status === 'COMPLETED' &&
                 ['security', 'quality', 'performance'].includes(review.reviewType) && (() => {
                   const fixType = review.reviewType as FixType;
                   const fixing = isFixing(fixType);
                   const fixStatus = getFixStatus(fixType);
-                  const activityMessage = fixStatus?.currentActivity || 'Fixing issues...';
 
-                  // Check if fix has verification results
+                  // Check if fix has any status (started or verification)
+                  const hasFixStatus = !!fixStatus;
                   const hasVerification = fixStatus && (
                     fixStatus.status === 'VERIFYING' ||
                     fixStatus.status === 'VERIFIED_SUCCESS' ||
                     fixStatus.status === 'VERIFIED_FAILED'
                   );
 
-                  // Determine if the fix button should be shown
-                  // Hide button if verification succeeded
+                  // Show fix button when:
+                  // - No fix has been started, OR
+                  // - Fix failed and can retry
                   const showFixButton = !fixStatus || (
-                    fixStatus.status !== 'VERIFIED_SUCCESS' &&
-                    fixStatus.status !== 'VERIFYING' &&
-                    fixStatus.status !== 'VERIFIED_FAILED'
+                    fixStatus.status === 'FAILED' ||
+                    (fixStatus.status === 'VERIFIED_FAILED' && fixStatus.canRetry)
+                  );
+
+                  // Show progress panel when fix is active or has verification state
+                  // This keeps the panel visible throughout the entire workflow
+                  const showProgressPanel = hasFixStatus && (
+                    fixStatus.status === 'IN_PROGRESS' ||
+                    fixStatus.status === 'VERIFYING'
                   );
 
                   return (
-                    <div className="mt-4 pt-3 border-t border-border">
+                    <div className="mt-4 pt-3 border-t border-border space-y-4">
                       {/* Fix Button */}
                       {showFixButton && (
                         <Button
@@ -509,18 +517,27 @@ export function ReviewResults({ taskId }: ReviewResultsProps) {
                           {fixing ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
-                              <span className="text-cyan-500">{activityMessage}</span>
+                              <span className="text-cyan-500">Starting fix...</span>
                             </>
                           ) : (
                             <>
                               <Wand2 className="h-4 w-4" />
-                              Fix Issues
+                              Fix {REVIEW_LABELS[review.reviewType]}
                             </>
                           )}
                         </Button>
                       )}
 
-                      {/* Verification Results */}
+                      {/* Fix Progress Panel - shows inline workflow progress */}
+                      {showProgressPanel && (
+                        <FixProgressPanel
+                          taskId={taskId}
+                          fixType={fixType}
+                          className="mt-3"
+                        />
+                      )}
+
+                      {/* Verification Results - shows after verification completes */}
                       {hasVerification && fixStatus && (
                         <VerificationResults
                           fixStatus={fixStatus}

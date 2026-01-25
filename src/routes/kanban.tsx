@@ -111,13 +111,8 @@ export function KanbanPage() {
   }, []);
 
   // Subscribe to fix events for the selected task
-  // Auto-close modal when verification review starts
-  useFixSubscription(selectedTaskId, {
-    onVerificationStart: () => {
-      // Close the modal when verification starts so user can see the AI reviewing
-      setSelectedTaskId(null);
-    },
-  });
+  // Modal now stays open to show inline fix progress
+  useFixSubscription(selectedTaskId);
 
   // Handle close CreateTaskModal
   const handleCloseCreateModal = useCallback(() => {
