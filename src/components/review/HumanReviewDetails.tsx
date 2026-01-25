@@ -58,6 +58,7 @@ import type {
   ReviewFinding,
   FindingSeverity,
   ReviewStatus,
+  HumanReview,
 } from '@/types/ipc';
 
 // ============================================================================
@@ -391,6 +392,7 @@ export function HumanReviewDetails({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overallScore, setOverallScore] = useState<number | undefined>();
+  const [humanReview, setHumanReview] = useState<HumanReview | null>(null);
 
   // Fetch review data when task changes or sheet opens
   useEffect(() => {
@@ -403,6 +405,10 @@ export function HumanReviewDetails({
       setError(null);
 
       try {
+        // Fetch human review data (includes reviewer)
+        const humanReviewData = await invoke('humanReview:get', task.id);
+        setHumanReview(humanReviewData);
+
         // Fetch review progress
         const progress = await invoke('review:getProgress', task.id);
 
@@ -611,29 +617,29 @@ export function HumanReviewDetails({
           )}
 
           {/* Assigned Reviewer */}
-          {task.assignee && (
+          {humanReview?.reviewer && (
             <div className="flex items-center gap-3 mt-4 pt-4 border-t">
               <Avatar className="h-8 w-8">
-                {task.assignee.avatar && (
-                  <AvatarImage src={task.assignee.avatar} alt={task.assignee.name || ''} />
+                {humanReview.reviewer.avatar && (
+                  <AvatarImage src={humanReview.reviewer.avatar} alt={humanReview.reviewer.name || ''} />
                 )}
                 <AvatarFallback>
-                  {task.assignee.name
-                    ? task.assignee.name.split(' ').map(n => n[0]).join('').toUpperCase()
-                    : (task.assignee.email[0] ?? '?').toUpperCase()}
+                  {humanReview.reviewer.name
+                    ? humanReview.reviewer.name.split(' ').map(n => n[0]).join('').toUpperCase()
+                    : (humanReview.reviewer.email[0] ?? '?').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">
-                  {task.assignee.name || task.assignee.email}
+                  {humanReview.reviewer.name || humanReview.reviewer.email}
                 </p>
                 <p className="text-xs text-muted-foreground">Assigned Reviewer</p>
               </div>
-              <ReviewStatusBadge status="PENDING" />
+              <ReviewStatusBadge status={humanReview.status} />
             </div>
           )}
 
-          {!task.assignee && (
+          {!humanReview?.reviewer && (
             <div className="flex items-center gap-2 mt-4 pt-4 border-t text-muted-foreground">
               <User className="h-4 w-4" />
               <span className="text-sm">No reviewer assigned</span>
