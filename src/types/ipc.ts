@@ -1438,6 +1438,7 @@ export interface IpcChannels {
   'research:searchSolution': (data: ResearchRequest) => Promise<ResearchResponse>;
   'research:searchStackOverflow': (data: ResearchRequest) => Promise<ResearchResponse>;
   'research:searchGitHub': (data: ResearchRequest) => Promise<ResearchResponse>;
+  'research:openUrl': (url: string) => Promise<ResearchResponse>;
 }
 
 /**
@@ -2037,6 +2038,7 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'research:searchSolution',
   'research:searchStackOverflow',
   'research:searchGitHub',
+  'research:openUrl',
 ] as const;
 
 /**

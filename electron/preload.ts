@@ -181,6 +181,17 @@ const VALID_INVOKE_CHANNELS = [
   'fix:cancel',
   'fix:retry',
   'fix:getVerification',
+  // Human Review Workflow
+  'humanReview:assign',
+  'humanReview:get',
+  'humanReview:start',
+  'humanReview:complete',
+  'humanReview:getAIResults',
+  // Research channels
+  'research:searchSolution',
+  'research:searchStackOverflow',
+  'research:searchGitHub',
+  'research:openUrl',
 ] as const;
 
 /**
