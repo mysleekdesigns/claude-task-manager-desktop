@@ -155,19 +155,6 @@ export function KanbanPage() {
     }, 300);
   }, []);
 
-  // Handle start review from human review panel (opens TaskModal with Reviews tab)
-  const handleStartReviewFromPanel = useCallback(() => {
-    if (humanReviewTask) {
-      // Close the HumanReviewDetails panel
-      setIsHumanReviewOpen(false);
-      // Open the TaskModal for detailed review workflow
-      setSelectedTaskId(humanReviewTask.id);
-      setTimeout(() => {
-        setHumanReviewTask(null);
-      }, 300);
-    }
-  }, [humanReviewTask]);
-
   // Smart polling for active Claude tasks - isolated to minimize re-renders
   useTaskPolling(tasks, refetch, {
     activeInterval: ACTIVE_TASK_POLL_INTERVAL,
@@ -269,7 +256,6 @@ export function KanbanPage() {
         task={humanReviewTask}
         isOpen={isHumanReviewOpen}
         onClose={handleCloseHumanReview}
-        onStartReview={handleStartReviewFromPanel}
       />
     </div>
   );

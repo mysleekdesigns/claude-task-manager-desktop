@@ -21,7 +21,6 @@ import {
   ExternalLink,
   HelpCircle,
   User,
-  Play,
   Copy,
   Check,
   ChevronDown,
@@ -42,6 +41,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -131,7 +136,6 @@ interface HumanReviewDetailsProps {
   task: Task | null;
   isOpen: boolean;
   onClose: () => void;
-  onStartReview?: () => void;
 }
 
 // ============================================================================
@@ -386,7 +390,6 @@ export function HumanReviewDetails({
   task,
   isOpen,
   onClose,
-  onStartReview,
 }: HumanReviewDetailsProps) {
   const [reviews, setReviews] = useState<ReviewWithFindings[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -705,30 +708,38 @@ export function HumanReviewDetails({
                 <Separator />
 
                 {/* Findings Grouped by Severity */}
-                {SEVERITY_ORDER.map((severity) => {
-                  const items = findingsBySeverity.get(severity) || [];
-                  if (items.length === 0) return null;
+                <Accordion type="single" collapsible className="space-y-2">
+                  {SEVERITY_ORDER.map((severity) => {
+                    const items = findingsBySeverity.get(severity) || [];
+                    if (items.length === 0) return null;
 
-                  const SeverityIcon = SEVERITY_ICONS[severity];
+                    const SeverityIcon = SEVERITY_ICONS[severity];
 
-                  return (
-                    <div key={severity} className="space-y-3">
-                      <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <SeverityIcon className={cn('h-4 w-4', SEVERITY_COLORS[severity].split(' ')[0])} />
-                        {SEVERITY_LABELS[severity]} Issues ({items.length})
-                      </h3>
-                      <div className="space-y-3">
-                        {items.map((item, index) => (
-                          <FindingCard
-                            key={`${item.category}-${index}`}
-                            finding={item.finding}
-                            category={item.category}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                    return (
+                      <AccordionItem key={severity} value={severity} className="border rounded-lg">
+                        <AccordionTrigger className="px-4 hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <SeverityIcon className={cn('h-4 w-4', SEVERITY_COLORS[severity].split(' ')[0])} />
+                            <span className="text-sm font-semibold">
+                              {SEVERITY_LABELS[severity]} Issues ({items.length})
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4">
+                          <div className="space-y-3">
+                            {items.map((item, index) => (
+                              <FindingCard
+                                key={`${item.category}-${index}`}
+                                finding={item.finding}
+                                category={item.category}
+                              />
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
 
                 {/* No findings message */}
                 {totalFindings === 0 && (
@@ -747,26 +758,13 @@ export function HumanReviewDetails({
 
         {/* Footer */}
         <SheetFooter className="px-6 py-4 border-t flex-shrink-0">
-          <div className="flex w-full gap-3">
-            {onStartReview && (
-              <Button
-                className="flex-1"
-                onClick={onStartReview}
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Start Review
-              </Button>
-            )}
-            {!onStartReview && (
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={onClose}
-              >
-                Close
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onClose}
+          >
+            Close
+          </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
