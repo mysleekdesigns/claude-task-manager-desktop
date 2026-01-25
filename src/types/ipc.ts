@@ -1426,6 +1426,13 @@ export interface IpcChannels {
   'fix:cancel': (data: { taskId: string; fixType: FixType }) => Promise<void>;
   'fix:retry': (data: { taskId: string; fixType: FixType }) => Promise<void>;
   'fix:getVerification': (data: { taskId: string; fixType: FixType }) => Promise<FixVerificationResult | null>;
+
+  // Human Review Workflow channels
+  'humanReview:assign': (data: AssignReviewerInput) => Promise<HumanReview>;
+  'humanReview:get': (taskId: string) => Promise<HumanReview | null>;
+  'humanReview:start': (taskId: string) => Promise<HumanReview>;
+  'humanReview:complete': (data: CompleteReviewInput) => Promise<HumanReview>;
+  'humanReview:getAIResults': (taskId: string) => Promise<FormattedAIReview | null>;
 }
 
 /**
@@ -1581,6 +1588,79 @@ export interface UpdateProgress {
   bytesPerSecond: number;
   total: number;
   transferred: number;
+}
+
+// ============================================================================
+// Human Review Types (Human Review Workflow)
+// ============================================================================
+
+/**
+ * Status of a human review
+ */
+export type HumanReviewStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+
+/**
+ * Human review entity with relations
+ */
+export interface HumanReview {
+  id: string;
+  taskId: string;
+  reviewerId: string | null;
+  status: HumanReviewStatus;
+  aiReviewData: string | null;
+  notes: string | null;
+  assignedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewer?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  } | null;
+  task?: {
+    id: string;
+    title: string;
+    status: string;
+  };
+}
+
+/**
+ * Input for assigning a reviewer to a human review
+ */
+export interface AssignReviewerInput {
+  taskId: string;
+  reviewerId: string | null;
+}
+
+/**
+ * Input for completing a human review
+ */
+export interface CompleteReviewInput {
+  taskId: string;
+  notes?: string;
+}
+
+/**
+ * Individual AI review result for human review display
+ */
+export interface AIReviewResult {
+  reviewType: string;
+  status: string;
+  score: number | null;
+  summary: string | null;
+  findings: ReviewFinding[];
+}
+
+/**
+ * Formatted AI review data for human review workflow
+ */
+export interface FormattedAIReview {
+  overallScore: number | null;
+  reviews: AIReviewResult[];
+  completedAt: string | null;
 }
 
 // ============================================================================
@@ -1917,6 +1997,12 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'fix:cancel',
   'fix:retry',
   'fix:getVerification',
+  // Human Review Workflow
+  'humanReview:assign',
+  'humanReview:get',
+  'humanReview:start',
+  'humanReview:complete',
+  'humanReview:getAIResults',
 ] as const;
 
 /**

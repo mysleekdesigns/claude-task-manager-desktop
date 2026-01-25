@@ -26,6 +26,7 @@ model User {
   githubTokens   GitHubToken[]
   ideas          Idea[]      @relation("CreatedIdeas")
   settings       UserSettings?
+  humanReviews   HumanReview[] @relation("humanReviewer")
 }
 
 model UserSettings {
@@ -138,6 +139,7 @@ model Task {
   reviews        TaskReview[]
   fixes          TaskFix[]
   taskSummary    TaskSummary?
+  humanReview    HumanReview?
 
   @@index([projectId])
   @@index([status])
@@ -515,4 +517,25 @@ model TaskSummary {
 
   // Relations
   task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model HumanReview {
+  id            String    @id @default(cuid())
+  taskId        String    @unique
+  reviewerId    String?   // The assigned human reviewer (User ID)
+  status        String    @default("PENDING") // PENDING|IN_PROGRESS|COMPLETED
+  aiReviewData  String?   // Cached AI review results for easy access (JSON string)
+  notes         String?   // Human reviewer's notes
+  assignedAt    DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reviewer      User?     @relation("humanReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([reviewerId])
+  @@index([status])
 }

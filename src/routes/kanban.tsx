@@ -14,6 +14,7 @@ import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { TaskModal } from '@/components/task/TaskModal';
 import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { TaskTerminalPanel } from '@/components/kanban/TaskTerminalPanel';
+import { HumanReviewDetails } from '@/components/review/HumanReviewDetails';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, AlertCircle } from 'lucide-react';
@@ -38,6 +39,10 @@ export function KanbanPage() {
   const [terminalPanelTask, setTerminalPanelTask] = useState<Task | null>(null);
   const [isTerminalPanelOpen, setIsTerminalPanelOpen] = useState(false);
 
+  // Human review panel state
+  const [humanReviewTask, setHumanReviewTask] = useState<Task | null>(null);
+  const [isHumanReviewOpen, setIsHumanReviewOpen] = useState(false);
+
   // Fetch tasks for the current project
   const {
     tasks,
@@ -60,9 +65,16 @@ export function KanbanPage() {
     [updateTaskStatus]
   );
 
-  // Handle task click (open detail view)
+  // Handle task click (open detail view or human review panel)
   const handleTaskClick = useCallback((task: Task) => {
-    setSelectedTaskId(task.id);
+    // Show HumanReviewDetails panel for tasks in HUMAN_REVIEW status
+    if (task.status === 'HUMAN_REVIEW') {
+      setHumanReviewTask(task);
+      setIsHumanReviewOpen(true);
+    } else {
+      // Show TaskModal for all other statuses
+      setSelectedTaskId(task.id);
+    }
   }, []);
 
   // Handle task edit
@@ -133,6 +145,28 @@ export function KanbanPage() {
       setTerminalPanelTask(null);
     }, 300);
   }, []);
+
+  // Handle close human review panel
+  const handleCloseHumanReview = useCallback(() => {
+    setIsHumanReviewOpen(false);
+    // Keep the task reference for a smooth close animation
+    setTimeout(() => {
+      setHumanReviewTask(null);
+    }, 300);
+  }, []);
+
+  // Handle start review from human review panel (opens TaskModal with Reviews tab)
+  const handleStartReviewFromPanel = useCallback(() => {
+    if (humanReviewTask) {
+      // Close the HumanReviewDetails panel
+      setIsHumanReviewOpen(false);
+      // Open the TaskModal for detailed review workflow
+      setSelectedTaskId(humanReviewTask.id);
+      setTimeout(() => {
+        setHumanReviewTask(null);
+      }, 300);
+    }
+  }, [humanReviewTask]);
 
   // Smart polling for active Claude tasks - isolated to minimize re-renders
   useTaskPolling(tasks, refetch, {
@@ -228,6 +262,14 @@ export function KanbanPage() {
         task={terminalPanelTask}
         isOpen={isTerminalPanelOpen}
         onClose={handleCloseTerminalPanel}
+      />
+
+      {/* Human Review Panel */}
+      <HumanReviewDetails
+        task={humanReviewTask}
+        isOpen={isHumanReviewOpen}
+        onClose={handleCloseHumanReview}
+        onStartReview={handleStartReviewFromPanel}
       />
     </div>
   );

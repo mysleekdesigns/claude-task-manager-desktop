@@ -19,8 +19,12 @@ import {
   DragOverEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { toast } from 'sonner';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskCard } from './TaskCard';
+import { AssignReviewerDialog } from './AssignReviewerDialog';
+import { useProjectStore } from '@/store/useProjectStore';
+import { useIPCMutation } from '@/hooks/useIPC';
 import type { Task, TaskStatus } from '@/types/ipc';
 
 // ============================================================================
@@ -51,6 +55,14 @@ interface KanbanBoardProps {
   loading?: boolean;
 }
 
+/**
+ * Pending drag state for HUMAN_REVIEW assignment
+ */
+interface PendingReviewDrag {
+  taskId: string;
+  taskTitle: string;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -67,6 +79,18 @@ export function KanbanBoard({
   loading = false,
 }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [pendingReviewDrag, setPendingReviewDrag] = useState<PendingReviewDrag | null>(null);
+  const [isAssigningReviewer, setIsAssigningReviewer] = useState(false);
+
+  // Get project members from store
+  const currentProject = useProjectStore((state) => state.currentProject);
+  const projectMembers = useMemo(() => currentProject?.members ?? [], [currentProject?.members]);
+
+  // IPC mutation for assigning reviewer
+  const assignReviewerMutation = useIPCMutation('humanReview:assign');
+
+  // IPC mutation for completing human review
+  const completeReviewMutation = useIPCMutation('humanReview:complete');
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -94,9 +118,7 @@ export function KanbanBoard({
 
     tasks.forEach((task) => {
       const status = task.status;
-      if (grouped[status]) {
-        grouped[status].push(task);
-      }
+      grouped[status].push(task);
     });
 
     return grouped;
@@ -106,7 +128,7 @@ export function KanbanBoard({
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const task = tasks.find((t) => t.id === event.active.id);
-      setActiveTask(task || null);
+      setActiveTask(task ?? null);
     },
     [tasks]
   );
@@ -140,6 +162,37 @@ export function KanbanBoard({
 
       // Only update if status changed
       if (newStatus && draggedTask && newStatus !== draggedTask.status) {
+        // If dropping on HUMAN_REVIEW, show the reviewer assignment dialog
+        if (newStatus === 'HUMAN_REVIEW') {
+          setPendingReviewDrag({
+            taskId: draggedTask.id,
+            taskTitle: draggedTask.title,
+          });
+          return;
+        }
+
+        // If moving from HUMAN_REVIEW to COMPLETED, complete the human review
+        if (draggedTask.status === 'HUMAN_REVIEW' && newStatus === 'COMPLETED') {
+          try {
+            // First complete the human review record
+            await completeReviewMutation.mutate({ taskId });
+
+            // The humanReview:complete handler already updates task status to COMPLETED
+            // so we just need to refetch tasks to update the UI
+            toast.success('Human review completed');
+
+            if (refetchTasks) {
+              await refetchTasks();
+            }
+          } catch (error) {
+            console.error('Failed to complete human review:', error);
+            toast.error(
+              error instanceof Error ? error.message : 'Failed to complete review'
+            );
+          }
+          return;
+        }
+
         try {
           await onTaskStatusChange(taskId, newStatus);
         } catch (error) {
@@ -147,8 +200,58 @@ export function KanbanBoard({
         }
       }
     },
-    [tasks, onTaskStatusChange]
+    [tasks, onTaskStatusChange, completeReviewMutation, refetchTasks]
   );
+
+  /**
+   * Handle reviewer assignment from dialog
+   */
+  const handleAssignReviewer = useCallback(
+    async (reviewerId: string | null) => {
+      if (!pendingReviewDrag) return;
+
+      setIsAssigningReviewer(true);
+
+      try {
+        // First update the task status to HUMAN_REVIEW
+        await onTaskStatusChange(pendingReviewDrag.taskId, 'HUMAN_REVIEW');
+
+        // Then assign the reviewer (creates or updates HumanReview record)
+        await assignReviewerMutation.mutate({ taskId: pendingReviewDrag.taskId, reviewerId });
+
+        if (reviewerId) {
+          const reviewer = projectMembers.find((m) => m.user?.id === reviewerId);
+          const reviewerName = reviewer?.user?.name ?? reviewer?.user?.email ?? 'reviewer';
+          toast.success(`Task assigned to ${reviewerName} for review`);
+        } else {
+          toast.success('Task moved to Human Review (unassigned)');
+        }
+
+        // Refetch tasks to update the UI
+        if (refetchTasks) {
+          await refetchTasks();
+        }
+      } catch (error) {
+        console.error('Failed to assign reviewer:', error);
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to assign reviewer'
+        );
+      } finally {
+        setIsAssigningReviewer(false);
+        setPendingReviewDrag(null);
+      }
+    },
+    [pendingReviewDrag, onTaskStatusChange, assignReviewerMutation, projectMembers, refetchTasks]
+  );
+
+  /**
+   * Handle dialog close without assignment
+   */
+  const handleReviewDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setPendingReviewDrag(null);
+    }
+  }, []);
 
   // Handle drag over (optional - for visual feedback during drag)
   const handleDragOver = useCallback((_event: DragOverEvent) => {
@@ -177,14 +280,14 @@ export function KanbanBoard({
             key={column.id}
             id={column.id}
             title={column.title}
-            tasks={tasksByStatus[column.id] || []}
-            onTaskClick={onTaskClick || undefined}
-            onTaskEdit={onTaskEdit || undefined}
-            onTaskDelete={onTaskDelete || undefined}
-            onViewTerminal={onViewTerminal || undefined}
-            onAddTask={onAddTask || undefined}
-            refetchTasks={refetchTasks || undefined}
-            collapsible={column.collapsible || false}
+            tasks={tasksByStatus[column.id]}
+            onTaskClick={onTaskClick}
+            onTaskEdit={onTaskEdit}
+            onTaskDelete={onTaskDelete}
+            onViewTerminal={onViewTerminal}
+            onAddTask={onAddTask}
+            refetchTasks={refetchTasks}
+            collapsible={column.collapsible ?? false}
           />
         ))}
       </div>
@@ -197,6 +300,16 @@ export function KanbanBoard({
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* Assign Reviewer Dialog */}
+      <AssignReviewerDialog
+        open={pendingReviewDrag !== null}
+        onOpenChange={handleReviewDialogOpenChange}
+        members={projectMembers}
+        taskTitle={pendingReviewDrag?.taskTitle ?? ''}
+        onAssign={handleAssignReviewer}
+        isLoading={isAssigningReviewer}
+      />
     </DndContext>
   );
 }
