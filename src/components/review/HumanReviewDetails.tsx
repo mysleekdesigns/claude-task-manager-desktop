@@ -22,7 +22,14 @@ import {
   HelpCircle,
   User,
   Play,
+  Copy,
+  Check,
+  ChevronDown,
+  Globe,
+  Code2,
+  Github,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Sheet,
   SheetContent,
@@ -35,6 +42,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { invoke } from '@/lib/ipc';
 import { CopyReviewButton } from './CopyReviewButton';
@@ -178,7 +191,28 @@ interface FindingCardProps {
   category: ReviewType;
 }
 
+/**
+ * Formats a single finding for copying to clipboard in a format suitable for an AI agent.
+ */
+function formatSingleFinding(finding: ReviewFinding): string {
+  const location = finding.file
+    ? `${finding.file}${finding.line !== undefined ? `:${finding.line}` : ''}`
+    : '';
+
+  const lines: string[] = [];
+  lines.push(`Fix this ${finding.severity} issue:`);
+  lines.push('');
+  if (location) {
+    lines.push(`Location: ${location}`);
+  }
+  lines.push(`Issue: ${finding.title}`);
+  lines.push(`Description: ${finding.description}`);
+
+  return lines.join('\n');
+}
+
 function FindingCard({ finding, category }: FindingCardProps) {
+  const [copied, setCopied] = useState(false);
   const SeverityIcon = SEVERITY_ICONS[finding.severity] || HelpCircle;
   const severityColor = SEVERITY_COLORS[finding.severity] || SEVERITY_COLORS.medium;
 
@@ -192,6 +226,70 @@ function FindingCard({ finding, category }: FindingCardProps) {
     }
   }, [finding.file, finding.line]);
 
+  const handleCopyFinding = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const content = formatSingleFinding(finding);
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast.success('Finding copied to clipboard');
+
+      // Reset after 2 seconds
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy finding:', err);
+      toast.error('Failed to copy to clipboard');
+    }
+  }, [finding]);
+
+  const handleResearch = useCallback(async (
+    searchType: 'google' | 'stackoverflow' | 'github'
+  ) => {
+    // Build the finding data, only including optional fields if they have values
+    const findingData: {
+      title: string;
+      description: string;
+      severity: string;
+      category: 'security' | 'quality' | 'performance' | 'documentation' | 'research';
+      file?: string;
+      line?: number;
+    } = {
+      title: finding.title,
+      description: finding.description,
+      severity: finding.severity,
+      category: category as 'security' | 'quality' | 'performance' | 'documentation' | 'research',
+    };
+
+    // Only add file/line if they are defined
+    if (finding.file) {
+      findingData.file = finding.file;
+    }
+    if (finding.line !== undefined) {
+      findingData.line = finding.line;
+    }
+
+    try {
+      switch (searchType) {
+        case 'google':
+          await invoke('research:searchSolution', findingData);
+          break;
+        case 'stackoverflow':
+          await invoke('research:searchStackOverflow', findingData);
+          break;
+        case 'github':
+          await invoke('research:searchGitHub', findingData);
+          break;
+      }
+      toast.success('Opening search...');
+    } catch (err) {
+      console.error(`Failed to open ${searchType} search:`, err);
+      toast.error(`Failed to open search: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [finding, category]);
+
   return (
     <div className={cn(
       'p-4 rounded-lg border',
@@ -204,6 +302,49 @@ function FindingCard({ finding, category }: FindingCardProps) {
           <span className="font-medium text-sm truncate">{finding.title}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Copy and Research button group */}
+          <div className="flex items-center">
+            <button
+              onClick={handleCopyFinding}
+              className={cn(
+                'p-1 rounded-l hover:bg-black/10 dark:hover:bg-white/10 transition-colors',
+                copied && 'text-green-600 dark:text-green-400'
+              )}
+              title="Copy finding for AI agent"
+            >
+              {copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4 opacity-60 hover:opacity-100" />
+              )}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="p-1 rounded-r hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex items-center"
+                  title="Research solutions"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Search className="h-4 w-4 opacity-60 hover:opacity-100" />
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={() => handleResearch('google')}>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Search Google
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleResearch('stackoverflow')}>
+                  <Code2 className="h-4 w-4 mr-2" />
+                  Search Stack Overflow
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleResearch('github')}>
+                  <Github className="h-4 w-4 mr-2" />
+                  Search GitHub
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <Badge variant="outline" className="text-xs">
             {CATEGORY_LABELS[category] || category}
           </Badge>

@@ -1433,6 +1433,11 @@ export interface IpcChannels {
   'humanReview:start': (taskId: string) => Promise<HumanReview>;
   'humanReview:complete': (data: CompleteReviewInput) => Promise<HumanReview>;
   'humanReview:getAIResults': (taskId: string) => Promise<FormattedAIReview | null>;
+
+  // Research channels
+  'research:searchSolution': (data: ResearchRequest) => Promise<ResearchResponse>;
+  'research:searchStackOverflow': (data: ResearchRequest) => Promise<ResearchResponse>;
+  'research:searchGitHub': (data: ResearchRequest) => Promise<ResearchResponse>;
 }
 
 /**
@@ -1827,6 +1832,31 @@ export interface FixResult {
   researchNotes?: string;
 }
 
+// ============================================================================
+// Research Types
+// ============================================================================
+
+/**
+ * Input for researching a solution
+ */
+export interface ResearchRequest {
+  title: string;
+  description: string;
+  severity: string;
+  file?: string;
+  line?: number;
+  category: 'security' | 'quality' | 'performance' | 'documentation' | 'research';
+}
+
+/**
+ * Result from a research request
+ */
+export interface ResearchResponse {
+  success: boolean;
+  searchUrl?: string;
+  error?: string;
+}
+
 /**
  * Extract event channel names as a union type
  */
@@ -2003,6 +2033,10 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'humanReview:start',
   'humanReview:complete',
   'humanReview:getAIResults',
+  // Research channels
+  'research:searchSolution',
+  'research:searchStackOverflow',
+  'research:searchGitHub',
 ] as const;
 
 /**
