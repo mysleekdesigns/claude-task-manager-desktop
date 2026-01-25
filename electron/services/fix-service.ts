@@ -485,10 +485,16 @@ class FixService {
    *
    * Called when the verification review finishes. This method:
    * 1. Gets the pre-fix score from TaskFix record
-   * 2. Calculates score improvement
-   * 3. Determines if verification passed
-   * 4. Updates TaskFix with verification results
-   * 5. Emits verification result event
+   * 2. Performs finding-by-finding comparison
+   * 3. Calculates score improvement and regression detection
+   * 4. Determines if verification passed using strict rules
+   * 5. Updates TaskFix with verification results
+   * 6. Emits verification result event
+   *
+   * STRICT PASS RULES:
+   * - If postFixScore < preFixScore → ALWAYS FAIL (regression)
+   * - If new findings introduced that weren't in original → FAIL
+   * - Only pass if at least one original finding was fixed
    *
    * @param taskId - Task ID
    * @param fixType - Type of fix that was verified
@@ -507,7 +513,7 @@ class FixService {
 
     const prisma = databaseService.getClient();
 
-    // Get the TaskFix record with pre-fix score
+    // Get the TaskFix record with pre-fix score and original findings
     const taskFix = await prisma.taskFix.findUnique({
       where: {
         taskId_fixType: { taskId, fixType },
@@ -521,36 +527,100 @@ class FixService {
 
     const preFixScore = taskFix.preFixScore ?? 0;
     const scoreImprovement = postFixScore - preFixScore;
+    const originalFindings = JSON.parse(taskFix.findings || '[]') as ReviewFinding[];
 
-    // Determine if verification passed
-    // Key rules:
-    // 1. NEVER pass if score dropped (scoreImprovement < 0) - that's a regression
-    // 2. If score stayed same or improved, check thresholds
-    // 3. If pre-fix score was already good (>= 90) and it dropped, that's a clear regression
+    // === FINDING-BY-FINDING COMPARISON ===
+
+    // Categorize post-fix findings
+    let originalFindingsRemaining = 0;
+    let newFindingsIntroduced = 0;
+
+    for (const finding of postFixFindings) {
+      if (this.isNewFinding(finding)) {
+        // Explicitly marked as new by the review
+        newFindingsIntroduced++;
+      } else if (this.isOriginalFinding(finding, originalFindings)) {
+        // This is an original finding that's still present
+        originalFindingsRemaining++;
+      } else {
+        // Not clearly marked as new, but doesn't match originals
+        // Treat as a new finding (regression)
+        newFindingsIntroduced++;
+      }
+    }
+
+    // Calculate how many original findings were fixed
+    const fixedCount = originalFindings.length - originalFindingsRemaining;
+
+    // === STRICT PASS/FAIL DETERMINATION ===
+
+    // Rule 1: Score dropped = ALWAYS FAIL (regression)
     const scoreDropped = scoreImprovement < 0;
+
+    // Rule 2: New findings introduced = FAIL (regression)
+    const hasNewIssues = newFindingsIntroduced > 0;
+
+    // Rule 3: Must have fixed at least one thing
+    const fixedSomething = fixedCount > 0;
+
+    // Rule 4: Standard thresholds (only apply if no regression)
     const meetsThresholds =
       scoreImprovement >= VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT ||
       postFixScore >= VERIFICATION_CONFIG.MIN_POST_FIX_SCORE;
 
-    // Verification only passes if score did not drop AND meets one of the thresholds
-    const passed = !scoreDropped && meetsThresholds;
+    // Detect regression
+    const hasRegression = scoreDropped || hasNewIssues;
 
-    // Build accurate verification summary message
+    // STRICT: Fail if ANY regression, regardless of other improvements
+    // Otherwise, must fix something AND meet thresholds
+    const passed = !hasRegression && fixedSomething && meetsThresholds;
+
+    // === BUILD VERIFICATION SUMMARY ===
+
     let verificationSummary: string;
-    if (passed) {
-      if (scoreImprovement > 0) {
-        verificationSummary = `Verification passed: Score improved from ${String(preFixScore)} to ${String(postFixScore)} (+${String(scoreImprovement)})`;
-      } else {
-        // Score stayed the same but meets threshold
-        verificationSummary = `Verification passed: Score maintained at ${String(postFixScore)} (meets minimum threshold of ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)})`;
+
+    if (hasRegression) {
+      // Regression detected - always fail with clear message
+      const regressionReasons: string[] = [];
+      if (scoreDropped) {
+        regressionReasons.push(`score decreased (${String(preFixScore)} → ${String(postFixScore)})`);
       }
-    } else if (scoreDropped) {
-      // Score dropped - this is a regression, never say "improved" or "passed"
-      verificationSummary = `Verification failed: Score decreased from ${String(preFixScore)} to ${String(postFixScore)} (${String(scoreImprovement)}). Fix caused a regression.`;
+      if (hasNewIssues) {
+        regressionReasons.push(`${String(newFindingsIntroduced)} new issue(s) introduced`);
+      }
+      verificationSummary = `VERIFICATION FAILED - REGRESSION DETECTED: ${regressionReasons.join(', ')}. ` +
+        `Fixed ${String(fixedCount)}/${String(originalFindings.length)} original issues, but fix caused new problems.`;
+    } else if (!fixedSomething) {
+      // No regression, but nothing was fixed
+      verificationSummary = `VERIFICATION FAILED: No original issues were fixed. ` +
+        `All ${String(originalFindings.length)} original finding(s) still present. ` +
+        `Score: ${String(preFixScore)} → ${String(postFixScore)}.`;
+    } else if (!meetsThresholds) {
+      // Fixed something but didn't meet score thresholds
+      verificationSummary = `VERIFICATION FAILED: Fixed ${String(fixedCount)}/${String(originalFindings.length)} issues, ` +
+        `but score improvement insufficient. Score: ${String(preFixScore)} → ${String(postFixScore)} ` +
+        `(+${String(scoreImprovement)}). Minimum: +${String(VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT)} or score >= ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)}.`;
     } else {
-      // Score improved or stayed same but didn't meet thresholds
-      verificationSummary = `Verification failed: Score ${String(preFixScore)} -> ${String(postFixScore)} (${scoreImprovement >= 0 ? '+' : ''}${String(scoreImprovement)}). Minimum improvement: ${String(VERIFICATION_CONFIG.MIN_SCORE_IMPROVEMENT)} or score >= ${String(VERIFICATION_CONFIG.MIN_POST_FIX_SCORE)}`;
+      // Passed all checks
+      verificationSummary = `VERIFICATION PASSED: Fixed ${String(fixedCount)}/${String(originalFindings.length)} issues. ` +
+        `Score improved from ${String(preFixScore)} to ${String(postFixScore)} (+${String(scoreImprovement)}). ` +
+        `No regressions detected.`;
     }
+
+    // Apply regression penalty to score for display purposes
+    // This doesn't affect the stored postFixScore, just shows the penalty
+    const adjustedScore = hasNewIssues
+      ? Math.max(0, postFixScore - (newFindingsIntroduced * 20))
+      : postFixScore;
+
+    logger.info(
+      `Verification analysis for ${fixType} on task ${taskId}: ` +
+      `fixed=${String(fixedCount)}/${String(originalFindings.length)}, ` +
+      `remaining=${String(originalFindingsRemaining)}, ` +
+      `newIssues=${String(newFindingsIntroduced)}, ` +
+      `hasRegression=${String(hasRegression)}, ` +
+      `score=${String(preFixScore)}->${String(postFixScore)} (adjusted=${String(adjustedScore)})`
+    );
 
     // Update TaskFix record with verification results
     await prisma.taskFix.update({
@@ -566,8 +636,7 @@ class FixService {
     });
 
     logger.info(
-      `Verification ${passed ? 'passed' : 'failed'} for ${fixType} fix on task ${taskId}: ` +
-      `score ${String(preFixScore)} -> ${String(postFixScore)} (${scoreImprovement >= 0 ? '+' : ''}${String(scoreImprovement)})`
+      `Verification ${passed ? 'PASSED' : 'FAILED'} for ${fixType} fix on task ${taskId}`
     );
 
     // Determine if retry is allowed
@@ -582,6 +651,11 @@ class FixService {
         remainingFindings: postFixFindings,
         summary: verificationSummary,
         passed,
+        // New fields for per-finding tracking
+        fixedCount,
+        originalFindingsRemaining,
+        newFindingsIntroduced,
+        hasRegression,
       };
 
       logger.info(
@@ -737,10 +811,11 @@ class FixService {
     originalFindings: ReviewFinding[],
     taskContext: string
   ): string {
-    // Format each finding for the prompt
+    // Format each finding with a unique ID for tracking
     const findingsText = originalFindings.map((finding, index) => {
+      const findingId = `ORIG-${String(index + 1).padStart(2, '0')}`;
       const lines = [
-        `${String(index + 1)}. [${finding.severity.toUpperCase()}] ${finding.title}`,
+        `${findingId}. [${finding.severity.toUpperCase()}] ${finding.title}`,
         `   Description: ${finding.description}`,
       ];
       if (finding.file) {
@@ -749,10 +824,10 @@ class FixService {
       return lines.join('\n');
     }).join('\n\n');
 
-    return `[TARGETED VERIFICATION REVIEW]
+    return `[STRICT TARGETED VERIFICATION REVIEW]
 
-This is a TARGETED VERIFICATION review, NOT a general code review.
-Your job is to verify whether the following ${String(originalFindings.length)} specific issue(s) have been fixed.
+This is a STRICT VERIFICATION review. Your job is to verify whether each specific issue was ACTUALLY fixed.
+DO NOT do a general code review - ONLY verify the ${String(originalFindings.length)} specific issue(s) listed below.
 
 =============================================================================
 ORIGINAL FINDINGS TO VERIFY (${fixType.toUpperCase()} issues)
@@ -761,51 +836,63 @@ ORIGINAL FINDINGS TO VERIFY (${fixType.toUpperCase()} issues)
 ${findingsText || 'No specific findings recorded.'}
 
 =============================================================================
-VERIFICATION INSTRUCTIONS
+STRICT VERIFICATION SCORING
 =============================================================================
 
-1. CHECK EACH ORIGINAL FINDING ABOVE
-   - Go to the file/location mentioned
-   - Determine if the specific issue is FIXED or STILL PRESENT
-   - Do NOT do a general code review - focus ONLY on these specific issues
+For EACH original finding above, determine if it was:
+- FIXED (issue no longer exists) → +25 points per finding
+- PARTIALLY FIXED (issue reduced but still present) → +10 points per finding
+- NOT FIXED (issue still fully present) → 0 points
+- REGRESSION (fix made it worse or introduced new issues) → -50 points per regression
 
-2. FOR EACH FINDING, DETERMINE:
-   - FIXED: The specific issue described is no longer present
-   - STILL PRESENT: The issue still exists (include in findings array)
-   - PARTIALLY FIXED: The issue is reduced but not eliminated (include with updated description)
-
-3. CHECK FOR REGRESSION
-   - Did the fix introduce any OBVIOUS new issues in the same files?
-   - Only report critical new issues, don't do a full review
-
-4. CALCULATE SCORE BASED ON FIX SUCCESS RATE:
-   - Score = (number of FIXED issues / total original issues) * 100
-   - If 3 of 4 issues fixed: score = 75
-   - If all issues fixed: score = 100
-   - If no issues fixed: score = 0
-   - Subtract 10 points for each critical new issue introduced
-
-TASK CONTEXT: ${taskContext}
+Base score calculation:
+- Start at 0
+- Add points for each fixed/partially fixed finding
+- Subtract 50 for EACH regression introduced
+- Final score = min(100, max(0, total_points))
 
 =============================================================================
-REQUIRED OUTPUT FORMAT
+REGRESSION DETECTION - CRITICAL
 =============================================================================
 
-After verification, output your results in this EXACT format:
+A REGRESSION occurs when ANY of these are true:
+1. The fix changed code that wasn't related to the original findings
+2. The fix introduced NEW issues not present before (mark these as "[NEW]")
+3. The fix removed functionality or broke existing behavior
+4. The fix made the code MORE complex without actually fixing the issue
+5. The fix moved the problem to a different location instead of fixing it
+
+**If ANY regression is detected, include it in findings with "[NEW]" prefix in title**
+
+=============================================================================
+REQUIRED OUTPUT FORMAT - MUST FOLLOW EXACTLY
+=============================================================================
+
+For EACH original finding, you MUST classify it. Then output:
 
 <review_json>
 {
-  "score": <0-100 based on fix success rate>,
+  "score": <calculated as described above>,
   "findings": [
-    <ONLY include findings that are STILL PRESENT or NEW issues>
+    // Include ONLY:
+    // 1. Original findings that are STILL PRESENT or PARTIALLY FIXED
+    // 2. NEW issues introduced by the fix (prefix title with "[NEW]")
+
+    // For still-present original findings, prefix description with "STILL PRESENT:" or "PARTIALLY FIXED:"
+    // For new issues introduced, prefix title with "[NEW]"
   ]
 }
 </review_json>
 
-Example if 1 of 3 issues is still present:
+=============================================================================
+EXAMPLES
+=============================================================================
+
+EXAMPLE 1: 2 of 3 original issues fixed, no regressions
+Score calculation: 2 * 25 = 50, plus 0 for unfixed = 50 points
 <review_json>
 {
-  "score": 67,
+  "score": 50,
   "findings": [
     {
       "severity": "high",
@@ -818,7 +905,8 @@ Example if 1 of 3 issues is still present:
 }
 </review_json>
 
-Example if all issues are fixed:
+EXAMPLE 2: All 4 issues fixed, no regressions
+Score calculation: 4 * 25 = 100 points
 <review_json>
 {
   "score": 100,
@@ -826,11 +914,175 @@ Example if all issues are fixed:
 }
 </review_json>
 
-CRITICAL:
-- You MUST include the <review_json>...</review_json> tags
-- Only include findings that are STILL PRESENT or are NEW issues
-- Score should reflect fix success rate, not a general code quality assessment
-- This is verification of SPECIFIC fixes, not a general review`;
+EXAMPLE 3: 1 issue fixed, but fix introduced 1 new issue (REGRESSION)
+Score calculation: 1 * 25 = 25, minus 50 for regression = -25, clamped to 0
+<review_json>
+{
+  "score": 0,
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Original Issue Title",
+      "description": "STILL PRESENT: Original issue description",
+      "file": "src/file.ts",
+      "line": 10
+    },
+    {
+      "severity": "high",
+      "title": "[NEW] Memory Leak in Event Handler",
+      "description": "NEW REGRESSION: The fix added an event listener that is never removed, causing memory leaks",
+      "file": "src/file.ts",
+      "line": 25
+    }
+  ]
+}
+</review_json>
+
+EXAMPLE 4: 2 issues partially fixed
+Score calculation: 2 * 10 = 20 points
+<review_json>
+{
+  "score": 20,
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Missing Input Validation",
+      "description": "PARTIALLY FIXED: Some validation added but edge cases still not handled",
+      "file": "src/api.ts"
+    },
+    {
+      "severity": "low",
+      "title": "Error Messages Expose Details",
+      "description": "PARTIALLY FIXED: Generic errors used in production but stack traces still logged",
+      "file": "src/errors.ts"
+    }
+  ]
+}
+</review_json>
+
+=============================================================================
+TASK CONTEXT
+=============================================================================
+${taskContext}
+
+=============================================================================
+CRITICAL REQUIREMENTS
+=============================================================================
+
+1. You MUST include the <review_json>...</review_json> tags
+2. For still-present findings, description MUST start with "STILL PRESENT:" or "PARTIALLY FIXED:"
+3. For NEW issues introduced by fix, title MUST start with "[NEW]"
+4. Score is based ONLY on fix success, NOT general code quality
+5. ANY regression (new issues) should result in very low or zero score
+6. Do NOT report issues unrelated to the original findings or the fix
+7. This is verification of SPECIFIC fixes, not a general review`;
+  }
+
+  /**
+   * Check if a finding appears to be from the original set.
+   * Uses fuzzy matching on title and file location.
+   *
+   * @param finding - Finding to check
+   * @param originalFindings - Original findings to compare against
+   * @returns true if this appears to be an original finding still present
+   */
+  private isOriginalFinding(
+    finding: ReviewFinding,
+    originalFindings: ReviewFinding[]
+  ): boolean {
+    const normalizeTitle = (title: string) =>
+      title.toLowerCase().replace(/^\[new\]\s*/i, '').replace(/^(still present|partially fixed):\s*/i, '').trim();
+
+    const findingTitle = normalizeTitle(finding.title);
+    const findingFile = finding.file?.toLowerCase() || '';
+
+    return originalFindings.some(original => {
+      const originalTitle = normalizeTitle(original.title);
+      const originalFile = original.file?.toLowerCase() || '';
+
+      // Check for title similarity (contains or substantial overlap)
+      const titleMatch =
+        findingTitle.includes(originalTitle) ||
+        originalTitle.includes(findingTitle) ||
+        this.calculateSimilarity(findingTitle, originalTitle) > 0.6;
+
+      // If same file or no file specified, and titles are similar
+      const fileMatch =
+        !findingFile ||
+        !originalFile ||
+        findingFile.includes(originalFile) ||
+        originalFile.includes(findingFile);
+
+      return titleMatch && fileMatch;
+    });
+  }
+
+  /**
+   * Check if a finding is marked as a new issue introduced by the fix.
+   *
+   * @param finding - Finding to check
+   * @returns true if this is a new issue (regression)
+   */
+  private isNewFinding(finding: ReviewFinding): boolean {
+    const title = finding.title.toLowerCase();
+    const description = finding.description.toLowerCase();
+
+    return (
+      title.startsWith('[new]') ||
+      description.startsWith('new regression:') ||
+      description.includes('introduced by') ||
+      description.includes('caused by fix') ||
+      description.includes('new issue')
+    );
+  }
+
+  /**
+   * Calculate similarity between two strings using Levenshtein distance.
+   *
+   * @param a - First string
+   * @param b - Second string
+   * @returns Similarity score between 0 and 1
+   */
+  private calculateSimilarity(a: string, b: string): number {
+    if (a === b) return 1;
+    if (a.length === 0 || b.length === 0) return 0;
+
+    // Initialize matrix with proper dimensions
+    const matrix: number[][] = Array.from({ length: b.length + 1 }, () =>
+      Array.from({ length: a.length + 1 }, () => 0)
+    );
+
+    // Fill first column
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i]![0] = i;
+    }
+
+    // Fill first row
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0]![j] = j;
+    }
+
+    // Fill rest of matrix
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        const prevRow = matrix[i - 1]!;
+        const currRow = matrix[i]!;
+
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          currRow[j] = prevRow[j - 1]!;
+        } else {
+          currRow[j] = Math.min(
+            prevRow[j - 1]! + 1, // substitution
+            currRow[j - 1]! + 1, // insertion
+            prevRow[j]! + 1     // deletion
+          );
+        }
+      }
+    }
+
+    const maxLen = Math.max(a.length, b.length);
+    const distance = matrix[b.length]![a.length]!;
+    return 1 - distance / maxLen;
   }
 }
 

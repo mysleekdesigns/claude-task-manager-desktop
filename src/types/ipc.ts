@@ -1701,6 +1701,14 @@ export interface FixVerificationResult {
   remainingFindings: ReviewFinding[];
   summary: string;
   passed: boolean;
+  /** Number of original findings that were fixed */
+  fixedCount?: number;
+  /** Number of original findings still present */
+  originalFindingsRemaining?: number;
+  /** Number of NEW issues introduced by the fix (regressions) */
+  newFindingsIntroduced?: number;
+  /** Whether a regression was detected (new issues or score drop) */
+  hasRegression?: boolean;
 }
 
 /** Input for starting a fix */

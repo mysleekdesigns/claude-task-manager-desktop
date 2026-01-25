@@ -96,6 +96,14 @@ export interface FixOutput {
   researchSources: string[];
   /** Error message if fix failed */
   error?: string;
+  /** Before code from agent output (for minimal change tracking) */
+  beforeCode?: string;
+  /** After code from agent output (for minimal change tracking) */
+  afterCode?: string;
+  /** Number of lines changed (for minimal change tracking) */
+  linesChanged?: number;
+  /** Whether the change is flagged as suspicious (too many lines changed) */
+  suspiciousOverScope?: boolean;
 }
 
 /**
@@ -105,6 +113,38 @@ export interface FixActivity {
   message: string;
   timestamp: number;
 }
+
+/**
+ * Critical constraints that apply to ALL fix types.
+ * These are prepended to each fix prompt.
+ */
+const CRITICAL_CONSTRAINTS = `
+## CRITICAL CONSTRAINTS - VIOLATIONS WILL FAIL VERIFICATION
+
+1. CHANGES MUST BE MINIMAL - If you change more than 20 lines total, you're doing it wrong
+2. DO NOT touch files not mentioned in the findings
+3. DO NOT rename variables, reorganize imports, or add comments
+4. DO NOT add new error handling, logging, or features
+5. ONLY fix the EXACT issue at the EXACT location specified
+
+## VERIFICATION WILL CHECK:
+- Did the score improve? If it dropped, your fix FAILED
+- Were only the flagged lines changed? If you changed other lines, your fix FAILED
+- Is the code simpler or same complexity? If you made it more complex, your fix FAILED
+
+## OUTPUT REQUIREMENT - BEFORE/AFTER DIFF:
+Before making changes, you MUST output:
+<before_code>
+[The exact lines you're about to change - copy from the file]
+</before_code>
+
+After making changes, you MUST output:
+<after_code>
+[The exact lines after your change]
+</after_code>
+
+This diff will be reviewed. If your changes are not minimal, verification will fail.
+`;
 
 /**
  * Fix prompts for each fix type
@@ -121,19 +161,22 @@ CRITICAL INSTRUCTIONS - READ FIRST
 4. Do NOT add features, change APIs, or modify behavior beyond the security fix
 5. If a file is not listed in the findings, do NOT modify it
 6. Focus on the EXACT line/location specified - do not expand scope
+${CRITICAL_CONSTRAINTS}
 
 ## Step 1: Read the Flagged Code
 For EACH finding:
 1. Read the file at the specified location
-2. Understand the specific vulnerable pattern
-3. Identify the minimal change needed to fix it
+2. Quote the EXACT problematic code in a <before_code> block
+3. Understand the specific vulnerable pattern
+4. Identify the minimal change needed to fix it
 
 ## Step 2: Apply Targeted Fixes
 For EACH finding:
 1. Apply the fix at the EXACT location specified
-2. Keep changes as small as possible
+2. Keep changes as small as possible (aim for 1-5 lines per finding)
 3. Do NOT change surrounding code that is working correctly
 4. Preserve comments, formatting, and structure
+5. After editing, show the result in an <after_code> block
 
 ## What to Fix (Security):
 - Input validation/sanitization gaps at the flagged location
@@ -182,7 +225,8 @@ CRITICAL RULES:
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
 4. This output format is MANDATORY - your response will be marked as FAILED without it
-5. Only report success:true if you actually modified files to fix vulnerabilities`,
+5. Only report success:true if you actually modified files to fix vulnerabilities
+6. You MUST include <before_code> and <after_code> blocks showing your minimal changes`,
 
   quality: `You are a code quality specialist. Your goal is to fix ONLY the specific quality issues listed below.
 
@@ -195,19 +239,22 @@ CRITICAL INSTRUCTIONS - READ FIRST
 4. Do NOT add features, change APIs, or modify behavior beyond the quality fix
 5. If a file is not listed in the findings, do NOT modify it
 6. Focus on the EXACT line/location specified - do not expand scope
+${CRITICAL_CONSTRAINTS}
 
 ## Step 1: Read the Flagged Code
 For EACH finding:
 1. Read the file at the specified location
-2. Understand the specific quality issue
-3. Identify the minimal change needed to fix it
+2. Quote the EXACT problematic code in a <before_code> block
+3. Understand the specific quality issue
+4. Identify the minimal change needed to fix it
 
 ## Step 2: Apply Targeted Fixes
 For EACH finding:
 1. Apply the fix at the EXACT location specified
-2. Keep changes as small as possible
+2. Keep changes as small as possible (aim for 1-5 lines per finding)
 3. Do NOT change surrounding code that is working correctly
 4. Preserve comments, formatting, and structure
+5. After editing, show the result in an <after_code> block
 
 ## What to Fix (Quality):
 - Magic numbers/strings at flagged locations -> extract to named constants
@@ -256,7 +303,8 @@ CRITICAL RULES:
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
 4. This output format is MANDATORY - your response will be marked as FAILED without it
-5. Only report success:true if you actually modified files to fix quality issues`,
+5. Only report success:true if you actually modified files to fix quality issues
+6. You MUST include <before_code> and <after_code> blocks showing your minimal changes`,
 
   performance: `You are a performance optimization specialist. Your goal is to fix ONLY the specific performance issues listed below.
 
@@ -269,19 +317,22 @@ CRITICAL INSTRUCTIONS - READ FIRST
 4. Do NOT add features, change APIs, or modify behavior beyond the performance fix
 5. If a file is not listed in the findings, do NOT modify it
 6. Focus on the EXACT line/location specified - do not expand scope
+${CRITICAL_CONSTRAINTS}
 
 ## Step 1: Read the Flagged Code
 For EACH finding:
 1. Read the file at the specified location
-2. Understand the specific performance issue
-3. Identify the minimal change needed to fix it
+2. Quote the EXACT problematic code in a <before_code> block
+3. Understand the specific performance issue
+4. Identify the minimal change needed to fix it
 
 ## Step 2: Apply Targeted Fixes
 For EACH finding:
 1. Apply the fix at the EXACT location specified
-2. Keep changes as small as possible
+2. Keep changes as small as possible (aim for 1-5 lines per finding)
 3. Do NOT change surrounding code that is working correctly
 4. Preserve comments, formatting, and structure
+5. After editing, show the result in an <after_code> block
 
 ## What to Fix (Performance):
 - Missing memoization at flagged locations -> add useMemo/useCallback/React.memo
@@ -331,7 +382,8 @@ CRITICAL RULES:
 2. Output NOTHING after the closing </fix_json> tag
 3. The JSON must be valid - no trailing commas, no comments
 4. This output format is MANDATORY - your response will be marked as FAILED without it
-5. Only report success:true if you actually modified files to fix performance issues`,
+5. Only report success:true if you actually modified files to fix performance issues
+6. You MUST include <before_code> and <after_code> blocks showing your minimal changes`,
 };
 
 /**
@@ -982,14 +1034,18 @@ class FixAgentPoolManager {
       lines.push(`**Severity:** ${finding.severity}`);
       lines.push('');
 
-      // Location information
+      // Location information with explicit code context instructions
       if (finding.file) {
         const locationStr = finding.line
           ? `${finding.file}:${String(finding.line)}`
           : finding.file;
         lines.push(`**Location:** \`${locationStr}\``);
         lines.push('');
-        lines.push('**Action Required:** Read this file to see the flagged code, then apply a minimal fix at this exact location.');
+        lines.push('**REQUIRED STEPS:**');
+        lines.push(`1. First, READ the file \`${finding.file}\` at line ${finding.line ? String(finding.line) : '1'}`);
+        lines.push('2. Quote the EXACT problematic code in a <before_code> block');
+        lines.push('3. Apply your minimal fix (aim for 1-5 lines changed)');
+        lines.push('4. Show the result in an <after_code> block');
         lines.push('');
       }
 
@@ -1039,7 +1095,7 @@ class FixAgentPoolManager {
       'stream-json',
       '--verbose', // Required when using --print with --output-format=stream-json
       '--max-turns',
-      '50', // More turns for complex fixes that include research, file reads, and synthesis
+      '15', // Limited turns for focused, minimal fixes - prevents over-scoping
       prompt,
     ];
   }
@@ -1313,6 +1369,66 @@ class FixAgentPoolManager {
   }
 
   /**
+   * Extract before/after code blocks and calculate lines changed.
+   * Used to detect over-scoping in fix agents.
+   *
+   * @param text - The concatenated output text
+   * @returns Object with before code, after code, lines changed, and suspicious flag
+   */
+  private extractCodeDiff(text: string): {
+    beforeCode: string | undefined;
+    afterCode: string | undefined;
+    linesChanged: number;
+    suspiciousOverScope: boolean;
+  } {
+    const MAX_LINES_ALLOWED = 20;
+
+    // Extract all before_code blocks
+    const beforeBlocks: string[] = [];
+    const beforeRegex = /<before_code>([\s\S]*?)<\/before_code>/gi;
+    let match;
+    while ((match = beforeRegex.exec(text)) !== null) {
+      if (match[1]) {
+        beforeBlocks.push(match[1].trim());
+      }
+    }
+
+    // Extract all after_code blocks
+    const afterBlocks: string[] = [];
+    const afterRegex = /<after_code>([\s\S]*?)<\/after_code>/gi;
+    while ((match = afterRegex.exec(text)) !== null) {
+      if (match[1]) {
+        afterBlocks.push(match[1].trim());
+      }
+    }
+
+    const beforeCode = beforeBlocks.length > 0 ? beforeBlocks.join('\n---\n') : undefined;
+    const afterCode = afterBlocks.length > 0 ? afterBlocks.join('\n---\n') : undefined;
+
+    // Calculate total lines changed
+    let linesChanged = 0;
+    if (beforeCode && afterCode) {
+      const beforeLines = beforeCode.split('\n').length;
+      const afterLines = afterCode.split('\n').length;
+      linesChanged = Math.max(beforeLines, afterLines);
+    } else if (afterCode) {
+      // Only after code provided - count its lines
+      linesChanged = afterCode.split('\n').length;
+    }
+
+    // Mark as suspicious if more than MAX_LINES_ALLOWED lines changed
+    const suspiciousOverScope = linesChanged > MAX_LINES_ALLOWED;
+
+    if (suspiciousOverScope) {
+      logger.warn(
+        `OVER-SCOPE WARNING: Agent changed ${String(linesChanged)} lines (max allowed: ${String(MAX_LINES_ALLOWED)})`
+      );
+    }
+
+    return { beforeCode, afterCode, linesChanged, suspiciousOverScope };
+  }
+
+  /**
    * Parse fix output from Claude Code.
    * Handles stream-json NDJSON format where output is wrapped in event structures.
    */
@@ -1332,6 +1448,15 @@ class FixAgentPoolManager {
       // Log message type distribution for debugging
       logger.info(`Message type distribution: ${JSON.stringify(typeCounts)}`);
 
+      // Step 1.5: Extract before/after code blocks for minimal changes tracking
+      const codeDiff = this.extractCodeDiff(concatenatedText);
+      if (codeDiff.beforeCode || codeDiff.afterCode) {
+        logger.info(
+          `Code diff tracking: ${String(codeDiff.linesChanged)} lines changed, ` +
+          `suspicious: ${String(codeDiff.suspiciousOverScope)}`
+        );
+      }
+
       // Step 2: Look for <fix_json>...</fix_json> tags in concatenated text
       const xmlJsonContent = this.extractFromXmlTags(concatenatedText, 'fix_json');
       if (xmlJsonContent) {
@@ -1343,9 +1468,22 @@ class FixAgentPoolManager {
               filesModified: Array.isArray(parsed.filesModified) ? parsed.filesModified : [],
               summary: typeof parsed.summary === 'string' ? parsed.summary : '',
               researchSources: Array.isArray(parsed.researchSources) ? parsed.researchSources : [],
+              linesChanged: codeDiff.linesChanged,
+              suspiciousOverScope: codeDiff.suspiciousOverScope,
             };
+            // Add code diff tracking only if values exist
+            if (codeDiff.beforeCode) {
+              result.beforeCode = codeDiff.beforeCode;
+            }
+            if (codeDiff.afterCode) {
+              result.afterCode = codeDiff.afterCode;
+            }
             if (!result.success && parsed.error) {
               result.error = parsed.error;
+            }
+            // Add over-scope warning to summary if suspicious
+            if (result.success && codeDiff.suspiciousOverScope) {
+              result.summary = `[OVER-SCOPE WARNING: ${String(codeDiff.linesChanged)} lines changed] ${result.summary}`;
             }
             logger.info(`Parsed fix output from XML tags: success=${String(result.success)}, files=${String(result.filesModified.length)}`);
             return result;
@@ -1366,9 +1504,22 @@ class FixAgentPoolManager {
               filesModified: Array.isArray(parsed.filesModified) ? parsed.filesModified : [],
               summary: typeof parsed.summary === 'string' ? parsed.summary : '',
               researchSources: Array.isArray(parsed.researchSources) ? parsed.researchSources : [],
+              linesChanged: codeDiff.linesChanged,
+              suspiciousOverScope: codeDiff.suspiciousOverScope,
             };
+            // Add code diff tracking only if values exist
+            if (codeDiff.beforeCode) {
+              result.beforeCode = codeDiff.beforeCode;
+            }
+            if (codeDiff.afterCode) {
+              result.afterCode = codeDiff.afterCode;
+            }
             if (!result.success && parsed.error) {
               result.error = parsed.error;
+            }
+            // Add over-scope warning to summary if suspicious
+            if (result.success && codeDiff.suspiciousOverScope) {
+              result.summary = `[OVER-SCOPE WARNING: ${String(codeDiff.linesChanged)} lines changed] ${result.summary}`;
             }
             logger.info(`Parsed fix output from raw XML tags: success=${String(result.success)}, files=${String(result.filesModified.length)}`);
             return result;
