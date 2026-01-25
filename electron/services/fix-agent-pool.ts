@@ -126,6 +126,7 @@ const CRITICAL_CONSTRAINTS = `
 3. DO NOT rename variables, reorganize imports, or add comments
 4. DO NOT add new error handling, logging, or features
 5. ONLY fix the EXACT issue at the EXACT location specified
+6. You MUST end your response with <fix_json>...</fix_json> tags - this is REQUIRED for your work to be registered
 
 ## VERIFICATION WILL CHECK:
 - Did the score improve? If it dropped, your fix FAILED
@@ -151,6 +152,8 @@ This diff will be reviewed. If your changes are not minimal, verification will f
  */
 const FIX_PROMPTS: Record<FixType, string> = {
   security: `You are a security fix specialist. Your goal is to fix ONLY the specific vulnerabilities listed below.
+
+**IMPORTANT: YOU MUST END YOUR RESPONSE WITH <fix_json>...</fix_json> TAGS. YOUR RESPONSE WILL BE MARKED AS FAILED WITHOUT THIS.**
 
 ===========================================
 CRITICAL INSTRUCTIONS - READ FIRST
@@ -230,6 +233,8 @@ CRITICAL RULES:
 
   quality: `You are a code quality specialist. Your goal is to fix ONLY the specific quality issues listed below.
 
+**IMPORTANT: YOU MUST END YOUR RESPONSE WITH <fix_json>...</fix_json> TAGS. YOUR RESPONSE WILL BE MARKED AS FAILED WITHOUT THIS.**
+
 ===========================================
 CRITICAL INSTRUCTIONS - READ FIRST
 ===========================================
@@ -307,6 +312,8 @@ CRITICAL RULES:
 6. You MUST include <before_code> and <after_code> blocks showing your minimal changes`,
 
   performance: `You are a performance optimization specialist. Your goal is to fix ONLY the specific performance issues listed below.
+
+**IMPORTANT: YOU MUST END YOUR RESPONSE WITH <fix_json>...</fix_json> TAGS. YOUR RESPONSE WILL BE MARKED AS FAILED WITHOUT THIS.**
 
 ===========================================
 CRITICAL INSTRUCTIONS - READ FIRST
@@ -1095,7 +1102,11 @@ class FixAgentPoolManager {
       'stream-json',
       '--verbose', // Required when using --print with --output-format=stream-json
       '--max-turns',
-      '15', // Limited turns for focused, minimal fixes - prevents over-scoping
+      // 50 turns provides ample room for complex fixes that require multiple file reads,
+      // analysis, making the fix, running typecheck verification, and outputting the
+      // required <fix_json> tags. The over-scope detection (20-line limit) and strict
+      // prompts prevent runaway changes regardless of turn count.
+      '50',
       prompt,
     ];
   }
@@ -1542,6 +1553,13 @@ class FixAgentPoolManager {
         const hasEditToolUsage = /Editing\s+[\w./-]+|Writing\s+[\w./-]+|The file.*has been updated/i.test(concatenatedText);
         const hasWriteConfirmation = /successfully|written|saved|updated.*file/i.test(concatenatedText);
 
+        // Check for before/after code blocks - indicates edit INTENT even if tool patterns not found
+        const hasBeforeAfterBlocks = codeDiff.linesChanged > 0;
+        if (hasBeforeAfterBlocks && !hasEditToolUsage) {
+          logger.warn(`  - WARNING: Found <before_code>/<after_code> blocks (${String(codeDiff.linesChanged)} lines) but no Edit tool usage detected.`);
+          logger.warn(`    This indicates the agent may have shown edit intent but did not complete the edit.`);
+        }
+
         // Check for "already optimized/secure" claims - these should report success:false
         const claimsAlreadyDone = /already\s*(?:optimized|secure|implemented|in\s*place|done|fixed|has|using|uses)/i.test(concatenatedText);
 
@@ -1562,34 +1580,79 @@ class FixAgentPoolManager {
 
         // CONSERVATIVE SUCCESS CRITERIA:
         // Only synthesize success if:
-        // 1. There's evidence of actual file edits (Edit/Write tool usage)
+        // 1. There's evidence of actual file edits (Edit/Write tool usage OR before/after blocks present)
         // 2. AND there are no failure indicators
         // 3. AND it's not just claiming "already done" without making changes
-        const hasActualEdits = (hasEditToolUsage || hasWriteConfirmation) && filesModified.length > 0;
-        const synthesizedSuccess = hasActualEdits && !hasFailureIndicators && !claimsAlreadyDone;
+        // 4. AND if before/after blocks exist, they are not over-scoped (>20 lines suggests agent went off-track)
+        const hasActualEdits = (hasEditToolUsage || hasWriteConfirmation || hasBeforeAfterBlocks) && !hasFailureIndicators;
+
+        // If before/after blocks exist but over-scope is detected, the agent likely went off-track
+        let overScopeBlocked = false;
+        if (hasBeforeAfterBlocks && codeDiff.suspiciousOverScope) {
+          logger.warn(`  - OVER-SCOPE BLOCKED: Agent showed ${String(codeDiff.linesChanged)} lines of changes (>20 lines threshold).`);
+          logger.warn(`    This suggests the agent went off-track and the fix should not be considered successful.`);
+          overScopeBlocked = true;
+        }
+
+        const synthesizedSuccess = hasActualEdits && !hasFailureIndicators && !claimsAlreadyDone && !overScopeBlocked;
+
+        // Detect if agent likely ran out of turns before completing
+        // Signs: Agent was actively working (reading/editing files) but didn't output <fix_json> tags
+        const hasReadActivity = /Reading\s+[\w./-]+|Read\s+[\w./-]+/i.test(concatenatedText);
+        const wasActivelyWorking = hasReadActivity || hasEditToolUsage || hasBeforeAfterBlocks;
+        const likelyRanOutOfTurns = wasActivelyWorking && !synthesizedSuccess && !hasFailureIndicators && !claimsAlreadyDone && !overScopeBlocked;
 
         logger.warn(`Fallback analysis:`);
         logger.warn(`  - Edit tool usage detected: ${String(hasEditToolUsage)}`);
         logger.warn(`  - Write confirmation found: ${String(hasWriteConfirmation)}`);
+        logger.warn(`  - Before/after blocks present: ${String(hasBeforeAfterBlocks)} (${String(codeDiff.linesChanged)} lines)`);
         logger.warn(`  - Files modified detected: ${String(filesModified.length)}`);
         logger.warn(`  - Claims already done: ${String(claimsAlreadyDone)}`);
         logger.warn(`  - Has failure indicators: ${String(hasFailureIndicators)}`);
+        logger.warn(`  - Over-scope blocked: ${String(overScopeBlocked)}`);
         logger.warn(`  - Synthesized success: ${String(synthesizedSuccess)}`);
+        logger.warn(`  - Likely ran out of turns: ${String(likelyRanOutOfTurns)}`);
 
-        // Even if we detect edits, mark as failure because the agent didn't follow instructions
-        // This ensures proper verification happens
+        // Build appropriate summary based on what we found
+        let summary: string;
+        if (synthesizedSuccess) {
+          summary = filesModified.length > 0
+            ? `[FALLBACK] Fix applied but agent did not output required format. Files: ${filesModified.join(', ')}`
+            : `[FALLBACK] Fix applied (detected from before/after blocks) but agent did not output required format.`;
+        } else if (overScopeBlocked) {
+          summary = `[FALLBACK] Fix rejected - agent made excessive changes (${String(codeDiff.linesChanged)} lines) suggesting off-track behavior.`;
+        } else if (likelyRanOutOfTurns) {
+          summary = `[TURN LIMIT] Agent ran out of turns before completing - fix was incomplete`;
+        } else {
+          summary = `[FALLBACK] Fix incomplete - agent did not output required <fix_json> format`;
+        }
+
         const result: FixOutput = {
           success: synthesizedSuccess,
           filesModified: synthesizedSuccess ? filesModified : [],
-          summary: synthesizedSuccess
-            ? `[FALLBACK] Fix applied but agent did not output required format. Files: ${filesModified.join(', ')}`
-            : `[FALLBACK] Fix incomplete - agent did not output required <fix_json> format`,
+          summary,
           researchSources: [],
+          linesChanged: codeDiff.linesChanged,
+          suspiciousOverScope: codeDiff.suspiciousOverScope,
         };
+
+        // Add code diff tracking only if values exist
+        if (codeDiff.beforeCode) {
+          result.beforeCode = codeDiff.beforeCode;
+        }
+        if (codeDiff.afterCode) {
+          result.afterCode = codeDiff.afterCode;
+        }
 
         // Only add error property if not successful
         if (!synthesizedSuccess) {
-          result.error = 'Agent did not complete fix process - missing required <fix_json> output tags';
+          if (overScopeBlocked) {
+            result.error = `Agent made excessive changes (${String(codeDiff.linesChanged)} lines) - likely went off-track. Missing required <fix_json> output tags.`;
+          } else if (likelyRanOutOfTurns) {
+            result.error = 'Agent ran out of turns before completing - the fix may need to be retried or the issue may be too complex';
+          } else {
+            result.error = 'Agent did not complete fix process - missing required <fix_json> output tags';
+          }
         }
 
         return result;
