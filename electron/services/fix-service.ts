@@ -824,62 +824,51 @@ class FixService {
       return lines.join('\n');
     }).join('\n\n');
 
-    return `[STRICT TARGETED VERIFICATION REVIEW]
+    return `[TARGETED VERIFICATION REVIEW]
 
-This is a STRICT VERIFICATION review. Your job is to verify whether each specific issue was ACTUALLY fixed.
-DO NOT do a general code review - ONLY verify the ${String(originalFindings.length)} specific issue(s) listed below.
+This is a verification review following a fix attempt. Review the code at the locations mentioned below
+and evaluate its CURRENT quality using the same scoring criteria as a standard ${fixType} review.
 
 =============================================================================
-ORIGINAL FINDINGS TO VERIFY (${fixType.toUpperCase()} issues)
+CONTEXT: ORIGINAL FINDINGS (${fixType.toUpperCase()} issues)
 =============================================================================
+
+This review follows a fix attempt for these ${String(originalFindings.length)} issue(s):
 
 ${findingsText || 'No specific findings recorded.'}
 
-=============================================================================
-STRICT VERIFICATION SCORING
-=============================================================================
-
-For EACH original finding above, determine if it was:
-- FIXED (issue no longer exists) → +25 points per finding
-- PARTIALLY FIXED (issue reduced but still present) → +10 points per finding
-- NOT FIXED (issue still fully present) → 0 points
-- REGRESSION (fix made it worse or introduced new issues) → -50 points per regression
-
-Base score calculation:
-- Start at 0
-- Add points for each fixed/partially fixed finding
-- Subtract 50 for EACH regression introduced
-- Final score = min(100, max(0, total_points))
+Your task:
+1. Review the code at the locations mentioned above
+2. Determine which original issues still exist (if any)
+3. Check if any NEW issues were introduced by the fix
+4. Score the CURRENT code quality (not fix effectiveness)
 
 =============================================================================
-REGRESSION DETECTION - CRITICAL
+SCORING INSTRUCTIONS
 =============================================================================
 
-A REGRESSION occurs when ANY of these are true:
-1. The fix changed code that wasn't related to the original findings
-2. The fix introduced NEW issues not present before (mark these as "[NEW]")
-3. The fix removed functionality or broke existing behavior
-4. The fix made the code MORE complex without actually fixing the issue
-5. The fix moved the problem to a different location instead of fixing it
+Score this code using the SAME criteria as a standard ${fixType} review:
+- 100 = Perfect, no issues found
+- 90-99 = Excellent, only minor/low severity issues
+- 80-89 = Good, some medium severity issues
+- 70-79 = Acceptable, noticeable issues that should be addressed
+- 60-69 = Needs work, multiple issues affecting quality
+- Below 60 = Significant problems requiring attention
 
-**If ANY regression is detected, include it in findings with "[NEW]" prefix in title**
+IMPORTANT: Score based on the CURRENT state of the code, not on how many original issues were fixed.
+This score should be COMPARABLE to what a fresh ${fixType} review would produce.
 
 =============================================================================
-REQUIRED OUTPUT FORMAT - MUST FOLLOW EXACTLY
+REQUIRED OUTPUT FORMAT
 =============================================================================
-
-For EACH original finding, you MUST classify it. Then output:
 
 <review_json>
 {
-  "score": <calculated as described above>,
+  "score": <0-100 based on current code quality>,
   "findings": [
-    // Include ONLY:
-    // 1. Original findings that are STILL PRESENT or PARTIALLY FIXED
-    // 2. NEW issues introduced by the fix (prefix title with "[NEW]")
-
-    // For still-present original findings, prefix description with "STILL PRESENT:" or "PARTIALLY FIXED:"
-    // For new issues introduced, prefix title with "[NEW]"
+    // Any issues that exist in the code now (original or new)
+    // For still-present original findings, prefix description with "STILL PRESENT:"
+    // For new issues introduced by the fix, prefix title with "[NEW]"
   ]
 }
 </review_json>
@@ -888,11 +877,10 @@ For EACH original finding, you MUST classify it. Then output:
 EXAMPLES
 =============================================================================
 
-EXAMPLE 1: 2 of 3 original issues fixed, no regressions
-Score calculation: 2 * 25 = 50, plus 0 for unfixed = 50 points
+EXAMPLE 1: Code improved, 1 original issue remains
 <review_json>
 {
-  "score": 50,
+  "score": 75,
   "findings": [
     {
       "severity": "high",
@@ -905,56 +893,25 @@ Score calculation: 2 * 25 = 50, plus 0 for unfixed = 50 points
 }
 </review_json>
 
-EXAMPLE 2: All 4 issues fixed, no regressions
-Score calculation: 4 * 25 = 100 points
+EXAMPLE 2: All issues fixed, code is clean
 <review_json>
 {
-  "score": 100,
+  "score": 95,
   "findings": []
 }
 </review_json>
 
-EXAMPLE 3: 1 issue fixed, but fix introduced 1 new issue (REGRESSION)
-Score calculation: 1 * 25 = 25, minus 50 for regression = -25, clamped to 0
+EXAMPLE 3: Fix introduced a new issue
 <review_json>
 {
-  "score": 0,
+  "score": 65,
   "findings": [
-    {
-      "severity": "medium",
-      "title": "Original Issue Title",
-      "description": "STILL PRESENT: Original issue description",
-      "file": "src/file.ts",
-      "line": 10
-    },
     {
       "severity": "high",
       "title": "[NEW] Memory Leak in Event Handler",
-      "description": "NEW REGRESSION: The fix added an event listener that is never removed, causing memory leaks",
+      "description": "The fix added an event listener that is never removed, causing memory leaks",
       "file": "src/file.ts",
       "line": 25
-    }
-  ]
-}
-</review_json>
-
-EXAMPLE 4: 2 issues partially fixed
-Score calculation: 2 * 10 = 20 points
-<review_json>
-{
-  "score": 20,
-  "findings": [
-    {
-      "severity": "medium",
-      "title": "Missing Input Validation",
-      "description": "PARTIALLY FIXED: Some validation added but edge cases still not handled",
-      "file": "src/api.ts"
-    },
-    {
-      "severity": "low",
-      "title": "Error Messages Expose Details",
-      "description": "PARTIALLY FIXED: Generic errors used in production but stack traces still logged",
-      "file": "src/errors.ts"
     }
   ]
 }
@@ -970,12 +927,11 @@ CRITICAL REQUIREMENTS
 =============================================================================
 
 1. You MUST include the <review_json>...</review_json> tags
-2. For still-present findings, description MUST start with "STILL PRESENT:" or "PARTIALLY FIXED:"
-3. For NEW issues introduced by fix, title MUST start with "[NEW]"
-4. Score is based ONLY on fix success, NOT general code quality
-5. ANY regression (new issues) should result in very low or zero score
-6. Do NOT report issues unrelated to the original findings or the fix
-7. This is verification of SPECIFIC fixes, not a general review`;
+2. For still-present original findings, prefix description with "STILL PRESENT:"
+3. For NEW issues introduced by fix, prefix title with "[NEW]"
+4. Score must be 0-100 (100 = no issues, 0 = critical problems)
+5. Severity must be one of: "critical", "high", "medium", "low"
+6. Focus on the code locations from the original findings, but also note any new issues introduced`;
   }
 
   /**
