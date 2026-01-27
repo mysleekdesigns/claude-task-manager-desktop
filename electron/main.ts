@@ -17,7 +17,7 @@ import {
 } from './utils/window-state.js';
 import { trayService } from './services/tray.js';
 import { shortcutService } from './services/shortcuts.js';
-import { registerIPCHandlers, createIPCLogger } from './ipc/index.js';
+import { registerIPCHandlers, createIPCLogger, cleanupSyncHandlers } from './ipc/index.js';
 import { databaseService } from './services/database.js';
 import { performStartupCleanup } from './services/startup-cleanup.js';
 import { terminalManager } from './services/terminal.js';
@@ -491,6 +491,7 @@ app.on('will-quit', () => {
   claudeCodeService.killAllProcesses(); // Backup cleanup for Claude processes
   terminalManager.killAll(); // Backup cleanup for terminal processes
   void supabaseService.cleanup(); // Cleanup Supabase subscriptions
+  void cleanupSyncHandlers(); // Cleanup sync handlers (realtime + queue)
 });
 
 app.on('window-all-closed', () => {

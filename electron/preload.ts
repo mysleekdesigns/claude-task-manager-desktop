@@ -195,6 +195,17 @@ const VALID_INVOKE_CHANNELS = [
   'research:searchStackOverflow',
   'research:searchGitHub',
   'research:openUrl',
+  // Sync channels (Phase 17)
+  'sync:getStatus',
+  'sync:triggerSync',
+  'sync:getQueueCount',
+  'sync:subscribe',
+  'sync:unsubscribe',
+  'sync:getActiveSubscriptions',
+  'sync:performFullSync',
+  'sync:performIncrementalSync',
+  'sync:performSync',
+  'sync:resetSyncState',
 ] as const;
 
 /**
@@ -208,6 +219,15 @@ const VALID_EVENT_CHANNELS = [
   'auth:state-change',
   'auth:oauth-success',
   'auth:oauth-error',
+  // Sync channels (Phase 17)
+  'sync:status-change',
+  'sync:incoming-change',
+  'sync:queue-status',
+  'sync:progress',
+  'sync:error',
+  'sync:projects-change',
+  'sync:tasks-change',
+  'sync:project_members-change',
 ] as const;
 
 // ============================================================================
@@ -228,7 +248,9 @@ type DynamicEventChannel =
   | `review:complete:${string}`
   | `fix:progress:${string}:${string}`
   | `fix:complete:${string}`
-  | `fix:verified:${string}:${string}`;
+  | `fix:verified:${string}:${string}`
+  // Sync channels (table-specific)
+  | `sync:${string}-change`;
 
 /**
  * All valid event channels (static + dynamic)
@@ -330,6 +352,11 @@ function isValidEventChannel(channel: string): channel is AllValidEventChannels 
     channel.startsWith('fix:complete:') ||
     channel.startsWith('fix:verified:')
   ) {
+    return true;
+  }
+
+  // Check dynamic sync channels (table-specific changes)
+  if (channel.startsWith('sync:') && channel.endsWith('-change')) {
     return true;
   }
 

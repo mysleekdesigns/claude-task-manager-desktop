@@ -19,3 +19,14 @@ export {
   getDeepLinkPath,
 } from './deep-link';
 export type { OAuthTokens, OAuthError, OAuthCallbackResult } from './deep-link';
+export { syncQueueService } from './sync-queue';
+export type { SyncChange, SyncStatus, SyncTable, SyncOperation } from './sync-queue';
+export { realtimeService } from './realtime';
+export type {
+  SyncTableName,
+  ChangeEventType,
+  RealtimeChangePayload,
+  SubscriptionStatus,
+} from './realtime';
+export { syncEngineService } from './sync-engine';
+export type { SyncResult, SyncProgressCallback } from './sync-engine';

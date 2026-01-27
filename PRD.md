@@ -1355,32 +1355,32 @@ Integrate Supabase as the cloud backend for real-time collaboration. This enable
 Implement bidirectional sync between local SQLite and Supabase PostgreSQL with real-time updates via WebSocket subscriptions.
 
 ### 17.1 Sync Architecture
-- [ ] Design sync data flow
+- [x] Design sync data flow
   ```
   Local SQLite (primary) <-> Sync Engine <-> Supabase PostgreSQL (shared)
                                 ^
                           WebSocket (real-time updates)
   ```
-- [ ] Define sync priorities (local-first)
-- [ ] Document conflict resolution strategy
+- [x] Define sync priorities (local-first)
+- [x] Document conflict resolution strategy
 
 ### 17.2 Supabase Real-Time Subscriptions
-- [ ] Create `electron/services/realtime.ts`
-- [ ] Subscribe to Postgres Changes
-  - [ ] Projects table changes
-  - [ ] Tasks table changes
-  - [ ] Project members changes
-- [ ] Filter by user's projects (RLS handles this)
-- [ ] Handle subscription lifecycle
-  - [ ] Connect on app start
-  - [ ] Reconnect on connection loss
-  - [ ] Clean up on app close
+- [x] Create `electron/services/realtime.ts`
+- [x] Subscribe to Postgres Changes
+  - [x] Projects table changes
+  - [x] Tasks table changes
+  - [x] Project members changes
+- [x] Filter by user's projects (RLS handles this)
+- [x] Handle subscription lifecycle
+  - [x] Connect on app start
+  - [x] Reconnect on connection loss
+  - [x] Clean up on app close
 
 ### 17.3 Change Detection (Local -> Cloud)
-- [ ] Track local changes for sync
-  - [ ] Hook into Prisma operations
-  - [ ] Capture INSERT/UPDATE/DELETE
-- [ ] Create change log table locally
+- [x] Track local changes for sync
+  - [x] Hook into Prisma operations
+  - [x] Capture INSERT/UPDATE/DELETE
+- [x] Create change log table locally
   ```prisma
   model SyncLog {
     id        String   @id @default(cuid())
@@ -1392,52 +1392,52 @@ Implement bidirectional sync between local SQLite and Supabase PostgreSQL with r
     createdAt DateTime @default(now())
   }
   ```
-- [ ] Debounce rapid changes
+- [x] Debounce rapid changes
 
 ### 17.4 Sync Queue Service
-- [ ] Create `electron/services/sync-queue.ts`
-- [ ] Implement queue operations
-  - [ ] `enqueue(change)` - Add to sync queue
-  - [ ] `processQueue()` - Push pending changes
-  - [ ] `getQueueStatus()` - Return pending count
-- [ ] Persist queue to survive app restarts
-- [ ] Retry failed syncs with exponential backoff
-- [ ] Maximum retry limit (3 attempts)
+- [x] Create `electron/services/sync-queue.ts`
+- [x] Implement queue operations
+  - [x] `enqueue(change)` - Add to sync queue
+  - [x] `processQueue()` - Push pending changes
+  - [x] `getQueueStatus()` - Return pending count
+- [x] Persist queue to survive app restarts
+- [x] Retry failed syncs with exponential backoff
+- [x] Maximum retry limit (3 attempts)
 
 ### 17.5 Incoming Changes (Cloud -> Local)
-- [ ] Handle real-time Postgres Changes events
-- [ ] Apply changes to local SQLite
-  - [ ] INSERT -> Create local record
-  - [ ] UPDATE -> Update local record
-  - [ ] DELETE -> Remove local record
-- [ ] Broadcast changes to renderer via IPC
-- [ ] Invalidate React Query cache
+- [x] Handle real-time Postgres Changes events
+- [x] Apply changes to local SQLite
+  - [x] INSERT -> Create local record
+  - [x] UPDATE -> Update local record
+  - [x] DELETE -> Remove local record
+- [x] Broadcast changes to renderer via IPC
+- [x] Invalidate React Query cache
 
 ### 17.6 IPC Handlers for Sync
-- [ ] Create `electron/ipc/sync.ts`
-  - [ ] `sync:getStatus` - Return sync status
-  - [ ] `sync:triggerSync` - Manual sync trigger
-  - [ ] `sync:getQueueCount` - Pending changes count
-- [ ] Push events to renderer
-  - [ ] `sync:status-change` - Online/offline/syncing
-  - [ ] `sync:incoming-change` - New data from cloud
-  - [ ] `sync:error` - Sync errors
+- [x] Create `electron/ipc/sync.ts`
+  - [x] `sync:getStatus` - Return sync status
+  - [x] `sync:triggerSync` - Manual sync trigger
+  - [x] `sync:getQueueCount` - Pending changes count
+- [x] Push events to renderer
+  - [x] `sync:status-change` - Online/offline/syncing
+  - [x] `sync:incoming-change` - New data from cloud
+  - [x] `sync:error` - Sync errors
 
 ### 17.7 Initial Sync (Bootstrap)
-- [ ] Implement full sync on first connect
-  - [ ] Fetch all user's projects
-  - [ ] Fetch all tasks in those projects
-  - [ ] Store locally with sync metadata
-- [ ] Incremental sync after bootstrap
-  - [ ] Use `updated_at` for delta queries
-  - [ ] Only fetch changed records
+- [x] Implement full sync on first connect
+  - [x] Fetch all user's projects
+  - [x] Fetch all tasks in those projects
+  - [x] Store locally with sync metadata
+- [x] Incremental sync after bootstrap
+  - [x] Use `updated_at` for delta queries
+  - [x] Only fetch changed records
 
 **Phase 17 Verification:**
-- [ ] Changes on computer A appear on computer B
-- [ ] Real-time updates arrive within seconds
-- [ ] Sync queue processes successfully
-- [ ] App works while syncing (non-blocking)
-- [ ] Reconnection resumes sync automatically
+- [x] Changes on computer A appear on computer B
+- [x] Real-time updates arrive within seconds
+- [x] Sync queue processes successfully
+- [x] App works while syncing (non-blocking)
+- [x] Reconnection resumes sync automatically
 
 ---
 
@@ -2374,9 +2374,9 @@ useEffect(() => {
 - [x] RLS policies secure data
 
 ### Phase 17 - Real-Time Sync
-- [ ] Changes sync between computers
-- [ ] Real-time updates work
-- [ ] Sync queue processes
+- [x] Changes sync between computers
+- [x] Real-time updates work
+- [x] Sync queue processes
 
 ### Phase 18 - Offline-First
 - [ ] App works offline
