@@ -46,6 +46,10 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  protocols:
+    - name: Claude Tasks
+      schemes:
+        - claude-tasks
 
 dmg:
   contents:
@@ -69,6 +73,10 @@ win:
     - target: portable
       arch:
         - x64
+  protocols:
+    - name: Claude Tasks
+      schemes:
+        - claude-tasks
 
 nsis:
   oneClick: false
@@ -96,6 +104,8 @@ linux:
   vendor: Claude Tasks
   synopsis: AI-driven development task manager
   description: Cross-platform desktop application for managing AI-driven development tasks with Claude Code
+  mimeTypes:
+    - x-scheme-handler/claude-tasks
 
 publish:
   provider: github

@@ -24,6 +24,7 @@ import { terminalManager } from './services/terminal.js';
 import { claudeCodeService } from './services/claude-code.js';
 import { fixAgentPool } from './services/fix-agent-pool.js';
 import { supabaseService } from './services/supabase.js';
+import { isValidOAuthCallbackUrl } from './services/deep-link.js';
 
 const logger = createIPCLogger('Main');
 
@@ -298,6 +299,42 @@ function initializeIPC(window: BrowserWindow): void {
 }
 
 /**
+ * Handle deep link URLs (OAuth callbacks)
+ *
+ * Routes OAuth callback URLs to the auth handler for processing.
+ * Notifies the renderer of success or error via IPC events.
+ */
+function handleDeepLink(url: string): void {
+  // Log full URL for debugging (hash fragment may contain tokens)
+  const hasHash = url.includes('#');
+  const hasQuery = url.includes('?');
+  logger.info(`Received deep link: ${url.split('#')[0]} (hasHash: ${hasHash}, hasQuery: ${hasQuery})`);
+  if (hasHash) {
+    logger.info(`Deep link hash fragment length: ${url.split('#')[1]?.length || 0}`);
+  }
+
+  if (!isValidOAuthCallbackUrl(url)) {
+    logger.warn('Invalid deep link URL received, ignoring');
+    return;
+  }
+
+  // Import and call the OAuth callback handler
+  // This will be implemented in the auth IPC handlers
+  void import('./ipc/auth.js').then(({ handleOAuthCallback }) => {
+    handleOAuthCallback(url, mainWindow);
+  }).catch((error) => {
+    logger.error('Failed to handle OAuth callback:', error);
+    if (mainWindow) {
+      mainWindow.webContents.send('auth:oauth-error', {
+        error: 'callback_failed',
+        errorDescription: 'Failed to process OAuth callback',
+        provider: 'unknown' as const,
+      });
+    }
+  });
+}
+
+/**
  * Initialize the application
  * - Initialize database connection
  * - Run database migrations to create/update schema
@@ -339,7 +376,16 @@ async function initializeApp(): Promise<void> {
       logger.info('Startup cleanup completed: no stale states found');
     }
 
-    // Step 4: Create main window and register IPC handlers
+    // Step 4: Register as default protocol handler for OAuth callbacks
+    if (process.defaultApp) {
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('claude-tasks', process.execPath, [path.resolve(process.argv[1]!)]);
+      }
+    } else {
+      app.setAsDefaultProtocolClient('claude-tasks');
+    }
+
+    // Step 5: Create main window and register IPC handlers
     // Note: IPC handlers are now initialized inside createWindow() BEFORE loadURL
     // to prevent race conditions where React app starts before handlers are ready
     await createWindow();
@@ -365,6 +411,12 @@ async function initializeApp(): Promise<void> {
 // App lifecycle events
 app.on('ready', () => {
   void initializeApp();
+});
+
+// Handle OAuth callback URLs on macOS
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
 });
 
 // Handle before-quit (set quitting flag to allow window close and cleanup)
@@ -461,10 +513,16 @@ app.on('activate', () => {
   }
 });
 
-// Handle second instance (focus existing window)
-app.on('second-instance', () => {
+// Handle second instance (focus existing window AND handle deep links on Windows/Linux)
+app.on('second-instance', (_event, commandLine) => {
   if (mainWindow) {
     trayService.showWindow();
+  }
+
+  // On Windows/Linux, the deep link URL is passed in the command line
+  const deepLinkUrl = commandLine.find((arg) => arg.startsWith('claude-tasks://'));
+  if (deepLinkUrl) {
+    handleDeepLink(deepLinkUrl);
   }
 });
 

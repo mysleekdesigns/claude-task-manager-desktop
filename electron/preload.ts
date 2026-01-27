@@ -43,6 +43,7 @@ const VALID_INVOKE_CHANNELS = [
   'auth:updateProfile',
   'auth:refreshSession',
   'auth:isSupabaseAuth',
+  'auth:signInWithOAuth',
   // Projects
   'projects:list',
   'projects:create',
@@ -205,6 +206,8 @@ const VALID_EVENT_CHANNELS = [
   'app:update-downloaded',
   'app:update-progress',
   'auth:state-change',
+  'auth:oauth-success',
+  'auth:oauth-error',
 ] as const;
 
 // ============================================================================

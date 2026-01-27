@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect to dashboard if already authenticated (e.g., after OAuth success)
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthLoading, isAuthenticated, navigate]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -107,6 +115,21 @@ export function LoginPage() {
               <LogIn className="h-4 w-4 mr-2" />
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
+
+            {/* OAuth Divider */}
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  or continue with
+                </span>
+              </div>
+            </div>
+
+            {/* OAuth Buttons */}
+            <OAuthButtons disabled={isLoading} />
 
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center space-x-2">

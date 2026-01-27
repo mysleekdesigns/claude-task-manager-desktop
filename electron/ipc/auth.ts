@@ -16,7 +16,7 @@
  * The renderer does not need to handle or store tokens directly.
  */
 
-import { ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { ipcMain, shell, type IpcMainInvokeEvent, type BrowserWindow } from 'electron';
 import { databaseService } from '../services/database.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
@@ -38,7 +38,8 @@ import {
   setSessionToken,
   clearSessionToken,
 } from '../services/session-storage.js';
-import { supabaseService } from '../services/supabase.js';
+import { supabaseService, type OAuthProvider } from '../services/supabase.js';
+import { parseOAuthCallback } from '../services/deep-link.js';
 
 /**
  * Auth data types
@@ -693,6 +694,150 @@ async function handleIsSupabaseAuth(
 }
 
 /**
+ * Initiate OAuth sign-in flow
+ * Opens the OAuth authorization URL in the system browser
+ */
+async function handleSignInWithOAuth(
+  _event: IpcMainInvokeEvent,
+  provider: OAuthProvider
+): Promise<void> {
+  // Validate provider
+  if (provider !== 'github' && provider !== 'google') {
+    throw IPCErrors.invalidArguments('Invalid OAuth provider. Must be "github" or "google"');
+  }
+
+  // Check if Supabase is configured
+  if (!isSupabaseAuthAvailable()) {
+    throw new Error('OAuth authentication requires Supabase to be configured');
+  }
+
+  try {
+    // Get the OAuth URL from Supabase
+    const authUrl = await supabaseService.signInWithOAuth(provider);
+
+    // Open the URL in the system browser
+    await shell.openExternal(authUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to initiate OAuth flow';
+    throw new Error(message);
+  }
+}
+
+/**
+ * Handle OAuth callback from deep link
+ * This is called by the main process when a deep link is received
+ *
+ * Supports two OAuth flows:
+ * 1. PKCE flow: Exchanges authorization code for tokens
+ * 2. Implicit flow: Uses tokens directly from URL hash
+ */
+export async function handleOAuthCallback(
+  url: string,
+  mainWindow: BrowserWindow | null
+): Promise<void> {
+  console.log('[OAuth] Processing callback URL');
+  const result = parseOAuthCallback(url);
+
+  if (!result.success) {
+    console.error('[OAuth] Callback error:', result.error);
+    // Send error to renderer
+    if (mainWindow) {
+      mainWindow.webContents.send('auth:oauth-error', {
+        error: result.error.error,
+        errorDescription: result.error.errorDescription,
+        provider: 'unknown' as OAuthProvider,
+      });
+    }
+    return;
+  }
+
+  try {
+    const supabase = supabaseService.getClient();
+
+    // Helper to send success
+    const sendSuccess = (user: {
+      id: string;
+      email?: string;
+      created_at: string;
+      updated_at?: string;
+      app_metadata?: Record<string, unknown>;
+      user_metadata?: Record<string, unknown>;
+    }) => {
+      const provider: OAuthProvider =
+        (user.app_metadata?.['provider'] as OAuthProvider) || 'github';
+
+      console.log('[OAuth] Authentication successful for provider:', provider);
+
+      if (mainWindow) {
+        mainWindow.webContents.send('auth:oauth-success', {
+          user: {
+            id: user.id,
+            email: user.email || '',
+            name: (user.user_metadata?.['name'] as string) ||
+                  (user.user_metadata?.['full_name'] as string) || null,
+            avatar: (user.user_metadata?.['avatar_url'] as string) ||
+                    (user.user_metadata?.['picture'] as string) || null,
+            createdAt: user.created_at,
+            updatedAt: user.updated_at || user.created_at,
+          },
+          provider,
+        });
+      }
+    };
+
+    if (result.type === 'code') {
+      // PKCE flow: Exchange the authorization code for tokens
+      console.log('[OAuth] Exchanging authorization code for tokens (PKCE flow)');
+      const { data, error } = await supabase.auth.exchangeCodeForSession(result.code.code);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error('No user returned from code exchange');
+      }
+
+      sendSuccess(data.user);
+      return;
+    }
+
+    if (result.type === 'tokens') {
+      // Implicit flow: Set the session directly with tokens
+      console.log('[OAuth] Setting session with tokens (implicit flow)');
+      const { data, error } = await supabase.auth.setSession({
+        access_token: result.tokens.accessToken,
+        refresh_token: result.tokens.refreshToken,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error('No user returned from session');
+      }
+
+      sendSuccess(data.user);
+      return;
+    }
+
+    // Should not reach here
+    throw new Error('Invalid OAuth callback result type');
+  } catch (error) {
+    console.error('[OAuth] Error processing callback:', error);
+
+    if (mainWindow) {
+      mainWindow.webContents.send('auth:oauth-error', {
+        error: 'session_error',
+        errorDescription: error instanceof Error ? error.message : 'Failed to set session',
+        provider: 'unknown' as OAuthProvider,
+      });
+    }
+  }
+}
+
+/**
  * Register all auth-related IPC handlers
  */
 export function registerAuthHandlers(): void {
@@ -737,6 +882,12 @@ export function registerAuthHandlers(): void {
     'auth:isSupabaseAuth',
     wrapWithLogging('auth:isSupabaseAuth', wrapHandler(handleIsSupabaseAuth))
   );
+
+  // auth:signInWithOAuth - Initiate OAuth flow
+  ipcMain.handle(
+    'auth:signInWithOAuth',
+    wrapWithLogging('auth:signInWithOAuth', wrapHandler(handleSignInWithOAuth))
+  );
 }
 
 /**
@@ -750,6 +901,7 @@ export function unregisterAuthHandlers(): void {
   ipcMain.removeHandler('auth:updateProfile');
   ipcMain.removeHandler('auth:refreshSession');
   ipcMain.removeHandler('auth:isSupabaseAuth');
+  ipcMain.removeHandler('auth:signInWithOAuth');
 }
 
 /**

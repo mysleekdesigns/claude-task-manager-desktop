@@ -14,6 +14,11 @@ import Store from 'electron-store';
 export type ConnectionStatus = 'online' | 'offline' | 'connecting';
 
 /**
+ * OAuth provider types supported for authentication
+ */
+export type OAuthProvider = 'github' | 'google';
+
+/**
  * Session storage interface for electron-store
  */
 interface SupabaseSessionStore {
@@ -348,6 +353,40 @@ class SupabaseService {
     }
 
     return data.session;
+  }
+
+  /**
+   * Initiate OAuth sign-in flow
+   *
+   * Returns the OAuth authorization URL to be opened in the system browser.
+   * The browser will redirect back to claude-tasks://auth/callback after auth.
+   *
+   * @param provider - OAuth provider ('github' or 'google')
+   * @returns The authorization URL to open in the browser
+   * @throws Error if client not initialized
+   */
+  public async signInWithOAuth(provider: OAuthProvider): Promise<string> {
+    if (!this.client) {
+      throw new Error('Supabase client not initialized');
+    }
+
+    const { data, error } = await this.client.auth.signInWithOAuth({
+      provider,
+      options: {
+        skipBrowserRedirect: true,
+        redirectTo: 'claude-tasks://auth/callback',
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data.url) {
+      throw new Error('No authorization URL returned from Supabase');
+    }
+
+    return data.url;
   }
 
   /**

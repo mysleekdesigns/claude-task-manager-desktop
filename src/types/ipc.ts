@@ -114,6 +114,28 @@ export interface AuthRefreshSessionResponse {
   message?: string;
 }
 
+/**
+ * OAuth provider types supported for authentication
+ */
+export type OAuthProvider = 'github' | 'google';
+
+/**
+ * Payload sent when OAuth authentication succeeds
+ */
+export interface OAuthSuccessPayload {
+  user: AuthUser;
+  provider: OAuthProvider;
+}
+
+/**
+ * Payload sent when OAuth authentication fails
+ */
+export interface OAuthErrorPayload {
+  error: string;
+  errorDescription?: string;
+  provider: OAuthProvider;
+}
+
 // ============================================================================
 // Project Types
 // ============================================================================
@@ -1207,6 +1229,7 @@ export interface IpcChannels {
   ) => Promise<AuthUser>;
   'auth:refreshSession': () => Promise<AuthRefreshSessionResponse>;
   'auth:isSupabaseAuth': () => Promise<boolean>;
+  'auth:signInWithOAuth': (provider: OAuthProvider) => Promise<void>;
 
   // Project channels
   'projects:list': (userId: string) => Promise<Project[]>;
@@ -1504,6 +1527,8 @@ export interface IpcEventChannels {
   'app:update-downloaded': (info: UpdateInfo) => void;
   'app:update-progress': (progress: UpdateProgress) => void;
   'auth:state-change': (session: AuthStateChangePayload | null) => void;
+  'auth:oauth-success': (payload: OAuthSuccessPayload) => void;
+  'auth:oauth-error': (payload: OAuthErrorPayload) => void;
 }
 
 /**
@@ -1923,6 +1948,7 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'auth:updateProfile',
   'auth:refreshSession',
   'auth:isSupabaseAuth',
+  'auth:signInWithOAuth',
   'projects:list',
   'projects:create',
   'projects:get',
@@ -2070,6 +2096,8 @@ export const VALID_EVENT_CHANNELS: readonly IpcEventChannelName[] = [
   'app:update-downloaded',
   'app:update-progress',
   'auth:state-change',
+  'auth:oauth-success',
+  'auth:oauth-error',
 ] as const;
 
 // ============================================================================

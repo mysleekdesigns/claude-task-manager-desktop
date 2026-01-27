@@ -1,10 +1,11 @@
-import { useState, FormEvent, useMemo } from 'react';
+import { useState, FormEvent, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
 import { CheckCircle2, Circle, UserPlus } from 'lucide-react';
 
 interface PasswordRequirement {
@@ -20,8 +21,15 @@ const passwordRequirements: PasswordRequirement[] = [
 ];
 
 export function RegisterPage() {
-  const { register } = useAuth();
+  const { register, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect to dashboard if already authenticated (e.g., after OAuth success)
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthLoading, isAuthenticated, navigate]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -193,6 +201,21 @@ export function RegisterPage() {
               <UserPlus className="h-4 w-4 mr-2" />
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
+
+            {/* OAuth Divider */}
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  or continue with
+                </span>
+              </div>
+            </div>
+
+            {/* OAuth Buttons */}
+            <OAuthButtons disabled={isLoading} />
 
             <p className="text-sm text-center text-muted-foreground">
               Already have an account?{' '}

@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { useIPCMutation, useIPC, useIPCEvent } from '@/hooks/useIPC';
 import type { User, LoginCredentials, RegisterData, ProfileUpdateData } from '@/types/auth';
-import type { AuthUser, AuthStateChangePayload } from '@/types/ipc';
+import type { AuthUser, AuthStateChangePayload, OAuthProvider, OAuthSuccessPayload, OAuthErrorPayload } from '@/types/ipc';
 
 // ============================================================================
 // Context Types
@@ -34,11 +34,13 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isUsingSupabase: boolean;
+  isOAuthLoading: OAuthProvider | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: ProfileUpdateData) => Promise<void>;
   refreshSession: () => Promise<void>;
+  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
 }
 
 interface AuthProviderProps {
@@ -54,6 +56,7 @@ const initialState: AuthContextValue = {
   isLoading: true,
   isAuthenticated: false,
   isUsingSupabase: false,
+  isOAuthLoading: null,
   login: () => {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
@@ -67,6 +70,9 @@ const initialState: AuthContextValue = {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
   refreshSession: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
+  },
+  signInWithOAuth: () => {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
 };
@@ -99,6 +105,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUsingSupabase, setIsUsingSupabase] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState<OAuthProvider | null>(null);
   const isMountedRef = useRef(true);
   const invoke = useIPC();
 
@@ -118,6 +125,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Session was cleared (e.g., token expired, signed out elsewhere)
       setUser(null);
     }
+  }, []));
+
+  // Listen for OAuth success events from main process
+  useIPCEvent('auth:oauth-success', useCallback((payload: OAuthSuccessPayload) => {
+    if (!isMountedRef.current) return;
+
+    setUser(convertAuthUser(payload.user));
+    setIsOAuthLoading(null);
+
+    toast.success('Login successful', {
+      description: `Signed in with ${payload.provider === 'github' ? 'GitHub' : 'Google'}`,
+    });
+  }, []));
+
+  // Listen for OAuth error events from main process
+  useIPCEvent('auth:oauth-error', useCallback((payload: OAuthErrorPayload) => {
+    if (!isMountedRef.current) return;
+
+    setIsOAuthLoading(null);
+
+    toast.error('OAuth sign-in failed', {
+      description: payload.errorDescription || payload.error,
+    });
   }, []));
 
   // Auto-login: Check for existing session on mount
@@ -306,6 +336,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [invoke]);
 
+  const signInWithOAuth = useCallback(
+    async (provider: OAuthProvider): Promise<void> => {
+      if (!isMountedRef.current) return;
+
+      if (isOAuthLoading) {
+        // Already an OAuth flow in progress
+        return;
+      }
+
+      setIsOAuthLoading(provider);
+
+      try {
+        // This initiates the OAuth flow - opens browser
+        // The result comes back via the auth:oauth-success or auth:oauth-error events
+        await invoke('auth:signInWithOAuth', provider);
+
+        // Note: We don't reset isOAuthLoading here because the flow continues
+        // in the browser. It will be reset when we receive the success/error event.
+      } catch (error) {
+        setIsOAuthLoading(null);
+        const message =
+          error instanceof Error ? error.message : 'Failed to start OAuth flow';
+        toast.error('OAuth sign-in failed', {
+          description: message,
+        });
+        throw error;
+      }
+    },
+    [invoke, isOAuthLoading]
+  );
+
   // ============================================================================
   // Context Value
   // ============================================================================
@@ -316,13 +377,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isLoading,
       isAuthenticated: user !== null,
       isUsingSupabase,
+      isOAuthLoading,
       login,
       register,
       logout,
       updateProfile,
       refreshSession,
+      signInWithOAuth,
     }),
-    [user, isLoading, isUsingSupabase, login, register, logout, updateProfile, refreshSession]
+    [user, isLoading, isUsingSupabase, isOAuthLoading, login, register, logout, updateProfile, refreshSession, signInWithOAuth]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
