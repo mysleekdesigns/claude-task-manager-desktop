@@ -33,9 +33,13 @@
 | 13 | Additional Features | ✅ Complete |
 | 14 | Settings and Preferences | ✅ Complete |
 | 15 | Claude Code Task Automation | ✅ Complete |
+| 16 | Supabase Setup & Authentication | Planned |
+| 17 | Real-Time Sync Engine | Planned |
+| 18 | Offline-First & Conflict Resolution | Planned |
+| 19 | Collaboration UI | Planned |
 | Final | Distribution and Packaging | Planned |
 
-**Current Status:** Phase 15 complete. Claude Code Task Automation fully implemented with live task output preview, pause/resume functionality, and automatic task status updates. Ready for Final Phase (Distribution and Packaging).
+**Current Status:** Phase 15 complete. Claude Code Task Automation fully implemented with live task output preview, pause/resume functionality, and automatic task status updates. Phases 16-19 are planned for Supabase real-time collaboration features (cloud sync, offline-first, multi-user collaboration). Ready for Final Phase (Distribution and Packaging) after collaboration features.
 
 ## Recent Changes
 
@@ -148,8 +152,8 @@ Latest 5 commits:
 ┌──────────────────────────────────────────────────────────────────┐
 │                        Main Process                              │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐ │
-│  │  Database  │  │  Terminal  │  │    Git     │  │   File     │ │
-│  │  (SQLite)  │  │  Manager   │  │ Operations │  │   System   │ │
+│  │  Database  │  │  Terminal  │  │    Git     │  │  Supabase  │ │
+│  │  (SQLite)  │  │  Manager   │  │ Operations │  │   Sync     │ │
 │  └────────────┘  └────────────┘  └────────────┘  └────────────┘ │
 │         │              │               │               │         │
 │         └──────────────┴───────────────┴───────────────┘         │
@@ -169,6 +173,17 @@ Latest 5 commits:
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
+                               │
+                               │ WebSocket + HTTPS
+                               ▼
+                    ┌─────────────────────┐
+                    │   Supabase Cloud    │
+                    │  ┌───────────────┐  │
+                    │  │  PostgreSQL   │  │
+                    │  │  Real-time    │  │
+                    │  │  Auth         │  │
+                    │  └───────────────┐  │
+                    └─────────────────────┘
 ```
 
 ### Key Architectural Decisions
@@ -219,6 +234,8 @@ Latest 5 commits:
 | **State Management** | Zustand | 5.x |
 | **Packaging** | electron-builder | 26.x |
 | **Auto Update** | electron-updater | 6.x |
+| **Cloud Sync** | Supabase | 2.x |
+| **Real-time** | Supabase Realtime | (included) |
 
 ---
 
@@ -1256,6 +1273,294 @@ Latest 5 commits:
 
 ---
 
+## Phase 16: Supabase Setup & Authentication
+
+### Overview
+Integrate Supabase as the cloud backend for real-time collaboration. This enables multiple users on different computers to sync their data and collaborate on shared projects.
+
+### 16.1 Supabase Project Configuration
+- [ ] Create Supabase project for production
+- [ ] Configure environment variables
+  - [ ] `SUPABASE_URL` - Project URL
+  - [ ] `SUPABASE_ANON_KEY` - Public anonymous key
+  - [ ] Store securely (never in renderer process)
+- [ ] Set up Supabase CLI for local development
+- [ ] Configure database connection pooling
+
+### 16.2 Supabase Client Setup
+- [ ] Install `@supabase/supabase-js` package
+- [ ] Create `electron/services/supabase.ts`
+  - [ ] Singleton Supabase client
+  - [ ] Session storage with electron-store
+  - [ ] Auto-refresh token handling
+- [ ] Configure realtime parameters
+- [ ] Add connection status monitoring
+
+### 16.3 Authentication Migration
+- [ ] Migrate local auth to Supabase Auth
+  - [ ] Email/password authentication
+  - [ ] Session management via Supabase
+  - [ ] Token refresh handling
+- [ ] Add OAuth providers (optional)
+  - [ ] GitHub OAuth for developers
+  - [ ] Google OAuth
+- [ ] Update AuthProvider to use Supabase
+- [ ] Handle auth state changes
+- [ ] Implement secure logout (clear all sessions)
+
+### 16.4 Database Schema (Supabase)
+- [ ] Create PostgreSQL schema mirroring local SQLite
+  - [ ] users table
+  - [ ] projects table
+  - [ ] project_members table
+  - [ ] tasks table
+  - [ ] task_phases table
+  - [ ] memories table
+- [ ] Add sync metadata columns
+  - [ ] `sync_version` (INTEGER) - Optimistic locking
+  - [ ] `updated_at` (TIMESTAMPTZ) - Last modification
+  - [ ] `deleted_at` (TIMESTAMPTZ) - Soft delete support
+- [ ] Create auto-update triggers for `updated_at`
+- [ ] Add appropriate indexes for sync queries
+
+### 16.5 Row Level Security (RLS)
+- [ ] Enable RLS on all tables
+- [ ] Create SELECT policies
+  - [ ] Users can view their own data
+  - [ ] Users can view projects they are members of
+  - [ ] Users can view tasks in their projects
+- [ ] Create INSERT policies
+  - [ ] Users can create in projects where they have MEMBER+ role
+- [ ] Create UPDATE policies
+  - [ ] Users can update tasks assigned to them
+  - [ ] Admins/Owners can update any task in their projects
+- [ ] Create DELETE policies
+  - [ ] Only Owners can delete projects
+  - [ ] Admins+ can delete tasks
+- [ ] Test all policies thoroughly
+- [ ] Add indexes for RLS performance
+
+**Phase 16 Verification:**
+- [ ] Supabase client connects successfully
+- [ ] User can register/login via Supabase Auth
+- [ ] OAuth login works (if implemented)
+- [ ] RLS policies prevent unauthorized access
+- [ ] Database schema matches local SQLite structure
+
+---
+
+## Phase 17: Real-Time Sync Engine
+
+### Overview
+Implement bidirectional sync between local SQLite and Supabase PostgreSQL with real-time updates via WebSocket subscriptions.
+
+### 17.1 Sync Architecture
+- [ ] Design sync data flow
+  ```
+  Local SQLite (primary) <-> Sync Engine <-> Supabase PostgreSQL (shared)
+                                ^
+                          WebSocket (real-time updates)
+  ```
+- [ ] Define sync priorities (local-first)
+- [ ] Document conflict resolution strategy
+
+### 17.2 Supabase Real-Time Subscriptions
+- [ ] Create `electron/services/realtime.ts`
+- [ ] Subscribe to Postgres Changes
+  - [ ] Projects table changes
+  - [ ] Tasks table changes
+  - [ ] Project members changes
+- [ ] Filter by user's projects (RLS handles this)
+- [ ] Handle subscription lifecycle
+  - [ ] Connect on app start
+  - [ ] Reconnect on connection loss
+  - [ ] Clean up on app close
+
+### 17.3 Change Detection (Local -> Cloud)
+- [ ] Track local changes for sync
+  - [ ] Hook into Prisma operations
+  - [ ] Capture INSERT/UPDATE/DELETE
+- [ ] Create change log table locally
+  ```prisma
+  model SyncLog {
+    id        String   @id @default(cuid())
+    table     String
+    recordId  String
+    operation String   // INSERT, UPDATE, DELETE
+    data      String   // JSON payload
+    synced    Boolean  @default(false)
+    createdAt DateTime @default(now())
+  }
+  ```
+- [ ] Debounce rapid changes
+
+### 17.4 Sync Queue Service
+- [ ] Create `electron/services/sync-queue.ts`
+- [ ] Implement queue operations
+  - [ ] `enqueue(change)` - Add to sync queue
+  - [ ] `processQueue()` - Push pending changes
+  - [ ] `getQueueStatus()` - Return pending count
+- [ ] Persist queue to survive app restarts
+- [ ] Retry failed syncs with exponential backoff
+- [ ] Maximum retry limit (3 attempts)
+
+### 17.5 Incoming Changes (Cloud -> Local)
+- [ ] Handle real-time Postgres Changes events
+- [ ] Apply changes to local SQLite
+  - [ ] INSERT -> Create local record
+  - [ ] UPDATE -> Update local record
+  - [ ] DELETE -> Remove local record
+- [ ] Broadcast changes to renderer via IPC
+- [ ] Invalidate React Query cache
+
+### 17.6 IPC Handlers for Sync
+- [ ] Create `electron/ipc/sync.ts`
+  - [ ] `sync:getStatus` - Return sync status
+  - [ ] `sync:triggerSync` - Manual sync trigger
+  - [ ] `sync:getQueueCount` - Pending changes count
+- [ ] Push events to renderer
+  - [ ] `sync:status-change` - Online/offline/syncing
+  - [ ] `sync:incoming-change` - New data from cloud
+  - [ ] `sync:error` - Sync errors
+
+### 17.7 Initial Sync (Bootstrap)
+- [ ] Implement full sync on first connect
+  - [ ] Fetch all user's projects
+  - [ ] Fetch all tasks in those projects
+  - [ ] Store locally with sync metadata
+- [ ] Incremental sync after bootstrap
+  - [ ] Use `updated_at` for delta queries
+  - [ ] Only fetch changed records
+
+**Phase 17 Verification:**
+- [ ] Changes on computer A appear on computer B
+- [ ] Real-time updates arrive within seconds
+- [ ] Sync queue processes successfully
+- [ ] App works while syncing (non-blocking)
+- [ ] Reconnection resumes sync automatically
+
+---
+
+## Phase 18: Offline-First & Conflict Resolution
+
+### Overview
+Ensure the app works fully offline and handles conflicts when multiple users edit the same data.
+
+### 18.1 Network Status Detection
+- [ ] Monitor network connectivity
+  - [ ] Use `navigator.onLine` API
+  - [ ] Ping Supabase periodically
+- [ ] Track connection state in Zustand store
+- [ ] Show connection indicator in UI
+
+### 18.2 Offline Operation
+- [ ] All reads from local SQLite (always fast)
+- [ ] All writes to local SQLite first
+- [ ] Queue writes for sync when online
+- [ ] No blocking on network operations
+
+### 18.3 Sync Queue Persistence
+- [ ] Store queue in electron-store
+- [ ] Survive app restarts
+- [ ] Resume sync on app launch
+- [ ] Show pending sync count in UI
+
+### 18.4 Conflict Detection
+- [ ] Compare `sync_version` on update
+- [ ] Detect concurrent modifications
+- [ ] Identify conflicting fields
+
+### 18.5 Conflict Resolution Strategy
+- [ ] Implement Last-Write-Wins (LWW)
+  - [ ] Compare `updated_at` timestamps
+  - [ ] Server timestamp wins if newer
+  - [ ] Local timestamp wins if newer
+- [ ] Log conflicts for audit
+- [ ] Option to show conflict notification
+
+### 18.6 Soft Deletes
+- [ ] Use `deleted_at` instead of hard delete
+- [ ] Filter out deleted records in queries
+- [ ] Sync deletes properly
+- [ ] Periodic cleanup of old soft-deleted records
+
+### 18.7 Optimistic UI Updates
+- [ ] Update UI immediately on user action
+- [ ] Rollback if sync fails
+- [ ] Show sync status indicator per item
+
+**Phase 18 Verification:**
+- [ ] App works fully without internet
+- [ ] Changes queue while offline
+- [ ] Sync resumes when back online
+- [ ] Conflicts resolve automatically
+- [ ] No data loss in conflict scenarios
+
+---
+
+## Phase 19: Collaboration UI
+
+### Overview
+Add UI components to support multi-user collaboration features.
+
+### 19.1 Sync Status Indicator
+- [ ] Create `SyncStatusIndicator` component
+  - [ ] Green dot: Online, synced
+  - [ ] Yellow dot: Syncing
+  - [ ] Red dot: Offline
+  - [ ] Show pending sync count
+- [ ] Add to Header component
+- [ ] Tooltip with details
+
+### 19.2 User Presence (Optional)
+- [ ] Show who's online in project
+- [ ] Show who's viewing which task
+- [ ] Use Supabase Presence feature
+- [ ] Avatar stack in project header
+
+### 19.3 Activity Feed
+- [ ] Show recent changes by collaborators
+- [ ] "John updated Task X" format
+- [ ] Filter by project
+- [ ] Real-time updates
+
+### 19.4 Collaboration Settings
+- [ ] Add to Settings page
+  - [ ] Enable/disable sync
+  - [ ] Sync frequency settings
+  - [ ] Clear local cache option
+- [ ] Show sync statistics
+  - [ ] Last sync time
+  - [ ] Records synced
+  - [ ] Conflicts resolved
+
+### 19.5 Invite Flow Improvements
+- [ ] Email invitations for new users
+- [ ] Invitation link generation
+- [ ] Accept invite flow
+- [ ] Show pending invitations
+
+### 19.6 Real-Time Task Updates
+- [ ] Live update task cards when changed
+- [ ] Highlight recently changed cards
+- [ ] Show "edited by X" indicator
+- [ ] Animate card movements
+
+### 19.7 Conflict Resolution UI (Advanced)
+- [ ] Show conflict notification
+- [ ] Option to view both versions
+- [ ] Manual resolution for critical data
+- [ ] Merge assistance
+
+**Phase 19 Verification:**
+- [ ] Sync status visible in header
+- [ ] Can see who's online (if presence enabled)
+- [ ] Activity feed shows recent changes
+- [ ] Task cards update in real-time
+- [ ] Invitations work end-to-end
+
+---
+
 ## Final Phase: Distribution and Packaging
 
 ### Final.1 Build Configuration
@@ -2062,6 +2367,26 @@ useEffect(() => {
 - [x] Task status auto-updates based on Claude activity
 - [x] Live task output preview on task cards
 - [x] Pause/Resume functionality for Claude sessions
+
+### Phase 16 - Supabase Setup
+- [ ] Supabase client connects
+- [ ] Auth works via Supabase
+- [ ] RLS policies secure data
+
+### Phase 17 - Real-Time Sync
+- [ ] Changes sync between computers
+- [ ] Real-time updates work
+- [ ] Sync queue processes
+
+### Phase 18 - Offline-First
+- [ ] App works offline
+- [ ] Conflicts resolve correctly
+- [ ] Data persists across restarts
+
+### Phase 19 - Collaboration UI
+- [ ] Sync indicator works
+- [ ] Activity feed updates
+- [ ] Invitations work
 
 ### Final Phase - Distribution
 - [ ] macOS build works
