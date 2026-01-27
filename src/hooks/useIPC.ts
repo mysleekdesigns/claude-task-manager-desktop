@@ -95,66 +95,91 @@ export function useIPCQuery<TChannel extends IpcChannelName>(
     error: null,
   });
 
-  // Use ref to track current args for comparison
-  const argsRef = useRef(args);
+  // Use ref to track mounted state and previous values
   const isMountedRef = useRef(true);
+  const isInitialMountRef = useRef(true);
+  const prevEnabledRef = useRef(enabled);
+  const prevArgsRef = useRef(args);
 
-  const fetchData = useCallback(async () => {
-    if (!isMountedRef.current) return;
+  const fetchData = useCallback(
+    async (currentArgs: IpcChannelParams<TChannel> | undefined) => {
+      if (!isMountedRef.current) return;
 
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+      setState((prev) => ({ ...prev, loading: true, error: null }));
 
-    try {
-      const result = await invoke(
-        channel,
-        ...(argsRef.current ?? ([] as unknown as IpcChannelParams<TChannel>))
-      );
+      try {
+        const result = await invoke(
+          channel,
+          ...(currentArgs ?? ([] as unknown as IpcChannelParams<TChannel>))
+        );
 
-      if (isMountedRef.current) {
-        setState({ data: result, loading: false, error: null });
+        if (isMountedRef.current) {
+          setState({ data: result, loading: false, error: null });
+        }
+      } catch (err) {
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            error:
+              err instanceof Error
+                ? err
+                : new IPCError({ name: 'Error', message: String(err) }),
+          }));
+        }
       }
-    } catch (err) {
-      if (isMountedRef.current) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error:
-            err instanceof Error
-              ? err
-              : new IPCError({ name: 'Error', message: String(err) }),
-        }));
-      }
-    }
-  }, [channel]);
+    },
+    [channel]
+  );
 
-  // Fetch on mount and when args change
+  // Single effect to handle both initial fetch and refetch on args/enabled change
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (enabled) {
-      void fetchData();
+    const isInitialMount = isInitialMountRef.current;
+    const wasEnabled = prevEnabledRef.current;
+    const prevArgs = prevArgsRef.current;
+
+    // Update refs to current values
+    isInitialMountRef.current = false;
+    prevEnabledRef.current = enabled;
+    prevArgsRef.current = args;
+
+    if (!enabled) {
+      return () => {
+        isMountedRef.current = false;
+      };
+    }
+
+    // Determine if we should fetch:
+    // 1. Initial mount with enabled=true
+    // 2. If enabled just became true (changed from false to true)
+    // 3. If args changed and refetchOnArgsChange is true
+    const shouldFetchOnMount = isInitialMount && enabled;
+    const enabledJustBecameTrue = !isInitialMount && enabled && !wasEnabled;
+    const argsChanged =
+      !isInitialMount &&
+      refetchOnArgsChange &&
+      JSON.stringify(args) !== JSON.stringify(prevArgs);
+
+    if (shouldFetchOnMount || enabledJustBecameTrue || argsChanged) {
+      // Always use current args (passed directly) to avoid stale ref issues
+      void fetchData(args);
     }
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [enabled, fetchData]);
+  }, [enabled, args, refetchOnArgsChange, fetchData]);
 
-  // Refetch when args change
-  useEffect(() => {
-    if (refetchOnArgsChange && enabled) {
-      const argsChanged =
-        JSON.stringify(args) !== JSON.stringify(argsRef.current);
-      if (argsChanged) {
-        argsRef.current = args;
-        void fetchData();
-      }
-    }
-  }, [args, enabled, refetchOnArgsChange, fetchData]);
+  // Create a stable refetch function that uses current args from ref
+  const refetch = useCallback(async () => {
+    await fetchData(prevArgsRef.current);
+  }, [fetchData]);
 
   return {
     ...state,
-    refetch: fetchData,
+    refetch,
   };
 }
 

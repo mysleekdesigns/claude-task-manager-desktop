@@ -34,7 +34,7 @@ export interface User {
   id: string;
   name: string | null;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   avatar: string | null;
   createdAt: Date;
   updatedAt: Date;

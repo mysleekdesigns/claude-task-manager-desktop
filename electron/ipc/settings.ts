@@ -352,6 +352,13 @@ async function handleUpdateProfile(
         );
       }
 
+      // OAuth users don't have a local password and cannot change it this way
+      if (!currentUser.passwordHash) {
+        throw IPCErrors.invalidArguments(
+          'Cannot change password for OAuth accounts. Please manage your password through your OAuth provider.'
+        );
+      }
+
       // Verify current password
       const isPasswordValid = await verifyPassword(
         data.currentPassword,

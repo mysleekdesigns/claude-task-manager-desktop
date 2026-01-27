@@ -355,6 +355,11 @@ async function handleLocalLogin(data: LoginInput): Promise<AuthResponse> {
     throw new Error('Invalid email or password');
   }
 
+  // OAuth users don't have a local password - they must use OAuth to login
+  if (!user.passwordHash) {
+    throw new Error('Invalid email or password');
+  }
+
   // Verify password
   const isPasswordValid = await verifyPassword(data.password, user.passwordHash);
 
@@ -754,8 +759,8 @@ export async function handleOAuthCallback(
   try {
     const supabase = supabaseService.getClient();
 
-    // Helper to send success
-    const sendSuccess = (user: {
+    // Helper to send success - also upserts local User record
+    const sendSuccess = async (user: {
       id: string;
       email?: string;
       created_at: string;
@@ -768,15 +773,45 @@ export async function handleOAuthCallback(
 
       console.log('[OAuth] Authentication successful for provider:', provider);
 
+      // Extract user data from OAuth response
+      const email = user.email || '';
+      const name = (user.user_metadata?.['name'] as string) ||
+                   (user.user_metadata?.['full_name'] as string) || null;
+      const avatar = (user.user_metadata?.['avatar_url'] as string) ||
+                     (user.user_metadata?.['picture'] as string) || null;
+
+      // Upsert local User record in SQLite database
+      // This ensures OAuth users have a local record for relations (projects, tasks, etc.)
+      try {
+        const prisma = databaseService.getClient();
+        await prisma.user.upsert({
+          where: { id: user.id },
+          update: {
+            email,
+            name,
+            avatar,
+          },
+          create: {
+            id: user.id, // Use Supabase UUID as the local ID
+            email,
+            name,
+            avatar,
+            passwordHash: null, // OAuth users don't have a local password
+          },
+        });
+        console.log('[OAuth] Local user record upserted for:', user.id);
+      } catch (error) {
+        // Log but don't fail - the OAuth session is valid even if local DB fails
+        console.error('[OAuth] Failed to upsert local user record:', error);
+      }
+
       if (mainWindow) {
         mainWindow.webContents.send('auth:oauth-success', {
           user: {
             id: user.id,
-            email: user.email || '',
-            name: (user.user_metadata?.['name'] as string) ||
-                  (user.user_metadata?.['full_name'] as string) || null,
-            avatar: (user.user_metadata?.['avatar_url'] as string) ||
-                    (user.user_metadata?.['picture'] as string) || null,
+            email,
+            name,
+            avatar,
             createdAt: user.created_at,
             updatedAt: user.updated_at || user.created_at,
           },
@@ -798,7 +833,7 @@ export async function handleOAuthCallback(
         throw new Error('No user returned from code exchange');
       }
 
-      sendSuccess(data.user);
+      await sendSuccess(data.user);
       return;
     }
 
@@ -818,7 +853,7 @@ export async function handleOAuthCallback(
         throw new Error('No user returned from session');
       }
 
-      sendSuccess(data.user);
+      await sendSuccess(data.user);
       return;
     }
 
