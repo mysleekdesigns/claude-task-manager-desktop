@@ -1279,73 +1279,73 @@ Latest 5 commits:
 Integrate Supabase as the cloud backend for real-time collaboration. This enables multiple users on different computers to sync their data and collaborate on shared projects.
 
 ### 16.1 Supabase Project Configuration
-- [ ] Create Supabase project for production
-- [ ] Configure environment variables
-  - [ ] `SUPABASE_URL` - Project URL
-  - [ ] `SUPABASE_ANON_KEY` - Public anonymous key
-  - [ ] Store securely (never in renderer process)
-- [ ] Set up Supabase CLI for local development
-- [ ] Configure database connection pooling
+- [x] Create Supabase project for production
+- [x] Configure environment variables
+  - [x] `SUPABASE_URL` - Project URL
+  - [x] `SUPABASE_ANON_KEY` - Public anonymous key
+  - [x] Store securely (never in renderer process)
+- [x] Set up Supabase CLI for local development
+- [x] Configure database connection pooling (documented)
 
 ### 16.2 Supabase Client Setup
-- [ ] Install `@supabase/supabase-js` package
-- [ ] Create `electron/services/supabase.ts`
-  - [ ] Singleton Supabase client
-  - [ ] Session storage with electron-store
-  - [ ] Auto-refresh token handling
-- [ ] Configure realtime parameters
-- [ ] Add connection status monitoring
+- [x] Install `@supabase/supabase-js` package
+- [x] Create `electron/services/supabase.ts`
+  - [x] Singleton Supabase client
+  - [x] Session storage with electron-store
+  - [x] Auto-refresh token handling
+- [x] Configure realtime parameters
+- [x] Add connection status monitoring
 
 ### 16.3 Authentication Migration
-- [ ] Migrate local auth to Supabase Auth
-  - [ ] Email/password authentication
-  - [ ] Session management via Supabase
-  - [ ] Token refresh handling
+- [x] Migrate local auth to Supabase Auth
+  - [x] Email/password authentication
+  - [x] Session management via Supabase
+  - [x] Token refresh handling
 - [ ] Add OAuth providers (optional)
   - [ ] GitHub OAuth for developers
   - [ ] Google OAuth
-- [ ] Update AuthProvider to use Supabase
-- [ ] Handle auth state changes
-- [ ] Implement secure logout (clear all sessions)
+- [x] Update AuthProvider to use Supabase
+- [x] Handle auth state changes
+- [x] Implement secure logout (clear all sessions)
 
 ### 16.4 Database Schema (Supabase)
-- [ ] Create PostgreSQL schema mirroring local SQLite
-  - [ ] users table
-  - [ ] projects table
-  - [ ] project_members table
-  - [ ] tasks table
-  - [ ] task_phases table
-  - [ ] memories table
-- [ ] Add sync metadata columns
-  - [ ] `sync_version` (INTEGER) - Optimistic locking
-  - [ ] `updated_at` (TIMESTAMPTZ) - Last modification
-  - [ ] `deleted_at` (TIMESTAMPTZ) - Soft delete support
-- [ ] Create auto-update triggers for `updated_at`
-- [ ] Add appropriate indexes for sync queries
+- [x] Create PostgreSQL schema mirroring local SQLite
+  - [x] users table
+  - [x] projects table
+  - [x] project_members table
+  - [x] tasks table
+  - [x] task_phases table
+  - [x] memories table
+- [x] Add sync metadata columns
+  - [x] `sync_version` (INTEGER) - Optimistic locking
+  - [x] `updated_at` (TIMESTAMPTZ) - Last modification
+  - [x] `deleted_at` (TIMESTAMPTZ) - Soft delete support
+- [x] Create auto-update triggers for `updated_at`
+- [x] Add appropriate indexes for sync queries
 
 ### 16.5 Row Level Security (RLS)
-- [ ] Enable RLS on all tables
-- [ ] Create SELECT policies
-  - [ ] Users can view their own data
-  - [ ] Users can view projects they are members of
-  - [ ] Users can view tasks in their projects
-- [ ] Create INSERT policies
-  - [ ] Users can create in projects where they have MEMBER+ role
-- [ ] Create UPDATE policies
-  - [ ] Users can update tasks assigned to them
-  - [ ] Admins/Owners can update any task in their projects
-- [ ] Create DELETE policies
-  - [ ] Only Owners can delete projects
-  - [ ] Admins+ can delete tasks
-- [ ] Test all policies thoroughly
-- [ ] Add indexes for RLS performance
+- [x] Enable RLS on all tables
+- [x] Create SELECT policies
+  - [x] Users can view their own data
+  - [x] Users can view projects they are members of
+  - [x] Users can view tasks in their projects
+- [x] Create INSERT policies
+  - [x] Users can create in projects where they have MEMBER+ role
+- [x] Create UPDATE policies
+  - [x] Users can update tasks assigned to them
+  - [x] Admins/Owners can update any task in their projects
+- [x] Create DELETE policies
+  - [x] Only Owners can delete projects
+  - [x] Admins+ can delete tasks
+- [x] Test all policies thoroughly
+- [x] Add indexes for RLS performance
 
 **Phase 16 Verification:**
-- [ ] Supabase client connects successfully
-- [ ] User can register/login via Supabase Auth
+- [x] Supabase client connects successfully
+- [x] User can register/login via Supabase Auth
 - [ ] OAuth login works (if implemented)
-- [ ] RLS policies prevent unauthorized access
-- [ ] Database schema matches local SQLite structure
+- [x] RLS policies prevent unauthorized access
+- [x] Database schema matches local SQLite structure
 
 ---
 
@@ -2369,9 +2369,9 @@ useEffect(() => {
 - [x] Pause/Resume functionality for Claude sessions
 
 ### Phase 16 - Supabase Setup
-- [ ] Supabase client connects
-- [ ] Auth works via Supabase
-- [ ] RLS policies secure data
+- [x] Supabase client connects
+- [x] Auth works via Supabase
+- [x] RLS policies secure data
 
 ### Phase 17 - Real-Time Sync
 - [ ] Changes sync between computers

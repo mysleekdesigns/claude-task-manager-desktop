@@ -1,3 +1,7 @@
+// Load environment variables from .env file FIRST (before any other imports)
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import http from 'node:http';
@@ -19,6 +23,7 @@ import { performStartupCleanup } from './services/startup-cleanup.js';
 import { terminalManager } from './services/terminal.js';
 import { claudeCodeService } from './services/claude-code.js';
 import { fixAgentPool } from './services/fix-agent-pool.js';
+import { supabaseService } from './services/supabase.js';
 
 const logger = createIPCLogger('Main');
 
@@ -312,6 +317,15 @@ async function initializeApp(): Promise<void> {
     databaseService.runMigrations();
     logger.info('Database migrations completed successfully');
 
+    // Step 2.5: Initialize Supabase (optional - if configured)
+    logger.info('Initializing Supabase...');
+    supabaseService.initialize();
+    if (supabaseService.isInitialized()) {
+      logger.info('Supabase initialized successfully');
+    } else {
+      logger.info('Supabase not configured - using local auth only');
+    }
+
     // Step 3: Clean up stale states from previous session (crash recovery)
     // This resets tasks that were RUNNING/STARTING to FAILED, removes orphaned terminals,
     // and marks orphaned reviews as FAILED
@@ -424,6 +438,7 @@ app.on('will-quit', () => {
   fixAgentPool.cleanup(); // Backup cleanup for fix agent processes
   claudeCodeService.killAllProcesses(); // Backup cleanup for Claude processes
   terminalManager.killAll(); // Backup cleanup for terminal processes
+  void supabaseService.cleanup(); // Cleanup Supabase subscriptions
 });
 
 app.on('window-all-closed', () => {

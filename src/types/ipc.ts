@@ -106,6 +106,14 @@ export interface AuthProfileUpdate {
   avatar?: string;
 }
 
+/**
+ * Refresh session response
+ */
+export interface AuthRefreshSessionResponse {
+  success: boolean;
+  message?: string;
+}
+
 // ============================================================================
 // Project Types
 // ============================================================================
@@ -1197,6 +1205,8 @@ export interface IpcChannels {
   'auth:updateProfile': (
     updates: AuthProfileUpdate
   ) => Promise<AuthUser>;
+  'auth:refreshSession': () => Promise<AuthRefreshSessionResponse>;
+  'auth:isSupabaseAuth': () => Promise<boolean>;
 
   // Project channels
   'projects:list': (userId: string) => Promise<Project[]>;
@@ -1493,6 +1503,15 @@ export interface IpcEventChannels {
   'app:update-available': (info: UpdateInfo) => void;
   'app:update-downloaded': (info: UpdateInfo) => void;
   'app:update-progress': (progress: UpdateProgress) => void;
+  'auth:state-change': (session: AuthStateChangePayload | null) => void;
+}
+
+/**
+ * Payload for auth state change events from Supabase
+ */
+export interface AuthStateChangePayload {
+  user: AuthUser;
+  accessToken: string;
 }
 
 /**
@@ -1902,6 +1921,8 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'auth:logout',
   'auth:getCurrentUser',
   'auth:updateProfile',
+  'auth:refreshSession',
+  'auth:isSupabaseAuth',
   'projects:list',
   'projects:create',
   'projects:get',
@@ -2048,6 +2069,7 @@ export const VALID_EVENT_CHANNELS: readonly IpcEventChannelName[] = [
   'app:update-available',
   'app:update-downloaded',
   'app:update-progress',
+  'auth:state-change',
 ] as const;
 
 // ============================================================================

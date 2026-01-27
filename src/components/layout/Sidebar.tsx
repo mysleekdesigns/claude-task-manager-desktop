@@ -15,8 +15,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   CheckSquare,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,8 +25,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useSidebarStore } from '@/store/useSidebarStore';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavItem {
   id: string;
@@ -50,10 +52,26 @@ const navigationItems: NavItem[] = [
   { id: 'prs', label: 'GitHub PRs', icon: GitPullRequest, path: '/prs', shortcut: 'P' },
 ];
 
+/**
+ * Get user initials from name or email
+ * Returns up to 2 capital letters
+ */
+function getInitials(name: string | undefined | null): string {
+  if (!name) return '?';
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .filter(Boolean)
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 export function Sidebar() {
   const { collapsed, toggleCollapsed } = useSidebarStore();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   // Keyboard shortcut handler
   useEffect(() => {
@@ -79,10 +97,6 @@ export function Sidebar() {
     window.addEventListener('keydown', handleKeyDown);
     return () => { window.removeEventListener('keydown', handleKeyDown); };
   }, [navigate, toggleCollapsed]);
-
-  const handleClaudeCodeClick = () => {
-    window.open('https://claude.ai/code', '_blank');
-  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -176,27 +190,8 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        {/* Footer - Claude Code link and Settings */}
+        {/* Footer - Settings */}
         <div className="border-t border-border p-2 space-y-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                className={cn(
-                  'w-full justify-start text-muted-foreground hover:text-foreground',
-                  collapsed && 'justify-center px-0'
-                )}
-                onClick={handleClaudeCodeClick}
-              >
-                <ExternalLink className={cn('size-4', !collapsed && 'mr-3')} />
-                {!collapsed && <span className="flex-1 text-left">Claude Code</span>}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right">Claude Code</TooltipContent>
-            )}
-          </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -219,6 +214,50 @@ export function Sidebar() {
             )}
           </Tooltip>
         </div>
+
+        {/* User Section */}
+        {user && (
+          <div className="border-t border-border p-3">
+            <div className={cn(
+              'flex items-center',
+              collapsed ? 'flex-col gap-2' : 'gap-3'
+            )}>
+              <Avatar className="size-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                  {getInitials(user.name || user.email)}
+                </AvatarFallback>
+              </Avatar>
+              {!collapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-foreground">
+                    {user.name || user.email}
+                  </p>
+                  {user.name && user.email && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void logout()}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    data-testid="signout-button"
+                  >
+                    <LogOut className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={collapsed ? 'right' : 'top'}>
+                  Sign out
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
       </aside>
     </TooltipProvider>
   );

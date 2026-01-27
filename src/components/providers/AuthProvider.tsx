@@ -4,6 +4,10 @@
  * Provides authentication state and operations throughout the application.
  * Handles login, registration, logout, and profile updates via IPC.
  *
+ * Supports both Supabase authentication (when configured) and local bcrypt-based
+ * authentication as a fallback. The `isUsingSupabase` flag indicates which mode
+ * is active.
+ *
  * Note: Session tokens are managed by the main process via electron-store.
  * The renderer only needs to call auth methods - no token management required.
  */
@@ -17,9 +21,9 @@ import {
   useRef,
 } from 'react';
 import { toast } from 'sonner';
-import { useIPCMutation, useIPC } from '@/hooks/useIPC';
+import { useIPCMutation, useIPC, useIPCEvent } from '@/hooks/useIPC';
 import type { User, LoginCredentials, RegisterData, ProfileUpdateData } from '@/types/auth';
-import type { AuthUser } from '@/types/ipc';
+import type { AuthUser, AuthStateChangePayload } from '@/types/ipc';
 
 // ============================================================================
 // Context Types
@@ -29,10 +33,12 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isUsingSupabase: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: ProfileUpdateData) => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 interface AuthProviderProps {
@@ -47,6 +53,7 @@ const initialState: AuthContextValue = {
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  isUsingSupabase: false,
   login: () => {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
@@ -57,6 +64,9 @@ const initialState: AuthContextValue = {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
   updateProfile: () => {
+    return Promise.reject(new Error('AuthProvider not initialized'));
+  },
+  refreshSession: () => {
     return Promise.reject(new Error('AuthProvider not initialized'));
   },
 };
@@ -88,12 +98,27 @@ function convertAuthUser(authUser: AuthUser): User {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUsingSupabase, setIsUsingSupabase] = useState(false);
   const isMountedRef = useRef(true);
   const invoke = useIPC();
 
   // IPC Mutations
   const loginMutation = useIPCMutation('auth:login');
   const registerMutation = useIPCMutation('auth:register');
+
+  // Listen for auth state changes from main process (Supabase only)
+  // This handles external auth changes like token refresh or session expiry
+  useIPCEvent('auth:state-change', useCallback((session: AuthStateChangePayload | null) => {
+    if (!isMountedRef.current) return;
+
+    if (session && session.user) {
+      // Update user state when auth changes externally
+      setUser(convertAuthUser(session.user));
+    } else {
+      // Session was cleared (e.g., token expired, signed out elsewhere)
+      setUser(null);
+    }
+  }, []));
 
   // Auto-login: Check for existing session on mount
   // The main process manages session tokens in electron-store
@@ -102,6 +127,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!isMountedRef.current) return;
 
       try {
+        // Check if Supabase authentication is being used
+        const usingSupabase = await invoke('auth:isSupabaseAuth');
+        if (isMountedRef.current) {
+          setIsUsingSupabase(usingSupabase);
+        }
+
         // Main process checks for stored session automatically
         const currentUser = await invoke('auth:getCurrentUser');
 
@@ -249,6 +280,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [user, invoke]
   );
 
+  const refreshSession = useCallback(async (): Promise<void> => {
+    if (!isMountedRef.current) return;
+
+    try {
+      const result = await invoke('auth:refreshSession');
+
+      if (!result.success) {
+        // Session refresh failed - may need to re-authenticate
+        console.warn('Session refresh failed:', result.message);
+
+        // If session is invalid, clear user state
+        if (result.message?.includes('expired') || result.message?.includes('invalid')) {
+          if (isMountedRef.current) {
+            setUser(null);
+            toast.warning('Session expired', {
+              description: 'Please log in again.',
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+      // Don't throw - session refresh is a background operation
+    }
+  }, [invoke]);
+
   // ============================================================================
   // Context Value
   // ============================================================================
@@ -258,12 +315,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user,
       isLoading,
       isAuthenticated: user !== null,
+      isUsingSupabase,
       login,
       register,
       logout,
       updateProfile,
+      refreshSession,
     }),
-    [user, isLoading, login, register, logout, updateProfile]
+    [user, isLoading, isUsingSupabase, login, register, logout, updateProfile, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

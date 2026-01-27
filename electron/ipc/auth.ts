@@ -2,13 +2,17 @@
  * Authentication IPC Handlers
  *
  * Handlers for authentication-related IPC channels:
- * - auth:register - Register a new user
- * - auth:login - Login with email/password
- * - auth:logout - Logout (delete session)
+ * - auth:register - Register a new user (Supabase or local fallback)
+ * - auth:login - Login with email/password (Supabase or local fallback)
+ * - auth:logout - Logout (Supabase or local session)
  * - auth:getCurrentUser - Get current user from stored session
  * - auth:updateProfile - Update user profile
+ * - auth:refreshSession - Manual token refresh (Supabase only)
  *
- * Session tokens are stored securely in electron-store and managed by the main process.
+ * When Supabase is configured (SUPABASE_URL and SUPABASE_ANON_KEY), authentication
+ * is handled by Supabase Auth. Otherwise, falls back to local bcrypt-based authentication.
+ *
+ * Session tokens are stored securely and managed by the main process.
  * The renderer does not need to handle or store tokens directly.
  */
 
@@ -34,6 +38,7 @@ import {
   setSessionToken,
   clearSessionToken,
 } from '../services/session-storage.js';
+import { supabaseService } from '../services/supabase.js';
 
 /**
  * Auth data types
@@ -76,7 +81,69 @@ export interface UserResponse {
 }
 
 /**
- * Register a new user
+ * Map Supabase error codes to user-friendly messages
+ */
+function mapSupabaseError(error: { message?: string | undefined; code?: string | undefined }): string {
+  const errorCode = error.code ?? '';
+  const errorMessage = error.message ?? 'An unknown error occurred';
+
+  // Supabase Auth error codes
+  const errorMap: Record<string, string> = {
+    // Sign up errors
+    user_already_exists: 'A user with this email already exists',
+    weak_password: 'Password does not meet security requirements',
+    invalid_email: 'Invalid email format',
+    email_not_confirmed: 'Please confirm your email address',
+    signup_disabled: 'Registration is currently disabled',
+
+    // Sign in errors
+    invalid_credentials: 'Invalid email or password',
+    invalid_grant: 'Invalid email or password',
+    user_not_found: 'Invalid email or password',
+    email_not_verified: 'Please verify your email before signing in',
+
+    // Session errors
+    session_not_found: 'Session not found. Please log in again',
+    refresh_token_not_found: 'Session expired. Please log in again',
+    invalid_refresh_token: 'Session expired. Please log in again',
+
+    // Rate limiting
+    over_request_rate_limit: 'Too many requests. Please try again later',
+    over_email_send_rate_limit: 'Too many email requests. Please try again later',
+
+    // Network errors
+    network_error: 'Network error. Please check your connection',
+  };
+
+  // Check for known error codes
+  if (errorMap[errorCode]) {
+    return errorMap[errorCode];
+  }
+
+  // Check for common error message patterns
+  if (errorMessage.includes('Invalid login credentials')) {
+    return 'Invalid email or password';
+  }
+  if (errorMessage.includes('Email not confirmed')) {
+    return 'Please confirm your email address before signing in';
+  }
+  if (errorMessage.includes('User already registered')) {
+    return 'A user with this email already exists';
+  }
+
+  // Return the original message if no mapping found
+  return errorMessage;
+}
+
+/**
+ * Check if Supabase authentication is available
+ */
+function isSupabaseAuthAvailable(): boolean {
+  return supabaseService.isInitialized();
+}
+
+/**
+ * Register a new user using Supabase Auth (with local fallback)
  */
 async function handleRegister(
   _event: IpcMainInvokeEvent,
@@ -92,7 +159,7 @@ async function handleRegister(
     throw IPCErrors.invalidArguments('Invalid email format');
   }
 
-  // Validate password strength
+  // Validate password strength (client-side validation)
   const passwordValidation = validatePassword(data.password);
   if (!passwordValidation.isValid) {
     throw IPCErrors.invalidArguments(
@@ -100,6 +167,59 @@ async function handleRegister(
     );
   }
 
+  // Use Supabase Auth if available
+  if (isSupabaseAuthAvailable()) {
+    return handleSupabaseRegister(data);
+  }
+
+  // Fall back to local authentication
+  return handleLocalRegister(data);
+}
+
+/**
+ * Register using Supabase Auth
+ */
+async function handleSupabaseRegister(data: RegisterInput): Promise<AuthResponse> {
+  const supabase = supabaseService.getClient();
+
+  const { data: authData, error } = await supabase.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      data: {
+        name: data.name,
+      },
+    },
+  });
+
+  if (error) {
+    throw new Error(mapSupabaseError(error));
+  }
+
+  if (!authData.user || !authData.session) {
+    throw new Error('Registration failed. Please try again.');
+  }
+
+  const user = authData.user;
+  const session = authData.session;
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email || data.email,
+      name: (user.user_metadata?.['name'] as string) || data.name,
+      avatar: (user.user_metadata?.['avatar'] as string) || null,
+      createdAt: new Date(user.created_at),
+      updatedAt: new Date(user.updated_at || user.created_at),
+    },
+    token: session.access_token,
+  };
+}
+
+/**
+ * Register using local bcrypt-based authentication (fallback)
+ */
+async function handleLocalRegister(data: RegisterInput): Promise<AuthResponse> {
   const prisma = databaseService.getClient();
 
   try {
@@ -164,7 +284,7 @@ async function handleRegister(
 }
 
 /**
- * Login with email and password
+ * Login with email and password using Supabase Auth (with local fallback)
  */
 async function handleLogin(
   _event: IpcMainInvokeEvent,
@@ -175,6 +295,54 @@ async function handleLogin(
     throw IPCErrors.invalidArguments('Email and password are required');
   }
 
+  // Use Supabase Auth if available
+  if (isSupabaseAuthAvailable()) {
+    return handleSupabaseLogin(data);
+  }
+
+  // Fall back to local authentication
+  return handleLocalLogin(data);
+}
+
+/**
+ * Login using Supabase Auth
+ */
+async function handleSupabaseLogin(data: LoginInput): Promise<AuthResponse> {
+  const supabase = supabaseService.getClient();
+
+  const { data: authData, error } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  });
+
+  if (error) {
+    throw new Error(mapSupabaseError(error));
+  }
+
+  if (!authData.user || !authData.session) {
+    throw new Error('Login failed. Please try again.');
+  }
+
+  const user = authData.user;
+  const session = authData.session;
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email || data.email,
+      name: (user.user_metadata?.['name'] as string) || null,
+      avatar: (user.user_metadata?.['avatar'] as string) || null,
+      createdAt: new Date(user.created_at),
+      updatedAt: new Date(user.updated_at || user.created_at),
+    },
+    token: session.access_token,
+  };
+}
+
+/**
+ * Login using local bcrypt-based authentication (fallback)
+ */
+async function handleLocalLogin(data: LoginInput): Promise<AuthResponse> {
   const prisma = databaseService.getClient();
 
   // Find user by email
@@ -222,11 +390,36 @@ async function handleLogin(
 }
 
 /**
- * Logout (delete session)
+ * Logout (delete session) using Supabase Auth (with local fallback)
  */
 async function handleLogout(
   _event: IpcMainInvokeEvent
 ): Promise<void> {
+  // Use Supabase Auth if available
+  if (isSupabaseAuthAvailable()) {
+    return handleSupabaseLogout();
+  }
+
+  // Fall back to local logout
+  return handleLocalLogout();
+}
+
+/**
+ * Logout using Supabase Auth
+ */
+async function handleSupabaseLogout(): Promise<void> {
+  try {
+    await supabaseService.clearSession();
+  } catch (error) {
+    // Log error but don't throw - user should still be logged out locally
+    console.error('Error signing out from Supabase:', error);
+  }
+}
+
+/**
+ * Logout using local session (fallback)
+ */
+async function handleLocalLogout(): Promise<void> {
   const token = getSessionToken();
 
   if (!token) {
@@ -254,11 +447,51 @@ async function handleLogout(
 }
 
 /**
- * Get current user from stored session
+ * Get current user from stored session using Supabase Auth (with local fallback)
  */
 async function handleGetCurrentUser(
   _event: IpcMainInvokeEvent
 ): Promise<UserResponse | null> {
+  // Use Supabase Auth if available
+  if (isSupabaseAuthAvailable()) {
+    return handleSupabaseGetCurrentUser();
+  }
+
+  // Fall back to local session
+  return handleLocalGetCurrentUser();
+}
+
+/**
+ * Get current user from Supabase session
+ */
+async function handleSupabaseGetCurrentUser(): Promise<UserResponse | null> {
+  try {
+    const supabase = supabaseService.getClient();
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email || '',
+      name: (user.user_metadata?.['name'] as string) || null,
+      avatar: (user.user_metadata?.['avatar'] as string) || null,
+      createdAt: new Date(user.created_at),
+      updatedAt: new Date(user.updated_at || user.created_at),
+    };
+  } catch (error) {
+    console.error('Error getting current user from Supabase:', error);
+    return null;
+  }
+}
+
+/**
+ * Get current user from local session (fallback)
+ */
+async function handleLocalGetCurrentUser(): Promise<UserResponse | null> {
   const token = getSessionToken();
 
   if (!token) {
@@ -304,12 +537,72 @@ async function handleGetCurrentUser(
 }
 
 /**
- * Update user profile
+ * Update user profile using Supabase Auth (with local fallback)
  */
 async function handleUpdateProfile(
   _event: IpcMainInvokeEvent,
   data: UpdateProfileInput
 ): Promise<UserResponse> {
+  // Use Supabase Auth if available
+  if (isSupabaseAuthAvailable()) {
+    return handleSupabaseUpdateProfile(data);
+  }
+
+  // Fall back to local update
+  return handleLocalUpdateProfile(data);
+}
+
+/**
+ * Update user profile using Supabase Auth
+ */
+async function handleSupabaseUpdateProfile(data: UpdateProfileInput): Promise<UserResponse> {
+  const supabase = supabaseService.getClient();
+
+  // First check if user is authenticated
+  const { data: { user: currentUser }, error: getUserError } = await supabase.auth.getUser();
+
+  if (getUserError || !currentUser) {
+    throw new Error('Not authenticated');
+  }
+
+  // Update user metadata
+  const updateData: { data: Record<string, unknown> } = {
+    data: {},
+  };
+
+  if (data.name !== undefined) {
+    updateData.data['name'] = data.name;
+  }
+  if (data.avatar !== undefined) {
+    updateData.data['avatar'] = data.avatar;
+  }
+
+  const { data: authData, error } = await supabase.auth.updateUser(updateData);
+
+  if (error) {
+    throw new Error(mapSupabaseError(error));
+  }
+
+  if (!authData.user) {
+    throw new Error('Failed to update profile');
+  }
+
+  const user = authData.user;
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: (user.user_metadata?.['name'] as string) || null,
+    avatar: (user.user_metadata?.['avatar'] as string) || null,
+    createdAt: new Date(user.created_at),
+    updatedAt: new Date(user.updated_at || user.created_at),
+  };
+}
+
+/**
+ * Update user profile using local database (fallback)
+ */
+async function handleLocalUpdateProfile(data: UpdateProfileInput): Promise<UserResponse> {
   const token = getSessionToken();
 
   if (!token) {
@@ -365,6 +658,41 @@ async function handleUpdateProfile(
 }
 
 /**
+ * Refresh the current session token (Supabase only)
+ */
+async function handleRefreshSession(
+  _event: IpcMainInvokeEvent
+): Promise<{ success: boolean; message?: string }> {
+  // Only available with Supabase
+  if (!isSupabaseAuthAvailable()) {
+    // Local sessions don't need manual refresh
+    return { success: true, message: 'Local sessions do not require refresh' };
+  }
+
+  try {
+    const session = await supabaseService.refreshSession();
+
+    if (!session) {
+      return { success: false, message: 'Failed to refresh session' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, message };
+  }
+}
+
+/**
+ * Check if Supabase authentication is being used
+ */
+async function handleIsSupabaseAuth(
+  _event: IpcMainInvokeEvent
+): Promise<boolean> {
+  return isSupabaseAuthAvailable();
+}
+
+/**
  * Register all auth-related IPC handlers
  */
 export function registerAuthHandlers(): void {
@@ -397,6 +725,18 @@ export function registerAuthHandlers(): void {
     'auth:updateProfile',
     wrapWithLogging('auth:updateProfile', wrapHandler(handleUpdateProfile))
   );
+
+  // auth:refreshSession - Manual token refresh (Supabase only)
+  ipcMain.handle(
+    'auth:refreshSession',
+    wrapWithLogging('auth:refreshSession', wrapHandler(handleRefreshSession))
+  );
+
+  // auth:isSupabaseAuth - Check if using Supabase authentication
+  ipcMain.handle(
+    'auth:isSupabaseAuth',
+    wrapWithLogging('auth:isSupabaseAuth', wrapHandler(handleIsSupabaseAuth))
+  );
 }
 
 /**
@@ -408,6 +748,8 @@ export function unregisterAuthHandlers(): void {
   ipcMain.removeHandler('auth:logout');
   ipcMain.removeHandler('auth:getCurrentUser');
   ipcMain.removeHandler('auth:updateProfile');
+  ipcMain.removeHandler('auth:refreshSession');
+  ipcMain.removeHandler('auth:isSupabaseAuth');
 }
 
 /**

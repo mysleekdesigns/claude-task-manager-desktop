@@ -3,6 +3,15 @@
  *
  * Provides authentication utilities including password hashing, verification,
  * session token generation, and password validation.
+ *
+ * NOTE: These utilities are used for:
+ * 1. Local authentication fallback when Supabase is not configured
+ * 2. Client-side password validation (validatePassword, validateEmail)
+ *
+ * When Supabase is configured (SUPABASE_URL and SUPABASE_ANON_KEY environment
+ * variables are set), the primary authentication is handled by Supabase Auth.
+ * However, password validation functions are still used for client-side
+ * validation before sending requests to Supabase.
  */
 
 import bcryptjs from 'bcryptjs';
