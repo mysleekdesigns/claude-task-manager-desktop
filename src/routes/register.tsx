@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, UserPlus } from 'lucide-react';
 
 interface PasswordRequirement {
   label: string;
@@ -112,6 +112,7 @@ export function RegisterPage() {
                 disabled={isLoading}
                 autoComplete="name"
                 autoFocus
+                className="border-border/60"
               />
             </div>
 
@@ -125,6 +126,7 @@ export function RegisterPage() {
                 onChange={(e) => { setEmail(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="email"
+                className="border-border/60"
               />
             </div>
 
@@ -138,6 +140,7 @@ export function RegisterPage() {
                 onChange={(e) => { setPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="new-password"
+                className="border-border/60"
               />
             </div>
 
@@ -163,7 +166,7 @@ export function RegisterPage() {
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
                 id="confirmPassword"
@@ -173,6 +176,7 @@ export function RegisterPage() {
                 onChange={(e) => { setConfirmPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="new-password"
+                className="border-border/60"
               />
               {confirmPassword && password !== confirmPassword && (
                 <p className="text-xs text-destructive">Passwords do not match</p>
@@ -186,6 +190,7 @@ export function RegisterPage() {
               className="w-full"
               disabled={isLoading || !isPasswordValid}
             >
+              <UserPlus className="h-4 w-4 mr-2" />
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
 

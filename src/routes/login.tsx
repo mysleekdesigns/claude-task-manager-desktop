@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -78,10 +79,11 @@ export function LoginPage() {
                 disabled={isLoading}
                 autoComplete="email"
                 autoFocus
+                className="border-border/60"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
@@ -91,22 +93,8 @@ export function LoginPage() {
                 onChange={(e) => { setPassword(e.target.value); }}
                 disabled={isLoading}
                 autoComplete="current-password"
+                className="border-border/60"
               />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="rememberMe"
-                checked={rememberMe}
-                onCheckedChange={(checked) => { setRememberMe(checked === true); }}
-                disabled={isLoading}
-              />
-              <Label
-                htmlFor="rememberMe"
-                className="text-sm font-normal cursor-pointer select-none"
-              >
-                Remember me
-              </Label>
             </div>
           </CardContent>
 
@@ -116,8 +104,33 @@ export function LoginPage() {
               className="w-full"
               disabled={isLoading}
             >
+              <LogIn className="h-4 w-4 mr-2" />
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
+
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => { setRememberMe(checked === true); }}
+                  disabled={isLoading}
+                  className="h-5 w-5 bg-background border-border/60"
+                />
+                <Label
+                  htmlFor="rememberMe"
+                  className="text-sm font-normal cursor-pointer select-none"
+                >
+                  Remember me
+                </Label>
+              </div>
+              <Link
+                to="/forgot-password"
+                className="text-sm text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             <p className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
