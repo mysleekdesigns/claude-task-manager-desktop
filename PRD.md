@@ -1301,9 +1301,9 @@ Integrate Supabase as the cloud backend for real-time collaboration. This enable
   - [x] Email/password authentication
   - [x] Session management via Supabase
   - [x] Token refresh handling
-- [ ] Add OAuth providers (optional)
-  - [ ] GitHub OAuth for developers
-  - [ ] Google OAuth
+- [x] Add OAuth providers
+  - [x] GitHub OAuth for developers
+  - [x] Google OAuth
 - [x] Update AuthProvider to use Supabase
 - [x] Handle auth state changes
 - [x] Implement secure logout (clear all sessions)
@@ -1343,7 +1343,7 @@ Integrate Supabase as the cloud backend for real-time collaboration. This enable
 **Phase 16 Verification:**
 - [x] Supabase client connects successfully
 - [x] User can register/login via Supabase Auth
-- [ ] OAuth login works (if implemented)
+- [x] OAuth login works
 - [x] RLS policies prevent unauthorized access
 - [x] Database schema matches local SQLite structure
 
