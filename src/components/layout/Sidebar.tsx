@@ -15,8 +15,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Plus,
   ExternalLink,
+  CheckSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,11 +50,7 @@ const navigationItems: NavItem[] = [
   { id: 'prs', label: 'GitHub PRs', icon: GitPullRequest, path: '/prs', shortcut: 'P' },
 ];
 
-interface SidebarProps {
-  onNewTask?: () => void;
-}
-
-export function Sidebar({ onNewTask }: SidebarProps) {
+export function Sidebar() {
   const { collapsed, toggleCollapsed } = useSidebarStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -78,17 +74,11 @@ export function Sidebar({ onNewTask }: SidebarProps) {
         e.preventDefault();
         toggleCollapsed();
       }
-
-      // New Task shortcut: Cmd/Ctrl + N
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-        e.preventDefault();
-        onNewTask?.();
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => { window.removeEventListener('keydown', handleKeyDown); };
-  }, [navigate, onNewTask]);
+  }, [navigate, toggleCollapsed]);
 
   const handleClaudeCodeClick = () => {
     window.open('https://claude.ai/code', '_blank');
@@ -104,11 +94,16 @@ export function Sidebar({ onNewTask }: SidebarProps) {
         )}
       >
         {/* Header with collapse button */}
-        <div className="flex h-14 items-center justify-between border-b border-border px-3 pt-10">
+        <div className="flex items-center justify-between border-b border-border px-3 pt-12 pb-2">
 
-          {!collapsed && (
-            <span className="font-semibold text-foreground">Claude Tasks</span>
-          )}
+          <div className={cn('flex items-center gap-2', collapsed && 'mx-auto')}>
+            <div className="flex size-7 items-center justify-center rounded-md bg-cyan-500">
+              <CheckSquare className="size-4 text-gray-900" />
+            </div>
+            {!collapsed && (
+              <span className="font-semibold text-foreground">Claude Tasks</span>
+            )}
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -127,27 +122,6 @@ export function Sidebar({ onNewTask }: SidebarProps) {
             <TooltipContent side="right">
               {collapsed ? 'Expand' : 'Collapse'} (⌘B)
             </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* New Task Button */}
-        <div className="border-b border-border p-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                className={cn(
-                  'w-full bg-cyan-500 text-gray-900 hover:bg-cyan-400',
-                  collapsed && 'px-0'
-                )}
-                onClick={onNewTask}
-              >
-                <Plus className={cn('size-4', !collapsed && 'mr-2')} />
-                {!collapsed && 'New Task'}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right">New Task (⌘N)</TooltipContent>
-            )}
           </Tooltip>
         </div>
 
