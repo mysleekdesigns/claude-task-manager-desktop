@@ -1447,54 +1447,54 @@ Implement bidirectional sync between local SQLite and Supabase PostgreSQL with r
 Ensure the app works fully offline and handles conflicts when multiple users edit the same data.
 
 ### 18.1 Network Status Detection
-- [ ] Monitor network connectivity
-  - [ ] Use `navigator.onLine` API
-  - [ ] Ping Supabase periodically
-- [ ] Track connection state in Zustand store
-- [ ] Show connection indicator in UI
+- [x] Monitor network connectivity
+  - [x] Use `navigator.onLine` API
+  - [x] Ping Supabase periodically
+- [x] Track connection state in Zustand store
+- [x] Show connection indicator in UI
 
 ### 18.2 Offline Operation
-- [ ] All reads from local SQLite (always fast)
-- [ ] All writes to local SQLite first
-- [ ] Queue writes for sync when online
-- [ ] No blocking on network operations
+- [x] All reads from local SQLite (always fast)
+- [x] All writes to local SQLite first
+- [x] Queue writes for sync when online
+- [x] No blocking on network operations
 
 ### 18.3 Sync Queue Persistence
-- [ ] Store queue in electron-store
-- [ ] Survive app restarts
-- [ ] Resume sync on app launch
-- [ ] Show pending sync count in UI
+- [x] Store queue in electron-store
+- [x] Survive app restarts
+- [x] Resume sync on app launch
+- [x] Show pending sync count in UI
 
 ### 18.4 Conflict Detection
-- [ ] Compare `sync_version` on update
-- [ ] Detect concurrent modifications
-- [ ] Identify conflicting fields
+- [x] Compare `sync_version` on update
+- [x] Detect concurrent modifications
+- [x] Identify conflicting fields
 
 ### 18.5 Conflict Resolution Strategy
-- [ ] Implement Last-Write-Wins (LWW)
-  - [ ] Compare `updated_at` timestamps
-  - [ ] Server timestamp wins if newer
-  - [ ] Local timestamp wins if newer
-- [ ] Log conflicts for audit
-- [ ] Option to show conflict notification
+- [x] Implement Last-Write-Wins (LWW)
+  - [x] Compare `updated_at` timestamps
+  - [x] Server timestamp wins if newer
+  - [x] Local timestamp wins if newer
+- [x] Log conflicts for audit
+- [x] Option to show conflict notification
 
 ### 18.6 Soft Deletes
-- [ ] Use `deleted_at` instead of hard delete
-- [ ] Filter out deleted records in queries
-- [ ] Sync deletes properly
-- [ ] Periodic cleanup of old soft-deleted records
+- [x] Use `deleted_at` instead of hard delete
+- [x] Filter out deleted records in queries
+- [x] Sync deletes properly
+- [x] Periodic cleanup of old soft-deleted records
 
 ### 18.7 Optimistic UI Updates
-- [ ] Update UI immediately on user action
-- [ ] Rollback if sync fails
-- [ ] Show sync status indicator per item
+- [x] Update UI immediately on user action
+- [x] Rollback if sync fails
+- [x] Show sync status indicator per item
 
 **Phase 18 Verification:**
-- [ ] App works fully without internet
-- [ ] Changes queue while offline
-- [ ] Sync resumes when back online
-- [ ] Conflicts resolve automatically
-- [ ] No data loss in conflict scenarios
+- [x] App works fully without internet
+- [x] Changes queue while offline
+- [x] Sync resumes when back online
+- [x] Conflicts resolve automatically
+- [x] No data loss in conflict scenarios
 
 ---
 
@@ -2379,9 +2379,9 @@ useEffect(() => {
 - [x] Sync queue processes
 
 ### Phase 18 - Offline-First
-- [ ] App works offline
-- [ ] Conflicts resolve correctly
-- [ ] Data persists across restarts
+- [x] App works offline
+- [x] Conflicts resolve correctly
+- [x] Data persists across restarts
 
 ### Phase 19 - Collaboration UI
 - [ ] Sync indicator works
