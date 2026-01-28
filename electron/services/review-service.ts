@@ -177,10 +177,10 @@ class ReviewService {
       logger.info(`Flushed pending activities for task ${taskId}`);
     }
 
-    // Update task status
+    // Update task status and reset claudeStatus to prevent stale "Completed" badge
     await prisma.task.update({
       where: { id: taskId },
-      data: { status: 'AI_REVIEW' },
+      data: { status: 'AI_REVIEW', claudeStatus: 'IDLE' },
     });
 
     // Ensure we have a main window

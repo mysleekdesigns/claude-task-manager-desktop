@@ -6,7 +6,7 @@
  * Wrapped with React.memo to prevent unnecessary re-renders.
  */
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Clock, MoreVertical, Pencil, Trash2, Terminal } from 'lucide-react';
+import { Clock, MoreVertical, Pencil, Trash2, Terminal, Loader2 } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
 import { TaskCardStartButton } from './TaskCardStartButton';
 import { TaskCardReviewButton } from './TaskCardReviewButton';
@@ -29,6 +29,8 @@ import { isClaudeActive, getClaudeStatusFromTask } from '@/hooks/useClaudeStatus
 import { TaskOutputPreview } from './TaskOutputPreview';
 import { ReviewOutputPreview } from './ReviewOutputPreview';
 import { PhaseBadge } from './PhaseBadge';
+import { useReviewProgress } from '@/hooks/useReview';
+import { useReviewStore } from '@/store/useReviewStore';
 
 // ============================================================================
 // Types
@@ -115,6 +117,39 @@ function TaskCardComponent({
   const claudeStatus = getClaudeStatusFromTask(task);
   const isClaudeRunning = isClaudeActive(claudeStatus);
 
+  // Get review progress for AI_REVIEW status tasks
+  const isAIReviewStatus = task.status === 'AI_REVIEW';
+  const reviewProgress = useReviewProgress(isAIReviewStatus ? task.id : null);
+  const { verifyingReviewTypes } = useReviewStore();
+
+  // Determine if AI review is actively running
+  const isReviewRunning = useMemo(() => {
+    if (!isAIReviewStatus) return false;
+
+    // Check if any verification is running for this task
+    const verifyingSet = verifyingReviewTypes.get(task.id);
+    const isVerificationRunning = verifyingSet && verifyingSet.size > 0;
+
+    if (!reviewProgress) {
+      // If we don't have progress yet but task is in AI_REVIEW, assume it's starting
+      return true;
+    }
+
+    // Check if overall status is in_progress
+    if (reviewProgress.status === 'in_progress') return true;
+
+    // Check if any individual review is still running
+    const hasRunningReview = reviewProgress.reviews.some(
+      (r) => r.status === 'RUNNING'
+    );
+    if (hasRunningReview) return true;
+
+    // Check if fix verification is in progress
+    if (isVerificationRunning) return true;
+
+    return false;
+  }, [isAIReviewStatus, reviewProgress, task.id, verifyingReviewTypes]);
+
   // Memoize event handlers to prevent child re-renders
   const handleViewTerminal = useCallback(
     (e: React.MouseEvent) => {
@@ -179,6 +214,17 @@ function TaskCardComponent({
               status={task.claudeStatus}
               terminalId={task.claudeTerminalId ?? undefined}
             />
+          )}
+
+          {/* AI Review In Progress Badge - shown when reviews are actively running */}
+          {isReviewRunning && (
+            <Badge
+              variant="secondary"
+              className="text-xs rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30"
+            >
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              In Progress
+            </Badge>
           )}
         </div>
 

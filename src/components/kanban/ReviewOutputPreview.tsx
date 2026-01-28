@@ -84,6 +84,12 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
 
       if (data.currentActivity) {
         setCurrentMessage(data.currentActivity.message);
+      } else if (data.reviews.length === 0) {
+        // No reviews created yet - show starting message
+        // This handles the initial state when review just started
+        if (data.status === 'in_progress' || data.status === 'pending') {
+          setCurrentMessage('Starting review...');
+        }
       } else {
         // Find the first running review
         const running = data.reviews.find((r) => r.status === 'RUNNING');
@@ -285,10 +291,20 @@ export function ReviewOutputPreview({ taskId }: ReviewOutputPreviewProps) {
   // Check if any verification is running for this task
   const isVerificationRunning = uniqueReviews.some((r) => isReviewTypeVerifying(taskId, r.reviewType));
   // Check if any review is running OR any review type is being re-verified
-  const hasRunning = uniqueReviews.some((r) => r.status === 'RUNNING') || isVerificationRunning;
+  // Also consider "in_progress" with no reviews yet as running (reviews are being created)
+  const hasRunning = uniqueReviews.some((r) => r.status === 'RUNNING')
+    || isVerificationRunning
+    || (progress.status === 'in_progress' && totalCount === 0);
   const hasFailed = uniqueReviews.some((r) => r.status === 'FAILED');
-  // Only mark as completed if progress is completed AND no verification is running
-  const isAllCompleted = progress.status === 'completed' && !isVerificationRunning;
+  // Only mark as completed if:
+  // 1. progress.status is 'completed' AND
+  // 2. No verification is running AND
+  // 3. There are actually reviews present (prevents showing "Completed" when reviews haven't started yet)
+  // 4. All reviews are actually completed (handles race condition where status is stale)
+  const isAllCompleted = progress.status === 'completed'
+    && !isVerificationRunning
+    && totalCount > 0
+    && completedCount === totalCount;
 
   return (
     <div className="mt-2 p-2 bg-zinc-900/95 border border-zinc-800 rounded-md overflow-hidden">
