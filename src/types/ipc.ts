@@ -1472,6 +1472,11 @@ export interface IpcChannels {
   'research:searchStackOverflow': (data: ResearchRequest) => Promise<ResearchResponse>;
   'research:searchGitHub': (data: ResearchRequest) => Promise<ResearchResponse>;
   'research:openUrl': (url: string) => Promise<ResearchResponse>;
+
+  // Network status channels (Phase 18)
+  'network:getStatus': () => Promise<NetworkStatusInfo>;
+  'network:ping': () => Promise<NetworkStatusInfo>;
+  'network:isOnline': () => Promise<boolean>;
 }
 
 /**
@@ -1529,6 +1534,14 @@ export interface IpcEventChannels {
   'auth:state-change': (session: AuthStateChangePayload | null) => void;
   'auth:oauth-success': (payload: OAuthSuccessPayload) => void;
   'auth:oauth-error': (payload: OAuthErrorPayload) => void;
+  // Network status events (Phase 18)
+  'network:status-change': (status: NetworkStatusInfo) => void;
+  // Sync status events (Phase 18)
+  'sync:status': (status: SyncStatusEvent) => void;
+  'sync:progress': (progress: number) => void;
+  // Conflict events (Phase 18.4 & 18.5)
+  'sync:conflict': (payload: ConflictEventPayload) => void;
+  'sync:conflict-resolved': (payload: ConflictResolvedPayload) => void;
 }
 
 /**
@@ -1878,6 +1891,129 @@ export interface FixResult {
 }
 
 // ============================================================================
+// Network Status Types (Phase 18)
+// ============================================================================
+
+/**
+ * Network connection states
+ */
+export type NetworkStatus = 'online' | 'offline' | 'reconnecting';
+
+/**
+ * Network status information returned by network:getStatus
+ */
+export interface NetworkStatusInfo {
+  status: NetworkStatus;
+  isOnline: boolean;
+  lastOnlineAt: string | null;
+  lastCheckedAt: string | null;
+  supabaseReachable: boolean;
+}
+
+/**
+ * Sync operation status
+ */
+export type SyncOperationStatus = 'idle' | 'syncing' | 'error' | 'success';
+
+/**
+ * Sync status event payload for sync:status event
+ */
+export interface SyncStatusEvent {
+  /** Current sync operation status */
+  status: SyncOperationStatus;
+  /** Sync progress percentage (0-100) when syncing */
+  progress?: number;
+  /** Number of changes pending sync */
+  pendingCount?: number;
+  /** Error message if status is 'error' */
+  error?: string;
+  /** Timestamp of last successful sync */
+  lastSyncedAt?: string;
+}
+
+// ============================================================================
+// Conflict Resolution Types (Phase 18.4 & 18.5)
+// ============================================================================
+
+/**
+ * Table names that support conflict resolution
+ */
+export type ConflictTable = 'Project' | 'Task';
+
+/**
+ * Resolution decision for a sync conflict
+ */
+export type ResolutionDecision = 'local_wins' | 'remote_wins' | 'needs_merge';
+
+/**
+ * Field-level conflict information
+ */
+export interface FieldConflict {
+  /** Name of the conflicting field */
+  field: string;
+  /** Local value of the field */
+  localValue: unknown;
+  /** Remote value of the field */
+  remoteValue: unknown;
+}
+
+/**
+ * Conflict event payload sent to renderer when a conflict is detected
+ */
+export interface ConflictEventPayload {
+  /** Table name where conflict occurred */
+  table: ConflictTable;
+  /** ID of the record with conflict */
+  recordId: string;
+  /** Local sync version at time of conflict */
+  localVersion: number;
+  /** Remote sync version at time of conflict */
+  remoteVersion: number;
+  /** How the conflict was resolved */
+  decision: ResolutionDecision;
+  /** List of fields that were in conflict */
+  conflictingFields: FieldConflict[];
+  /** When the conflict was resolved */
+  resolvedAt: string;
+}
+
+/**
+ * Conflict resolved event payload
+ */
+export interface ConflictResolvedPayload {
+  /** Table name where conflict was resolved */
+  table: ConflictTable;
+  /** ID of the record */
+  recordId: string;
+  /** How the conflict was resolved */
+  decision: ResolutionDecision;
+  /** When the conflict was resolved */
+  resolvedAt: string;
+}
+
+/**
+ * Conflict log entry for audit trail display
+ */
+export interface ConflictLogEntry {
+  /** Unique ID of the conflict log entry */
+  id: string;
+  /** Table name */
+  table: string;
+  /** Record ID */
+  recordId: string;
+  /** Local version at conflict time */
+  localVersion: number;
+  /** Remote version at conflict time */
+  remoteVersion: number;
+  /** Resolution decision */
+  resolution: string;
+  /** When the conflict was resolved */
+  resolvedAt: string;
+  /** When the log entry was created */
+  createdAt: string;
+}
+
+// ============================================================================
 // Research Types
 // ============================================================================
 
@@ -2086,6 +2222,10 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'research:searchStackOverflow',
   'research:searchGitHub',
   'research:openUrl',
+  // Network status channels (Phase 18)
+  'network:getStatus',
+  'network:ping',
+  'network:isOnline',
 ] as const;
 
 /**
@@ -2098,6 +2238,13 @@ export const VALID_EVENT_CHANNELS: readonly IpcEventChannelName[] = [
   'auth:state-change',
   'auth:oauth-success',
   'auth:oauth-error',
+  'network:status-change',
+  // Sync status events (Phase 18)
+  'sync:status',
+  'sync:progress',
+  // Conflict events (Phase 18.4 & 18.5)
+  'sync:conflict',
+  'sync:conflict-resolved',
 ] as const;
 
 // ============================================================================

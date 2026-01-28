@@ -6,6 +6,7 @@
 
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { databaseService } from '../services/database.js';
+import { softDeleteService, notDeleted } from '../services/soft-delete.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
   logIPCRequest,
@@ -62,11 +63,16 @@ async function handleListProjects(
 
   const prisma = databaseService.getClient();
   const projectMembers = await prisma.projectMember.findMany({
-    where: { userId },
+    where: {
+      userId,
+      ...notDeleted, // Exclude soft-deleted memberships
+      project: notDeleted, // Exclude soft-deleted projects
+    },
     include: {
       project: {
         include: {
           members: {
+            where: notDeleted, // Only include non-deleted members
             include: {
               user: {
                 select: {
@@ -164,10 +170,14 @@ async function handleGetProject(
   }
 
   const prisma = databaseService.getClient();
-  const project = await prisma.project.findUnique({
-    where: { id },
+  const project = await prisma.project.findFirst({
+    where: {
+      id,
+      ...notDeleted, // Exclude soft-deleted projects
+    },
     include: {
       members: {
+        where: notDeleted, // Only include non-deleted members
         include: {
           user: {
             select: {
@@ -234,7 +244,10 @@ async function handleUpdateProject(
 }
 
 /**
- * Delete project
+ * Delete project (soft delete)
+ *
+ * Uses soft delete instead of hard delete to support sync and undo functionality.
+ * The project and its tasks/members are marked with a deletedAt timestamp.
  */
 async function handleDeleteProject(
   _event: IpcMainInvokeEvent,
@@ -244,17 +257,10 @@ async function handleDeleteProject(
     throw IPCErrors.invalidArguments('Project ID is required');
   }
 
-  const prisma = databaseService.getClient();
+  const result = await softDeleteService.softDelete('Project', id);
 
-  try {
-    await prisma.project.delete({
-      where: { id },
-    });
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-      throw new Error('Project not found');
-    }
-    throw error;
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to delete project');
   }
 }
 
@@ -309,7 +315,9 @@ async function handleAddMember(
 }
 
 /**
- * Remove member from project
+ * Remove member from project (soft delete)
+ *
+ * Uses soft delete instead of hard delete to support sync and undo functionality.
  */
 async function handleRemoveMember(
   _event: IpcMainInvokeEvent,
@@ -322,18 +330,23 @@ async function handleRemoveMember(
 
   const prisma = databaseService.getClient();
 
-  try {
-    await prisma.projectMember.deleteMany({
-      where: {
-        projectId,
-        userId,
-      },
-    });
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-      throw new Error('Project member not found');
-    }
-    throw error;
+  // Find the membership record
+  const member = await prisma.projectMember.findFirst({
+    where: {
+      projectId,
+      userId,
+      ...notDeleted,
+    },
+  });
+
+  if (!member) {
+    throw new Error('Project member not found');
+  }
+
+  const result = await softDeleteService.softDelete('ProjectMember', member.id);
+
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to remove member');
   }
 }
 

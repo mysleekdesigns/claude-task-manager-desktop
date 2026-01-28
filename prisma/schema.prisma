@@ -57,6 +57,9 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Soft delete support
+  deletedAt   DateTime? // When set, record is considered soft-deleted
+
   // Sync metadata for Supabase real-time sync
   supabaseId   String?   // The Supabase remote ID
   syncVersion  Int       @default(0) // Optimistic locking version
@@ -76,6 +79,7 @@ model Project {
 
   @@index([createdAt])
   @@index([supabaseId])
+  @@index([deletedAt])
 }
 
 model ProjectMember {
@@ -85,6 +89,9 @@ model ProjectMember {
   projectId String
   createdAt DateTime @default(now())
 
+  // Soft delete support
+  deletedAt DateTime? // When set, record is considered soft-deleted
+
   // Relations
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -92,6 +99,7 @@ model ProjectMember {
   @@unique([userId, projectId])
   @@index([projectId])
   @@index([userId])
+  @@index([deletedAt])
 }
 
 model Session {
@@ -131,6 +139,9 @@ model Task {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
+  // Soft delete support
+  deletedAt    DateTime? // When set, record is considered soft-deleted
+
   // Sync metadata for Supabase real-time sync
   supabaseId   String?   // The Supabase remote ID
   syncVersion  Int       @default(0) // Optimistic locking version
@@ -160,6 +171,7 @@ model Task {
   @@index([claudeStatus])
   @@index([createdAt])
   @@index([supabaseId])
+  @@index([deletedAt])
 }
 
 model TaskPhase {
@@ -570,5 +582,27 @@ model SyncLog {
 
   @@index([synced])
   @@index([table])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Conflict Log - Phase 18.4 & 18.5: Conflict Detection & Resolution
+// ============================================================================
+
+model ConflictLog {
+  id            String   @id @default(cuid())
+  table         String   // Table name: "Project", "Task"
+  recordId      String   // ID of the record that had a conflict
+  localVersion  Int      // Local sync version at time of conflict
+  remoteVersion Int      // Remote sync version at time of conflict
+  resolution    String   // Resolution: "local_wins", "remote_wins", "merged"
+  localData     String   // JSON snapshot of local state at conflict time
+  remoteData    String   // JSON snapshot of remote state at conflict time
+  resolvedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([table])
+  @@index([recordId])
+  @@index([resolution])
   @@index([createdAt])
 }

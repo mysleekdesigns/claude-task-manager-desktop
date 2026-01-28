@@ -30,3 +30,30 @@ export type {
 } from './realtime';
 export { syncEngineService } from './sync-engine';
 export type { SyncResult, SyncProgressCallback } from './sync-engine';
+export { conflictResolverService } from './conflict-resolver';
+export type {
+  ConflictTable,
+  ResolutionDecision,
+  FieldConflict,
+  ConflictDetectionResult,
+  LocalRecord,
+  RemoteRecord,
+  ConflictEventPayload,
+  ConflictLogEntry,
+} from './conflict-resolver';
+export { networkStatusService } from './network-status';
+export type { NetworkStatus, NetworkStatusInfo } from './network-status';
+export {
+  softDeleteService,
+  notDeleted,
+  onlyDeleted,
+  includeDeleted,
+} from './soft-delete';
+export type {
+  SoftDeleteTable,
+  SoftDeleteResult,
+  RestoreResult,
+  CleanupResult,
+  ListDeletedOptions,
+  DeletedRecordSummary,
+} from './soft-delete';

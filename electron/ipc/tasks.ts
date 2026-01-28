@@ -6,6 +6,7 @@
 
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { databaseService } from '../services/database.js';
+import { softDeleteService, notDeleted } from '../services/soft-delete.js';
 import { wrapHandler, IPCErrors } from '../utils/ipc-error.js';
 import {
   logIPCRequest,
@@ -107,7 +108,11 @@ async function handleListTasks(
     status?: TaskStatus;
     priority?: Priority;
     assigneeId?: string;
-  } = { projectId };
+    deletedAt?: null;
+  } = {
+    projectId,
+    ...notDeleted, // Exclude soft-deleted tasks
+  };
   if (filters?.status) {
     where.status = filters.status;
   }
@@ -198,8 +203,11 @@ async function handleGetTask(
 
   const prisma = databaseService.getClient();
 
-  const task = await prisma.task.findUnique({
-    where: { id },
+  const task = await prisma.task.findFirst({
+    where: {
+      id,
+      ...notDeleted, // Exclude soft-deleted tasks
+    },
     include: {
       assignee: {
         select: {
@@ -216,7 +224,9 @@ async function handleGetTask(
       },
       logs: true,
       files: true,
-      subtasks: true,
+      subtasks: {
+        where: notDeleted, // Only include non-deleted subtasks
+      },
       parent: true,
     },
   });
@@ -326,7 +336,10 @@ async function handleUpdateTaskStatus(
 }
 
 /**
- * Delete a task
+ * Delete a task (soft delete)
+ *
+ * Uses soft delete instead of hard delete to support sync and undo functionality.
+ * The task and its subtasks are marked with a deletedAt timestamp.
  */
 async function handleDeleteTask(
   _event: IpcMainInvokeEvent,
@@ -336,17 +349,10 @@ async function handleDeleteTask(
     throw IPCErrors.invalidArguments('Task ID is required');
   }
 
-  const prisma = databaseService.getClient();
+  const result = await softDeleteService.softDelete('Task', id);
 
-  try {
-    await prisma.task.delete({
-      where: { id },
-    });
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'P2025') {
-      throw new Error('Task not found');
-    }
-    throw error;
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to delete task');
   }
 }
 
@@ -440,7 +446,10 @@ async function handleGetSubtasks(
   const prisma = databaseService.getClient();
 
   const subtasks = await prisma.task.findMany({
-    where: { parentId },
+    where: {
+      parentId,
+      ...notDeleted, // Exclude soft-deleted subtasks
+    },
     include: {
       assignee: {
         select: {

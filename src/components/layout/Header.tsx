@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { ProjectSelector } from './ProjectSelector';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { SyncStatusIndicator } from '@/components/sync/SyncStatusIndicator';
 
 interface HeaderProps {
   /** Whether to show window controls (minimize, maximize, close) for frameless mode */
@@ -65,8 +66,9 @@ export function Header({
           </div>
         </div>
 
-        {/* Right Side - Theme Toggle, User Menu and Window Controls */}
+        {/* Right Side - Sync Status, Theme Toggle, User Menu and Window Controls */}
         <div className="flex items-center gap-2 ml-auto">
+          <SyncStatusIndicator />
           <ThemeToggle />
           <UserMenu />
 

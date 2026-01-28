@@ -19,6 +19,12 @@ import { BrowserWindow } from 'electron';
 import { supabaseService } from './supabase';
 import { getPrismaClient } from './database';
 import { syncQueueService } from './sync-queue';
+import {
+  conflictResolverService,
+  type LocalRecord,
+  type RemoteRecord,
+  type ConflictTable,
+} from './conflict-resolver';
 
 // ============================================================================
 // Types
@@ -41,6 +47,12 @@ export interface SyncResult {
   projectsSynced: number;
   tasksSynced: number;
   projectMembersSynced: number;
+  /** Number of conflicts detected during sync */
+  conflictsDetected: number;
+  /** Number of conflicts resolved with local winning */
+  conflictsLocalWins: number;
+  /** Number of conflicts resolved with remote winning */
+  conflictsRemoteWins: number;
   errors: string[];
   duration: number;
 }
@@ -60,6 +72,7 @@ interface RemoteProject {
   target_path: string | null;
   github_repo: string | null;
   sync_version: number;
+  deleted_at: string | null; // Soft delete timestamp
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +92,7 @@ interface RemoteTask {
   assignee_id: string | null;
   parent_id: string | null;
   sync_version: number;
+  deleted_at: string | null; // Soft delete timestamp
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +105,7 @@ interface RemoteProjectMember {
   role: string;
   user_id: string;
   project_id: string;
+  deleted_at: string | null; // Soft delete timestamp
   created_at: string;
 }
 
@@ -141,6 +156,8 @@ class SyncEngineService {
    */
   public setMainWindow(window: BrowserWindow): void {
     this.mainWindow = window;
+    // Also set on conflict resolver for conflict event emission
+    conflictResolverService.setMainWindow(window);
   }
 
   /**
@@ -148,6 +165,7 @@ class SyncEngineService {
    */
   public clearMainWindow(): void {
     this.mainWindow = null;
+    conflictResolverService.clearMainWindow();
   }
 
   // ============================================================================
@@ -251,6 +269,9 @@ class SyncEngineService {
         projectsSynced: 0,
         tasksSynced: 0,
         projectMembersSynced: 0,
+        conflictsDetected: 0,
+        conflictsLocalWins: 0,
+        conflictsRemoteWins: 0,
         errors: ['Sync already in progress'],
         duration: 0,
       };
@@ -263,6 +284,9 @@ class SyncEngineService {
         projectsSynced: 0,
         tasksSynced: 0,
         projectMembersSynced: 0,
+        conflictsDetected: 0,
+        conflictsLocalWins: 0,
+        conflictsRemoteWins: 0,
         errors: ['Supabase not initialized'],
         duration: 0,
       };
@@ -277,6 +301,9 @@ class SyncEngineService {
       projectsSynced: 0,
       tasksSynced: 0,
       projectMembersSynced: 0,
+      conflictsDetected: 0,
+      conflictsLocalWins: 0,
+      conflictsRemoteWins: 0,
       errors: [],
       duration: 0,
     };
@@ -315,7 +342,7 @@ class SyncEngineService {
 
       for (const remoteProject of remoteProjects) {
         try {
-          await this.upsertLocalProject(prisma, remoteProject);
+          await this.upsertLocalProject(prisma, remoteProject, result);
           result.projectsSynced++;
         } catch (error) {
           result.errors.push(
@@ -370,7 +397,7 @@ class SyncEngineService {
       // Step 5: Sync tasks
       for (const remoteTask of allTasks) {
         try {
-          await this.upsertLocalTask(prisma, remoteTask);
+          await this.upsertLocalTask(prisma, remoteTask, result);
           result.tasksSynced++;
         } catch (error) {
           result.errors.push(
@@ -431,6 +458,9 @@ class SyncEngineService {
         projectsSynced: 0,
         tasksSynced: 0,
         projectMembersSynced: 0,
+        conflictsDetected: 0,
+        conflictsLocalWins: 0,
+        conflictsRemoteWins: 0,
         errors: ['Sync already in progress'],
         duration: 0,
       };
@@ -443,6 +473,9 @@ class SyncEngineService {
         projectsSynced: 0,
         tasksSynced: 0,
         projectMembersSynced: 0,
+        conflictsDetected: 0,
+        conflictsLocalWins: 0,
+        conflictsRemoteWins: 0,
         errors: ['Supabase not initialized'],
         duration: 0,
       };
@@ -457,6 +490,9 @@ class SyncEngineService {
       projectsSynced: 0,
       tasksSynced: 0,
       projectMembersSynced: 0,
+      conflictsDetected: 0,
+      conflictsLocalWins: 0,
+      conflictsRemoteWins: 0,
       errors: [],
       duration: 0,
     };
@@ -495,7 +531,7 @@ class SyncEngineService {
 
         for (const remoteProject of updatedProjects) {
           try {
-            await this.upsertLocalProject(prisma, remoteProject);
+            await this.upsertLocalProject(prisma, remoteProject, result);
             result.projectsSynced++;
           } catch (error) {
             result.errors.push(
@@ -532,7 +568,7 @@ class SyncEngineService {
         } else if (updatedTasks) {
           for (const remoteTask of updatedTasks as RemoteTask[]) {
             try {
-              await this.upsertLocalTask(prisma, remoteTask);
+              await this.upsertLocalTask(prisma, remoteTask, result);
               result.tasksSynced++;
             } catch (error) {
               result.errors.push(
@@ -594,14 +630,16 @@ class SyncEngineService {
   // ============================================================================
 
   /**
-   * Upsert a project from Supabase into local SQLite
+   * Upsert a project from Supabase into local SQLite with conflict detection
    *
    * @param prisma - Prisma client instance
    * @param remote - Remote project data from Supabase
+   * @param syncResult - Optional SyncResult to update with conflict statistics
    */
   private async upsertLocalProject(
     prisma: ReturnType<typeof getPrismaClient>,
-    remote: RemoteProject
+    remote: RemoteProject,
+    syncResult?: SyncResult
   ): Promise<void> {
     // Check if we have a local record with this supabaseId
     const existing = await prisma.project.findFirst({
@@ -615,18 +653,69 @@ class SyncEngineService {
       githubRepo: remote.github_repo,
       syncVersion: remote.sync_version || 0,
       lastSyncedAt: new Date(),
+      // Sync soft delete status from remote
+      deletedAt: remote.deleted_at ? new Date(remote.deleted_at) : null,
     };
 
     if (existing) {
-      // Check if remote is newer (based on sync_version or updated_at)
-      if (remote.sync_version > (existing.syncVersion || 0)) {
-        await prisma.project.update({
-          where: { id: existing.id },
-          data: localData,
-        });
-        console.log(`[SyncEngine] Updated project: ${existing.id} (supabase: ${remote.id})`);
+      // Use conflict resolver for existing records
+      const localRecord: LocalRecord = {
+        id: existing.id,
+        syncVersion: existing.syncVersion || 0,
+        updatedAt: existing.updatedAt,
+        name: existing.name,
+        description: existing.description,
+        targetPath: existing.targetPath,
+        githubRepo: existing.githubRepo,
+      };
+
+      const remoteRecord: RemoteRecord = {
+        id: remote.id,
+        sync_version: remote.sync_version || 0,
+        updated_at: remote.updated_at,
+        name: remote.name,
+        description: remote.description,
+        target_path: remote.target_path,
+        github_repo: remote.github_repo,
+      };
+
+      const conflictResult = await conflictResolverService.handleConflict(
+        'Project' as ConflictTable,
+        localRecord,
+        remoteRecord
+      );
+
+      // Update statistics
+      if (syncResult && conflictResult.hasConflict) {
+        syncResult.conflictsDetected++;
+        if (conflictResult.decision === 'local_wins') {
+          syncResult.conflictsLocalWins++;
+        } else if (conflictResult.decision === 'remote_wins') {
+          syncResult.conflictsRemoteWins++;
+        }
+      }
+
+      // Apply resolution if remote wins or no conflict but remote is newer
+      if (conflictResult.decision === 'remote_wins' || !conflictResult.hasConflict) {
+        // Only update if there are actual changes
+        if (remote.sync_version > (existing.syncVersion || 0) || conflictResult.hasConflict) {
+          await prisma.project.update({
+            where: { id: existing.id },
+            data: {
+              ...localData,
+              syncVersion: (conflictResult.resolvedData['syncVersion'] as number) || localData.syncVersion,
+            },
+          });
+          console.log(
+            `[SyncEngine] Updated project: ${existing.id} (supabase: ${remote.id})` +
+            (conflictResult.hasConflict ? ` [conflict resolved: ${conflictResult.decision}]` : '')
+          );
+        }
       } else {
-        console.log(`[SyncEngine] Skipped project (local is newer): ${existing.id}`);
+        // Local wins - keep local data but note the resolution
+        console.log(
+          `[SyncEngine] Kept local project (conflict resolved: local_wins): ${existing.id}`
+        );
       }
     } else {
       // Check if there's a local record without supabaseId that matches by name
@@ -663,14 +752,16 @@ class SyncEngineService {
   }
 
   /**
-   * Upsert a task from Supabase into local SQLite
+   * Upsert a task from Supabase into local SQLite with conflict detection
    *
    * @param prisma - Prisma client instance
    * @param remote - Remote task data from Supabase
+   * @param syncResult - Optional SyncResult to update with conflict statistics
    */
   private async upsertLocalTask(
     prisma: ReturnType<typeof getPrismaClient>,
-    remote: RemoteTask
+    remote: RemoteTask,
+    syncResult?: SyncResult
   ): Promise<void> {
     // First, find the local project by supabaseId
     const localProject = await prisma.project.findFirst({
@@ -710,18 +801,73 @@ class SyncEngineService {
       // Note: assigneeId mapping would require user sync, skip for now
       syncVersion: remote.sync_version || 0,
       lastSyncedAt: new Date(),
+      // Sync soft delete status from remote
+      deletedAt: remote.deleted_at ? new Date(remote.deleted_at) : null,
     };
 
     if (existing) {
-      // Check if remote is newer
-      if (remote.sync_version > (existing.syncVersion || 0)) {
-        await prisma.task.update({
-          where: { id: existing.id },
-          data: localData,
-        });
-        console.log(`[SyncEngine] Updated task: ${existing.id} (supabase: ${remote.id})`);
+      // Use conflict resolver for existing records
+      const localRecord: LocalRecord = {
+        id: existing.id,
+        syncVersion: existing.syncVersion || 0,
+        updatedAt: existing.updatedAt,
+        title: existing.title,
+        description: existing.description,
+        branchName: existing.branchName,
+        status: existing.status,
+        priority: existing.priority,
+        tags: existing.tags,
+      };
+
+      const remoteRecord: RemoteRecord = {
+        id: remote.id,
+        sync_version: remote.sync_version || 0,
+        updated_at: remote.updated_at,
+        title: remote.title,
+        description: remote.description,
+        branch_name: remote.branch_name,
+        status: remote.status,
+        priority: remote.priority,
+        tags: remote.tags,
+      };
+
+      const conflictResult = await conflictResolverService.handleConflict(
+        'Task' as ConflictTable,
+        localRecord,
+        remoteRecord
+      );
+
+      // Update statistics
+      if (syncResult && conflictResult.hasConflict) {
+        syncResult.conflictsDetected++;
+        if (conflictResult.decision === 'local_wins') {
+          syncResult.conflictsLocalWins++;
+        } else if (conflictResult.decision === 'remote_wins') {
+          syncResult.conflictsRemoteWins++;
+        }
+      }
+
+      // Apply resolution if remote wins or no conflict but remote is newer
+      if (conflictResult.decision === 'remote_wins' || !conflictResult.hasConflict) {
+        // Only update if there are actual changes
+        if (remote.sync_version > (existing.syncVersion || 0) || conflictResult.hasConflict) {
+          await prisma.task.update({
+            where: { id: existing.id },
+            data: {
+              ...localData,
+              syncVersion: (conflictResult.resolvedData['syncVersion'] as number) || localData.syncVersion,
+            },
+          });
+          console.log(
+            `[SyncEngine] Updated task: ${existing.id} (supabase: ${remote.id})` +
+            (conflictResult.hasConflict ? ` [conflict resolved: ${conflictResult.decision}]` : '')
+          );
+        }
       } else {
-        console.log(`[SyncEngine] Skipped task (local is newer): ${existing.id}`);
+        // Local wins - keep local data but note the resolution
+        console.log(
+          `[SyncEngine] Kept local task (conflict resolved: local_wins): ${existing.id}`
+        );
       }
     } else {
       // Check if there's a local task without supabaseId that matches
@@ -791,13 +937,19 @@ class SyncEngineService {
     });
 
     if (existing) {
-      // Update role if changed
-      if (existing.role !== remote.role) {
+      // Update role and deletedAt if changed
+      const needsUpdate = existing.role !== remote.role ||
+        (existing.deletedAt?.toISOString() ?? null) !== remote.deleted_at;
+
+      if (needsUpdate) {
         await prisma.projectMember.update({
           where: { id: existing.id },
-          data: { role: remote.role },
+          data: {
+            role: remote.role,
+            deletedAt: remote.deleted_at ? new Date(remote.deleted_at) : null,
+          },
         });
-        console.log(`[SyncEngine] Updated membership role: ${existing.id}`);
+        console.log(`[SyncEngine] Updated membership: ${existing.id}`);
       }
     } else {
       // Create new membership
@@ -806,6 +958,7 @@ class SyncEngineService {
           role: remote.role,
           userId: localUserId,
           projectId: localProject.id,
+          deletedAt: remote.deleted_at ? new Date(remote.deleted_at) : null,
         },
       });
       console.log(`[SyncEngine] Created local membership for project: ${localProject.id}`);
@@ -835,6 +988,7 @@ class SyncEngineService {
   public cleanup(): void {
     this.progressCallbacks.clear();
     this.mainWindow = null;
+    conflictResolverService.cleanup();
     console.log('[SyncEngine] Cleanup complete');
   }
 }

@@ -28,6 +28,8 @@ import { registerFixHandlers, unregisterFixHandlers } from './fix.js';
 import { registerHumanReviewHandlers, unregisterHumanReviewHandlers } from './human-review.js';
 import { registerResearchHandlers, unregisterResearchHandlers } from './research.js';
 import { registerSyncHandlers, unregisterSyncHandlers } from './sync.js';
+import { registerNetworkHandlers, unregisterNetworkHandlers } from './network.js';
+import { registerSoftDeleteHandlers, unregisterSoftDeleteHandlers } from './soft-delete.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -82,6 +84,8 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerHumanReviewHandlers();
     registerResearchHandlers();
     registerSyncHandlers(mainWindow);
+    registerNetworkHandlers(mainWindow);
+    registerSoftDeleteHandlers();
 
     isRegistered = true;
     logger.info('IPC handlers registered successfully.');
@@ -128,6 +132,8 @@ export function unregisterIPCHandlers(): void {
     unregisterHumanReviewHandlers();
     unregisterResearchHandlers();
     unregisterSyncHandlers();
+    unregisterNetworkHandlers();
+    unregisterSoftDeleteHandlers();
 
     isRegistered = false;
     logger.info('IPC handlers unregistered successfully.');
@@ -159,5 +165,6 @@ export {
   logIPCEvent,
 } from '../utils/ipc-logger.js';
 
-// Re-export sync cleanup function for app shutdown
+// Re-export cleanup functions for app shutdown
 export { cleanupSyncHandlers } from './sync.js';
+export { cleanupNetworkHandlers } from './network.js';
