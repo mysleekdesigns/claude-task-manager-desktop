@@ -26,6 +26,30 @@ interface SupabaseSessionStore {
 }
 
 /**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface SessionStoreInterface {
+  get(key: 'session'): Session | null;
+  set(key: 'session', value: Session | null): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemorySessionStore implements SessionStoreInterface {
+  private data: SupabaseSessionStore = { session: null };
+
+  get(key: 'session'): Session | null {
+    return this.data[key];
+  }
+
+  set(key: 'session', value: Session | null): void {
+    this.data[key] = value;
+  }
+}
+
+/**
  * Callback type for connection status changes
  */
 type ConnectionStatusCallback = (status: ConnectionStatus) => void;
@@ -46,21 +70,51 @@ type AuthStateCallback = (event: AuthChangeEvent, session: Session | null) => vo
  */
 class SupabaseService {
   private client: SupabaseClient | null = null;
-  private store: Store<SupabaseSessionStore>;
+  private store: SessionStoreInterface;
   private connectionStatus: ConnectionStatus = 'offline';
   private connectionStatusCallbacks: Set<ConnectionStatusCallback> = new Set();
   private authStateCallbacks: Set<AuthStateCallback> = new Set();
   private initialized = false;
+  private usingInMemoryStore = false;
 
   constructor() {
     // Initialize electron-store for session persistence
-    this.store = new Store<SupabaseSessionStore>({
-      name: 'supabase-session',
-      encryptionKey: 'claude-tasks-supabase-session-key',
-      defaults: {
-        session: null,
-      },
-    });
+    // Falls back to in-memory storage on permission errors (e.g., E2E tests, sandboxed environments)
+    try {
+      this.store = new Store<SupabaseSessionStore>({
+        name: 'supabase-session',
+        encryptionKey: 'claude-tasks-supabase-session-key',
+        defaults: {
+          session: null,
+        },
+      });
+    } catch (error) {
+      // Handle EPERM and other permission errors by falling back to in-memory storage
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+        console.warn(
+          `SupabaseService: Cannot write to disk (${errorCode}), using in-memory session storage. ` +
+            'Sessions will not persist across app restarts.'
+        );
+        this.store = new InMemorySessionStore();
+        this.usingInMemoryStore = true;
+      } else {
+        // For unexpected errors, still fall back but log more details
+        console.warn(
+          'SupabaseService: Failed to initialize electron-store, using in-memory fallback:',
+          error
+        );
+        this.store = new InMemorySessionStore();
+        this.usingInMemoryStore = true;
+      }
+    }
+  }
+
+  /**
+   * Check if using in-memory storage (sessions won't persist)
+   */
+  public isUsingInMemoryStore(): boolean {
+    return this.usingInMemoryStore;
   }
 
   /**

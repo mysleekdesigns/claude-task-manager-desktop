@@ -31,17 +31,70 @@ import { isSessionExpired } from '../services/auth.js';
 import Store from 'electron-store';
 
 /**
+ * API key store schema
+ */
+interface ApiKeyStoreSchema {
+  [key: string]: { claudeApiKey?: string; githubToken?: string } | undefined;
+}
+
+/**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface ApiKeyStoreInterface {
+  get(key: string, defaultValue?: { claudeApiKey?: string; githubToken?: string }): { claudeApiKey?: string; githubToken?: string };
+  set(key: string, value: { claudeApiKey?: string; githubToken?: string }): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemoryApiKeyStore implements ApiKeyStoreInterface {
+  private data: ApiKeyStoreSchema = {};
+
+  get(key: string, defaultValue: { claudeApiKey?: string; githubToken?: string } = {}): { claudeApiKey?: string; githubToken?: string } {
+    return this.data[key] ?? defaultValue;
+  }
+
+  set(key: string, value: { claudeApiKey?: string; githubToken?: string }): void {
+    this.data[key] = value;
+  }
+}
+
+/**
+ * Create the API key store with fallback to in-memory storage
+ */
+function createApiKeyStore(): ApiKeyStoreInterface {
+  try {
+    return new Store<ApiKeyStoreSchema>({
+      name: 'api-keys',
+      encryptionKey: 'claude-tasks-api-keys-encryption-key',
+      defaults: {},
+    });
+  } catch (error) {
+    // Handle EPERM and other permission errors by falling back to in-memory storage
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+      console.warn(
+        `[Settings] Cannot write to disk (${errorCode}), using in-memory storage for API keys. ` +
+          'API keys will not persist across app restarts.'
+      );
+    } else {
+      // For unexpected errors, still fall back but log more details
+      console.warn(
+        '[Settings] Failed to initialize electron-store for API keys, using in-memory fallback:',
+        error
+      );
+    }
+    return new InMemoryApiKeyStore();
+  }
+}
+
+/**
  * Secure store for API keys
  * Uses encryption to protect sensitive data
  */
-const apiKeyStore = new Store<{
-  claudeApiKey?: string;
-  githubToken?: string;
-}>({
-  name: 'api-keys',
-  encryptionKey: 'claude-tasks-api-keys-encryption-key',
-  defaults: {},
-});
+const apiKeyStore: ApiKeyStoreInterface = createApiKeyStore();
 
 /**
  * Settings data types

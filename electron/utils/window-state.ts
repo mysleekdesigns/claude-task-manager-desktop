@@ -31,6 +31,14 @@ interface StoreSchema {
   closeToTray: boolean;
 }
 
+/**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface WindowStateStoreInterface {
+  get<K extends keyof StoreSchema>(key: K, defaultValue?: StoreSchema[K]): StoreSchema[K];
+  set<K extends keyof StoreSchema>(key: K, value: StoreSchema[K]): void;
+}
+
 const DEFAULT_STATE: WindowState = {
   x: 0,
   y: 0,
@@ -39,14 +47,58 @@ const DEFAULT_STATE: WindowState = {
   isMaximized: false,
 };
 
-const store = new Store<StoreSchema>({
-  name: 'window-state',
-  defaults: {
-    windowState: DEFAULT_STATE,
-    minimizeToTray: process.platform === 'darwin',
-    closeToTray: process.platform === 'darwin',
-  },
-});
+const DEFAULT_SCHEMA: StoreSchema = {
+  windowState: DEFAULT_STATE,
+  minimizeToTray: process.platform === 'darwin',
+  closeToTray: process.platform === 'darwin',
+};
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemoryWindowStateStore implements WindowStateStoreInterface {
+  private data: StoreSchema = { ...DEFAULT_SCHEMA };
+
+  get<K extends keyof StoreSchema>(key: K, defaultValue?: StoreSchema[K]): StoreSchema[K] {
+    const value = this.data[key];
+    return value !== undefined ? value : (defaultValue ?? DEFAULT_SCHEMA[key]);
+  }
+
+  set<K extends keyof StoreSchema>(key: K, value: StoreSchema[K]): void {
+    this.data[key] = value;
+  }
+}
+
+/**
+ * Create the window state store with fallback to in-memory storage
+ */
+function createWindowStateStore(): WindowStateStoreInterface {
+  try {
+    return new Store<StoreSchema>({
+      name: 'window-state',
+      defaults: DEFAULT_SCHEMA,
+    });
+  } catch (error) {
+    // Handle EPERM and other permission errors by falling back to in-memory storage
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+      console.warn(
+        `[WindowState] Cannot write to disk (${errorCode}), using in-memory storage. ` +
+          'Window state will not persist across app restarts.'
+      );
+    } else {
+      // For unexpected errors, still fall back but log more details
+      console.warn(
+        '[WindowState] Failed to initialize electron-store, using in-memory fallback:',
+        error
+      );
+    }
+    return new InMemoryWindowStateStore();
+  }
+}
+
+const store: WindowStateStoreInterface = createWindowStateStore();
 
 /**
  * Check if window bounds are visible on any available display

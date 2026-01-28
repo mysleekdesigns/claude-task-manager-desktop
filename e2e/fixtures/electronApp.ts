@@ -1,5 +1,8 @@
 import { test as base, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,9 +80,18 @@ export const test = base.extend<ElectronTestFixtures>({
    * Launch the Electron application
    */
   electronApp: async ({}, use) => {
-    // Launch Electron app
+    // Create a unique temp directory for user data to avoid permission issues
+    // and ensure test isolation (each test gets its own user data directory)
+    const uniqueId = crypto.randomUUID();
+    const userDataDir = path.join(os.tmpdir(), 'claude-tasks-e2e', uniqueId);
+    fs.mkdirSync(userDataDir, { recursive: true });
+
+    // Launch Electron app with custom user data directory
     const electronApp = await electron.launch({
-      args: [MAIN_JS_PATH],
+      args: [
+        MAIN_JS_PATH,
+        `--user-data-dir=${userDataDir}`,
+      ],
       cwd: PROJECT_ROOT,
       env: {
         ...process.env as { [key: string]: string },
@@ -97,6 +109,13 @@ export const test = base.extend<ElectronTestFixtures>({
 
     // Cleanup: close the app after the test with timeout protection
     await closeElectronApp(electronApp, 10_000);
+
+    // Clean up the temporary user data directory
+    try {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors - directory may already be deleted or locked
+    }
   },
 
   /**

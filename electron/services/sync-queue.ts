@@ -19,6 +19,33 @@ import { getPrismaClient } from './database';
 export type SyncTable = 'Project' | 'Task' | 'ProjectMember';
 
 /**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface SyncQueueStoreInterface {
+  get<K extends keyof SyncQueueStore>(key: K): SyncQueueStore[K];
+  set<K extends keyof SyncQueueStore>(key: K, value: SyncQueueStore[K]): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemorySyncQueueStore implements SyncQueueStoreInterface {
+  private data: SyncQueueStore = {
+    pendingChanges: [],
+    lastProcessedAt: null,
+  };
+
+  get<K extends keyof SyncQueueStore>(key: K): SyncQueueStore[K] {
+    return this.data[key];
+  }
+
+  set<K extends keyof SyncQueueStore>(key: K, value: SyncQueueStore[K]): void {
+    this.data[key] = value;
+  }
+}
+
+/**
  * Supported database operations for sync
  */
 export type SyncOperation = 'INSERT' | 'UPDATE' | 'DELETE';
@@ -81,20 +108,41 @@ const MAX_RETRY_ATTEMPTS = 3;
  * local SQLite database and Supabase cloud.
  */
 class SyncQueueService {
-  private store: Store<SyncQueueStore>;
+  private store: SyncQueueStoreInterface;
   private processing = false;
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private statusCallbacks: Set<SyncStatusCallback> = new Set();
   private retryTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
-    this.store = new Store<SyncQueueStore>({
-      name: 'sync-queue',
-      defaults: {
-        pendingChanges: [],
-        lastProcessedAt: null,
-      },
-    });
+    // Initialize electron-store for sync queue persistence
+    // Falls back to in-memory storage on permission errors (e.g., E2E tests, sandboxed environments)
+    try {
+      this.store = new Store<SyncQueueStore>({
+        name: 'sync-queue',
+        defaults: {
+          pendingChanges: [],
+          lastProcessedAt: null,
+        },
+      });
+    } catch (error) {
+      // Handle EPERM and other permission errors by falling back to in-memory storage
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+        console.warn(
+          `[SyncQueue] Cannot write to disk (${errorCode}), using in-memory storage. ` +
+            'Queue will not persist across app restarts.'
+        );
+        this.store = new InMemorySyncQueueStore();
+      } else {
+        // For unexpected errors, still fall back but log more details
+        console.warn(
+          '[SyncQueue] Failed to initialize electron-store, using in-memory fallback:',
+          error
+        );
+        this.store = new InMemorySyncQueueStore();
+      }
+    }
   }
 
   /**

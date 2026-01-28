@@ -27,11 +27,65 @@ interface SecureStore {
   githubToken?: string;
 }
 
+/**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface SecureStoreInterface {
+  get(key: 'githubToken'): string | undefined;
+  set(key: 'githubToken', value: string): void;
+  delete(key: 'githubToken'): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemorySecureStore implements SecureStoreInterface {
+  private data: SecureStore = {};
+
+  get(key: 'githubToken'): string | undefined {
+    return this.data[key];
+  }
+
+  set(key: 'githubToken', value: string): void {
+    this.data[key] = value;
+  }
+
+  delete(key: 'githubToken'): void {
+    delete this.data[key];
+  }
+}
+
+/**
+ * Create the secure store with fallback to in-memory storage
+ */
+function createSecureStore(): SecureStoreInterface {
+  try {
+    return new Store<SecureStore>({
+      name: 'secure-store',
+      encryptionKey: 'claude-tasks-desktop-encryption-key', // In production, use a generated key
+    });
+  } catch (error) {
+    // Handle EPERM and other permission errors by falling back to in-memory storage
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+      console.warn(
+        `[GitHub] Cannot write to disk (${errorCode}), using in-memory storage for GitHub token. ` +
+          'Token will not persist across app restarts.'
+      );
+    } else {
+      // For unexpected errors, still fall back but log more details
+      console.warn(
+        '[GitHub] Failed to initialize electron-store for secure storage, using in-memory fallback:',
+        error
+      );
+    }
+    return new InMemorySecureStore();
+  }
+}
+
 // Create encrypted store for sensitive data
-const secureStore = new Store<SecureStore>({
-  name: 'secure-store',
-  encryptionKey: 'claude-tasks-desktop-encryption-key', // In production, use a generated key
-});
+const secureStore: SecureStoreInterface = createSecureStore();
 
 // ============================================================================
 // Octokit Client Management

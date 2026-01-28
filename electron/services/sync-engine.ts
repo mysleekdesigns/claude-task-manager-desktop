@@ -40,6 +40,34 @@ interface SyncState {
 }
 
 /**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface SyncStateStoreInterface {
+  get<K extends keyof SyncState>(key: K): SyncState[K];
+  set<K extends keyof SyncState>(key: K, value: SyncState[K]): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemorySyncStateStore implements SyncStateStoreInterface {
+  private data: SyncState = {
+    lastFullSyncAt: null,
+    lastIncrementalSyncAt: null,
+    syncInProgress: false,
+  };
+
+  get<K extends keyof SyncState>(key: K): SyncState[K] {
+    return this.data[key];
+  }
+
+  set<K extends keyof SyncState>(key: K, value: SyncState[K]): void {
+    this.data[key] = value;
+  }
+}
+
+/**
  * Result of a sync operation
  */
 export interface SyncResult {
@@ -129,20 +157,41 @@ const SYNC_BATCH_SIZE = 100;
  * - Progress reporting to renderer
  */
 class SyncEngineService {
-  private store: Store<SyncState>;
+  private store: SyncStateStoreInterface;
   private mainWindow: BrowserWindow | null = null;
   private syncInProgress = false;
   private progressCallbacks: Set<SyncProgressCallback> = new Set();
 
   constructor() {
-    this.store = new Store<SyncState>({
-      name: 'sync-engine-state',
-      defaults: {
-        lastFullSyncAt: null,
-        lastIncrementalSyncAt: null,
-        syncInProgress: false,
-      },
-    });
+    // Initialize electron-store for sync state persistence
+    // Falls back to in-memory storage on permission errors (e.g., E2E tests, sandboxed environments)
+    try {
+      this.store = new Store<SyncState>({
+        name: 'sync-engine-state',
+        defaults: {
+          lastFullSyncAt: null,
+          lastIncrementalSyncAt: null,
+          syncInProgress: false,
+        },
+      });
+    } catch (error) {
+      // Handle EPERM and other permission errors by falling back to in-memory storage
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+        console.warn(
+          `[SyncEngine] Cannot write to disk (${errorCode}), using in-memory storage. ` +
+            'Sync state will not persist across app restarts.'
+        );
+        this.store = new InMemorySyncStateStore();
+      } else {
+        // For unexpected errors, still fall back but log more details
+        console.warn(
+          '[SyncEngine] Failed to initialize electron-store, using in-memory fallback:',
+          error
+        );
+        this.store = new InMemorySyncStateStore();
+      }
+    }
   }
 
   // ============================================================================

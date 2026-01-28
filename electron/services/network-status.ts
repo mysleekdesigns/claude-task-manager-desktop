@@ -50,6 +50,34 @@ interface NetworkStatusStore {
 }
 
 /**
+ * Minimal store interface matching the electron-store methods we use
+ */
+interface NetworkStatusStoreInterface {
+  get<K extends keyof NetworkStatusStore>(key: K): NetworkStatusStore[K];
+  set<K extends keyof NetworkStatusStore>(key: K, value: NetworkStatusStore[K]): void;
+}
+
+/**
+ * In-memory fallback store for when electron-store cannot write to disk
+ * (e.g., during E2E tests or sandboxed environments)
+ */
+class InMemoryNetworkStatusStore implements NetworkStatusStoreInterface {
+  private data: NetworkStatusStore = {
+    lastKnownStatus: 'offline',
+    lastOnlineAt: null,
+    lastCheckedAt: null,
+  };
+
+  get<K extends keyof NetworkStatusStore>(key: K): NetworkStatusStore[K] {
+    return this.data[key];
+  }
+
+  set<K extends keyof NetworkStatusStore>(key: K, value: NetworkStatusStore[K]): void {
+    this.data[key] = value;
+  }
+}
+
+/**
  * Default ping interval when online (30 seconds)
  */
 const ONLINE_PING_INTERVAL_MS = 30_000;
@@ -82,7 +110,7 @@ const RECONNECT_SUCCESS_THRESHOLD = 2;
  * for reliable online/offline state management.
  */
 class NetworkStatusService {
-  private store: Store<NetworkStatusStore>;
+  private store: NetworkStatusStoreInterface;
   private currentStatus: NetworkStatus = 'offline';
   private supabaseReachable = false;
   private statusCallbacks: Set<NetworkStatusCallback> = new Set();
@@ -92,14 +120,35 @@ class NetworkStatusService {
   private initialized = false;
 
   constructor() {
-    this.store = new Store<NetworkStatusStore>({
-      name: 'network-status',
-      defaults: {
-        lastKnownStatus: 'offline',
-        lastOnlineAt: null,
-        lastCheckedAt: null,
-      },
-    });
+    // Initialize electron-store for network status persistence
+    // Falls back to in-memory storage on permission errors (e.g., E2E tests, sandboxed environments)
+    try {
+      this.store = new Store<NetworkStatusStore>({
+        name: 'network-status',
+        defaults: {
+          lastKnownStatus: 'offline',
+          lastOnlineAt: null,
+          lastCheckedAt: null,
+        },
+      });
+    } catch (error) {
+      // Handle EPERM and other permission errors by falling back to in-memory storage
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EPERM' || errorCode === 'EACCES' || errorCode === 'EROFS') {
+        console.warn(
+          `[NetworkStatus] Cannot write to disk (${errorCode}), using in-memory storage. ` +
+            'Network status will not persist across app restarts.'
+        );
+        this.store = new InMemoryNetworkStatusStore();
+      } else {
+        // For unexpected errors, still fall back but log more details
+        console.warn(
+          '[NetworkStatus] Failed to initialize electron-store, using in-memory fallback:',
+          error
+        );
+        this.store = new InMemoryNetworkStatusStore();
+      }
+    }
 
     // Initialize from stored state
     this.currentStatus = this.store.get('lastKnownStatus');
