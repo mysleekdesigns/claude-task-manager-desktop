@@ -3,6 +3,7 @@
  *
  * Droppable column for the Kanban board that contains task cards.
  * Uses @dnd-kit/sortable for drop functionality.
+ * Includes real-time update highlighting and editor indicators.
  * Memoized to prevent unnecessary re-renders.
  */
 
@@ -15,8 +16,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskCard } from './TaskCard';
+import { TaskCardHighlight } from './TaskCardHighlight';
+import { EditedByIndicator } from './EditedByIndicator';
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Task, TaskStatus } from '@/types/ipc';
+import type { TaskEditor, TaskUpdateType } from '@/hooks/useTaskRealtimeUpdates';
 
 // ============================================================================
 // Types
@@ -33,6 +37,14 @@ interface KanbanColumnProps {
   onAddTask?: ((status: TaskStatus) => void) | undefined;
   refetchTasks?: (() => Promise<void>) | undefined;
   collapsible?: boolean | undefined;
+  /** Set of task IDs that were recently changed */
+  recentlyChangedTaskIds?: Set<string>;
+  /** Map of task ID to editor information */
+  taskEditors?: Map<string, TaskEditor>;
+  /** Map of task ID to update type */
+  taskUpdateTypes?: Map<string, TaskUpdateType>;
+  /** Callback to clear a recent change */
+  onClearRecentChange?: (taskId: string) => void;
 }
 
 // ============================================================================
@@ -50,6 +62,10 @@ function KanbanColumnComponent({
   onAddTask,
   refetchTasks,
   collapsible = false,
+  recentlyChangedTaskIds,
+  taskEditors,
+  taskUpdateTypes,
+  onClearRecentChange,
 }: KanbanColumnProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -125,17 +141,37 @@ function KanbanColumnComponent({
                 items={taskIds}
                 strategy={verticalListSortingStrategy}
               >
-                {tasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onClick={onTaskClick ? () => { onTaskClick(task); } : undefined}
-                    onEdit={onTaskEdit}
-                    onDelete={onTaskDelete}
-                    onViewTerminal={onViewTerminal}
-                    refetchTasks={refetchTasks}
-                  />
-                ))}
+                {tasks.map((task) => {
+                  const isRecentlyChanged = recentlyChangedTaskIds?.has(task.id) ?? false;
+                  const editor = taskEditors?.get(task.id);
+                  const updateType = taskUpdateTypes?.get(task.id);
+
+                  return (
+                    <TaskCardHighlight
+                      key={task.id}
+                      isHighlighted={isRecentlyChanged}
+                      updateType={updateType}
+                      onHighlightEnd={() => onClearRecentChange?.(task.id)}
+                    >
+                      <div className="relative">
+                        <TaskCard
+                          task={task}
+                          onClick={onTaskClick ? () => { onTaskClick(task); } : undefined}
+                          onEdit={onTaskEdit}
+                          onDelete={onTaskDelete}
+                          onViewTerminal={onViewTerminal}
+                          refetchTasks={refetchTasks}
+                        />
+                        {isRecentlyChanged && editor && (
+                          <EditedByIndicator
+                            editor={editor}
+                            variant="floating"
+                          />
+                        )}
+                      </div>
+                    </TaskCardHighlight>
+                  );
+                })}
               </SortableContext>
 
               {/* Empty State */}
@@ -205,6 +241,38 @@ export const KanbanColumn = memo(KanbanColumnComponent, (prevProps, nextProps) =
     prevProps.collapsible !== nextProps.collapsible
   ) {
     return false;
+  }
+
+  // Check if real-time update props changed
+  // Compare Sets by size and content for recently changed task IDs
+  if (prevProps.recentlyChangedTaskIds !== nextProps.recentlyChangedTaskIds) {
+    const prevSet = prevProps.recentlyChangedTaskIds;
+    const nextSet = nextProps.recentlyChangedTaskIds;
+
+    if (!prevSet && nextSet) return false;
+    if (prevSet && !nextSet) return false;
+    if (prevSet && nextSet) {
+      if (prevSet.size !== nextSet.size) return false;
+      for (const id of prevSet) {
+        if (!nextSet.has(id)) return false;
+      }
+    }
+  }
+
+  // Check if task editors map changed
+  if (prevProps.taskEditors !== nextProps.taskEditors) {
+    const prevMap = prevProps.taskEditors;
+    const nextMap = nextProps.taskEditors;
+
+    if (!prevMap && nextMap) return false;
+    if (prevMap && !nextMap) return false;
+    if (prevMap && nextMap) {
+      if (prevMap.size !== nextMap.size) return false;
+      for (const [key, value] of prevMap) {
+        const nextValue = nextMap.get(key);
+        if (!nextValue || nextValue.id !== value.id) return false;
+      }
+    }
   }
 
   // Check if tasks array changed (by reference first, then by content)

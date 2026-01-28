@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ProjectSelector } from './ProjectSelector';
+import { ConflictResolutionModal } from '@/components/collaboration';
 
 /**
  * MainLayout component that wraps the application with a sidebar
@@ -22,6 +23,9 @@ export function MainLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Global Conflict Resolution Modal */}
+      <ConflictResolutionModal />
     </div>
   );
 }

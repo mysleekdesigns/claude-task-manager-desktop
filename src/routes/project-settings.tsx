@@ -3,12 +3,13 @@
  *
  * Allows users to configure project settings including:
  * - General settings (name, description)
+ * - Team management (members & invitations)
  * - Directory settings
  * - GitHub integration
  * - Danger zone (delete project)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -32,8 +33,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useIPCQuery, useIPCMutation } from '@/hooks/useIPC';
-import type { UpdateProjectInput } from '@/types/ipc';
+import { useAuth } from '@/hooks/useAuth';
+import { TeamManagementSection } from '@/components/projects/TeamManagementSection';
+import { PendingInvitations } from '@/components/collaboration/PendingInvitations';
+import type { UpdateProjectInput, ProjectMember } from '@/types/ipc';
 
 /**
  * Loading skeleton component for the settings page
@@ -58,6 +63,7 @@ function SettingsSkeleton() {
 export function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // State for form values
   const [name, setName] = useState('');
@@ -67,14 +73,30 @@ export function ProjectSettingsPage() {
   // State for delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // Active settings tab
+  const [activeTab, setActiveTab] = useState('general');
+
   // Fetch project data
   const {
     data: project,
     loading,
     error,
+    refetch: refetchProject,
   } = useIPCQuery('projects:get', projectId ? [projectId] : undefined, {
     enabled: !!projectId,
   });
+
+  // Get project members from project data
+  const members: ProjectMember[] = useMemo(() => {
+    return project?.members || [];
+  }, [project]);
+
+  // Check if current user can manage team
+  const canManageTeam = useMemo(() => {
+    if (!user || !members.length) return false;
+    const currentMember = members.find((m) => m.userId === user.id);
+    return currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN';
+  }, [user, members]);
 
   // Mutations
   const updateProject = useIPCMutation('projects:update');
@@ -222,102 +244,139 @@ export function ProjectSettingsPage() {
         </p>
       </div>
 
-      {/* General Settings Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>General Settings</CardTitle>
-          <CardDescription>
-            Update your project's name and description
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Project Name</Label>
-            <Input
-              id="name"
-              placeholder="Enter project name"
-              value={name}
-              onChange={(e) => { setName(e.target.value); }}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              placeholder="Enter project description (optional)"
-              value={description}
-              onChange={(e) => { setDescription(e.target.value); }}
-              rows={4}
-            />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button
-            onClick={handleSaveGeneral}
-            disabled={updateProject.loading || !name.trim()}
-          >
-            {updateProject.loading ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </CardFooter>
-      </Card>
+      {/* Settings Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
+        </TabsList>
 
-      {/* Directory Settings Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Directory Settings</CardTitle>
-          <CardDescription>
-            Configure the project's working directory
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Current Directory</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                value={project.targetPath || 'No directory set'}
-                readOnly
-                className="flex-1 font-mono text-sm bg-muted"
-              />
+        {/* General Settings Tab */}
+        <TabsContent value="general" className="space-y-6 mt-6">
+          {/* General Settings Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>General Settings</CardTitle>
+              <CardDescription>
+                Update your project's name and description
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Project Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter project name"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Enter project description (optional)"
+                  value={description}
+                  onChange={(e) => { setDescription(e.target.value); }}
+                  rows={4}
+                />
+              </div>
+            </CardContent>
+            <CardFooter>
               <Button
-                onClick={handleChangeDirectory}
-                disabled={openDirectory.loading || updateProject.loading}
-                variant="outline"
+                onClick={handleSaveGeneral}
+                disabled={updateProject.loading || !name.trim()}
               >
-                {openDirectory.loading ? 'Opening...' : 'Change Directory'}
+                {updateProject.loading ? 'Saving...' : 'Save Changes'}
               </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardFooter>
+          </Card>
 
-      {/* GitHub Integration Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>GitHub Integration</CardTitle>
-          <CardDescription>
-            Connect this project to a GitHub repository
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="githubRepo">Repository URL</Label>
-            <Input
-              id="githubRepo"
-              placeholder="https://github.com/username/repository"
-              value={githubRepo}
-              onChange={(e) => { setGithubRepo(e.target.value); }}
+          {/* Directory Settings Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Directory Settings</CardTitle>
+              <CardDescription>
+                Configure the project's working directory
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Current Directory</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={project.targetPath || 'No directory set'}
+                    readOnly
+                    className="flex-1 font-mono text-sm bg-muted"
+                  />
+                  <Button
+                    onClick={handleChangeDirectory}
+                    disabled={openDirectory.loading || updateProject.loading}
+                    variant="outline"
+                  >
+                    {openDirectory.loading ? 'Opening...' : 'Change Directory'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Team Management Tab */}
+        <TabsContent value="team" className="space-y-6 mt-6">
+          {/* Team Members Section */}
+          {projectId && user && (
+            <TeamManagementSection
+              projectId={projectId}
+              members={members}
+              currentUserId={user.id}
+              onMembersChange={refetchProject}
             />
-            <p className="text-xs text-muted-foreground">
-              Enter the full URL to your GitHub repository
-            </p>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveGitHub} disabled={updateProject.loading}>
-            {updateProject.loading ? 'Saving...' : 'Save GitHub Repository'}
-          </Button>
-        </CardFooter>
-      </Card>
+          )}
+
+          {/* Pending Invitations Section */}
+          {canManageTeam && projectId && (
+            <PendingInvitations
+              projectId={projectId}
+              canManage={canManageTeam}
+              onRefresh={refetchProject}
+            />
+          )}
+        </TabsContent>
+
+        {/* Integrations Tab */}
+        <TabsContent value="integrations" className="space-y-6 mt-6">
+          {/* GitHub Integration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>GitHub Integration</CardTitle>
+              <CardDescription>
+                Connect this project to a GitHub repository
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="githubRepo">Repository URL</Label>
+                <Input
+                  id="githubRepo"
+                  placeholder="https://github.com/username/repository"
+                  value={githubRepo}
+                  onChange={(e) => { setGithubRepo(e.target.value); }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the full URL to your GitHub repository
+                </p>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleSaveGitHub} disabled={updateProject.loading}>
+                {updateProject.loading ? 'Saving...' : 'Save GitHub Repository'}
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Danger Zone Card */}
       <Card className="border-destructive">

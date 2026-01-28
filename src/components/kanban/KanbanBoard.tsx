@@ -3,6 +3,7 @@
  *
  * Main Kanban board with drag-and-drop functionality for task management.
  * Uses @dnd-kit/core for the drag-and-drop context.
+ * Includes real-time update highlighting and editor indicators.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -25,6 +26,8 @@ import { TaskCard } from './TaskCard';
 import { AssignReviewerDialog } from './AssignReviewerDialog';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useIPCMutation } from '@/hooks/useIPC';
+import { useTaskRealtimeUpdates } from '@/hooks/useTaskRealtimeUpdates';
+import { useAuth } from '@/hooks/useAuth';
 import type { Task, TaskStatus } from '@/types/ipc';
 
 // ============================================================================
@@ -85,6 +88,17 @@ export function KanbanBoard({
   // Get project members from store
   const currentProject = useProjectStore((state) => state.currentProject);
   const projectMembers = useMemo(() => currentProject?.members ?? [], [currentProject?.members]);
+
+  // Get current user for filtering out own updates
+  const { user: currentUser } = useAuth();
+
+  // Real-time task updates
+  const {
+    recentlyChangedTaskIds,
+    taskEditors,
+    taskUpdateTypes,
+    clearRecentChange,
+  } = useTaskRealtimeUpdates(currentProject?.id, tasks, currentUser?.id);
 
   // IPC mutation for assigning reviewer
   const assignReviewerMutation = useIPCMutation('humanReview:assign');
@@ -288,6 +302,10 @@ export function KanbanBoard({
             onAddTask={onAddTask}
             refetchTasks={refetchTasks}
             collapsible={column.collapsible ?? false}
+            recentlyChangedTaskIds={recentlyChangedTaskIds}
+            taskEditors={taskEditors}
+            taskUpdateTypes={taskUpdateTypes}
+            onClearRecentChange={clearRecentChange}
           />
         ))}
       </div>

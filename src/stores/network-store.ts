@@ -256,6 +256,20 @@ export const selectEffectiveStatus = (state: NetworkState): NetworkStatus =>
 
 /**
  * Selector for getting sync status summary
+ * Note: This selector returns a new object and should be used with shallow comparison
+ * or inside a component with useMemo. Prefer using individual primitive selectors
+ * when possible to avoid unnecessary re-renders.
+ *
+ * @example
+ * ```tsx
+ * // Recommended: use individual selectors
+ * const status = useNetworkStore((state) => state.status);
+ * const isSyncing = useNetworkStore((state) => state.isSyncing);
+ *
+ * // Or with shallow comparison (requires zustand/shallow import)
+ * import { useShallow } from 'zustand/shallow';
+ * const summary = useNetworkStore(useShallow(selectSyncSummary));
+ * ```
  */
 export const selectSyncSummary = (state: NetworkState) => ({
   status: state.status,

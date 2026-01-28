@@ -13,6 +13,7 @@ import { MainLayout } from '@/components/layout';
 // Public pages
 import { LoginPage } from './login';
 import { RegisterPage } from './register';
+import { InviteAcceptPage } from './invite-accept';
 
 // Protected pages
 import { KanbanPage } from './kanban';
@@ -29,6 +30,7 @@ import { ProjectSettingsPage } from './project-settings';
 import { ProjectDashboardPage } from './project-dashboard';
 import { GitHubIssuesPage } from './github/issues';
 import { GitHubPRsPage } from './github/prs';
+import { ActivityPage } from './activity';
 
 /**
  * Route definitions
@@ -42,6 +44,10 @@ export const routes: RouteObject[] = [
   {
     path: '/register',
     element: <RegisterPage />,
+  },
+  {
+    path: '/invite/:token',
+    element: <InviteAcceptPage />,
   },
 
   // Protected routes - all require authentication and use MainLayout with Sidebar
@@ -112,6 +118,10 @@ export const routes: RouteObject[] = [
       {
         path: 'prs',
         element: <GitHubPRsPage />,
+      },
+      {
+        path: 'activity',
+        element: <ActivityPage />,
       },
     ],
   },

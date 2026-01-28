@@ -12,6 +12,9 @@ import { ProjectSelector } from './ProjectSelector';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { SyncStatusIndicator } from '@/components/sync/SyncStatusIndicator';
+import { UserPresence, ConflictNotification } from '@/components/collaboration';
+import { usePresence } from '@/hooks/usePresence';
+import { useProjectStore } from '@/store/useProjectStore';
 
 interface HeaderProps {
   /** Whether to show window controls (minimize, maximize, close) for frameless mode */
@@ -36,6 +39,9 @@ export function Header({
   onMaximize,
   onClose,
 }: HeaderProps) {
+  const { currentProject } = useProjectStore();
+  const { users, isLoading: isPresenceLoading } = usePresence(currentProject?.id);
+
   const handleSearchClick = () => {
     // TODO: Open global search command palette
     console.log('Open search');
@@ -45,8 +51,17 @@ export function Header({
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center gap-4 px-4">
         {/* Project Selector */}
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <ProjectSelector />
+          {/* User Presence - shows who's online in the current project */}
+          {currentProject && (
+            <UserPresence
+              users={users}
+              isLoading={isPresenceLoading}
+              maxDisplay={4}
+              size="sm"
+            />
+          )}
         </div>
 
         {/* Global Search */}
@@ -66,8 +81,9 @@ export function Header({
           </div>
         </div>
 
-        {/* Right Side - Sync Status, Theme Toggle, User Menu and Window Controls */}
+        {/* Right Side - Conflicts, Sync Status, Theme Toggle, User Menu and Window Controls */}
         <div className="flex items-center gap-2 ml-auto">
+          <ConflictNotification compact />
           <SyncStatusIndicator />
           <ThemeToggle />
           <UserMenu />

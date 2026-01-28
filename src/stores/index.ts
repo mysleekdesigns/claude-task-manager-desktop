@@ -17,3 +17,14 @@ export {
   type NetworkStatus,
   type PendingChange,
 } from './network-store';
+
+export {
+  useConflictStore,
+  selectPendingConflicts,
+  selectHasConflicts,
+  selectPendingCount,
+  selectActiveConflict,
+  selectConflictsByType,
+} from './conflict-store';
+
+export type { ConflictState, ConflictActions } from '@/types/conflict';

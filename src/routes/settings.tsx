@@ -5,6 +5,7 @@ import { ApiKeysSection } from '@/components/settings/ApiKeysSection';
 import { PreferencesSection } from '@/components/settings/PreferencesSection';
 import { KeyboardShortcutsSection } from '@/components/settings/KeyboardShortcutsSection';
 import { ClaudeCodeSection } from '@/components/settings/ClaudeCodeSection';
+import { CollaborationSection } from '@/components/settings/CollaborationSection';
 
 export function SettingsPage() {
   return (
@@ -12,7 +13,7 @@ export function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="text-muted-foreground mt-2">
-          Manage your profile, API keys, preferences, shortcuts, and Claude Code automation
+          Manage your profile, API keys, preferences, shortcuts, Claude Code automation, and collaboration settings
         </p>
       </div>
 
@@ -48,6 +49,12 @@ export function SettingsPage() {
           >
             Claude Code
           </TabsTrigger>
+          <TabsTrigger
+            value="collaboration"
+            className="min-w-[100px] data-[state=active]:!bg-cyan-500 data-[state=active]:!text-gray-900 data-[state=active]:!border-cyan-500 data-[state=inactive]:bg-background data-[state=inactive]:text-foreground hover:bg-accent hover:text-accent-foreground border border-input shadow-sm h-9 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            Collaboration
+          </TabsTrigger>
         </TabsList>
 
         <ScrollArea className="h-[calc(100vh-16rem)] w-full mt-6">
@@ -69,6 +76,10 @@ export function SettingsPage() {
 
           <TabsContent value="claude-code" className="mt-0">
             <ClaudeCodeSection />
+          </TabsContent>
+
+          <TabsContent value="collaboration" className="mt-0">
+            <CollaborationSection />
           </TabsContent>
         </ScrollArea>
       </Tabs>

@@ -7,4 +7,6 @@
 export { KanbanBoard } from './KanbanBoard';
 export { KanbanColumn } from './KanbanColumn';
 export { TaskCard } from './TaskCard';
+export { TaskCardHighlight } from './TaskCardHighlight';
+export { EditedByIndicator } from './EditedByIndicator';
 export { AssignReviewerDialog } from './AssignReviewerDialog';
