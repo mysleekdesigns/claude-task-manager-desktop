@@ -85,7 +85,7 @@ function KanbanColumnComponent({
 
   return (
     <div
-      className={`flex flex-col w-80 flex-shrink-0 bg-muted/30 rounded-lg border border-border transition-colors ${
+      className={`flex flex-col min-w-80 flex-1 bg-muted/30 rounded-lg border border-border transition-colors ${
         isOver ? 'ring-2 ring-primary border-primary' : ''
       }`}
     >
