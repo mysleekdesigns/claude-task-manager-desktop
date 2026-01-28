@@ -15,7 +15,12 @@
   font-display: swap;
 }
 
-@import "tailwindcss";
+/* ===== Tailwind v4 Source Configuration ===== */
+/* Use source(none) to disable automatic detection, then explicitly register */
+/* only the src/ directory. This prevents Tailwind from scanning electron/ */
+/* and interpreting text patterns like [file:line] as arbitrary value classes */
+@import "tailwindcss" source(none);
+@source "../src";
 
 /* ===== Tailwind v4 Theme Configuration for shadcn/ui ===== */
 @theme {
