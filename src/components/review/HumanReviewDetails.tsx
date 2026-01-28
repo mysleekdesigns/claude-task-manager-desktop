@@ -39,7 +39,6 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Accordion,
@@ -297,7 +296,7 @@ function FindingCard({ finding, category }: FindingCardProps) {
 
   return (
     <div className={cn(
-      'p-4 rounded-lg border',
+      'p-4 rounded-lg border w-full',
       severityColor
     )}>
       {/* Header */}
@@ -571,7 +570,7 @@ export function HumanReviewDetails({
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-xl md:max-w-2xl flex flex-col p-0"
+        className="w-full sm:max-w-xl md:max-w-2xl flex flex-col p-0 h-full max-h-screen"
       >
         {/* Header */}
         <SheetHeader className="px-6 py-4 border-b flex-shrink-0">
@@ -651,8 +650,8 @@ export function HumanReviewDetails({
         </SheetHeader>
 
         {/* Content */}
-        <ScrollArea className="flex-1">
-          <div className="p-6 space-y-6">
+        <div className="flex-1 relative overflow-hidden">
+          <div className="absolute inset-0 overflow-y-auto p-6 space-y-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -708,7 +707,7 @@ export function HumanReviewDetails({
                 <Separator />
 
                 {/* Findings Grouped by Severity */}
-                <Accordion type="single" collapsible className="space-y-2">
+                <Accordion type="single" collapsible className="space-y-2 w-full">
                   {SEVERITY_ORDER.map((severity) => {
                     const items = findingsBySeverity.get(severity) || [];
                     if (items.length === 0) return null;
@@ -716,7 +715,7 @@ export function HumanReviewDetails({
                     const SeverityIcon = SEVERITY_ICONS[severity];
 
                     return (
-                      <AccordionItem key={severity} value={severity} className="border rounded-lg">
+                      <AccordionItem key={severity} value={severity} className="border rounded-lg w-full overflow-hidden">
                         <AccordionTrigger className="px-4 hover:no-underline">
                           <div className="flex items-center gap-2">
                             <SeverityIcon className={cn('h-4 w-4', SEVERITY_COLORS[severity].split(' ')[0])} />
@@ -754,7 +753,7 @@ export function HumanReviewDetails({
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <SheetFooter className="px-6 py-4 border-t flex-shrink-0">
