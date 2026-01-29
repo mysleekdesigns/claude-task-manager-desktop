@@ -1003,6 +1003,15 @@ class ClaudeCodeService {
 
       // Build environment variables
       const env = { ...process.env };
+
+      // Reset TMPDIR to system default to avoid sandbox permission issues.
+      // Claude Code's sandbox creates working directory symlinks in /tmp/claude-<uid>/
+      // which fails with "operation not permitted" errors if TMPDIR points to a
+      // restricted or sandboxed location (e.g., when the Electron app itself is
+      // running with a modified TMPDIR). By deleting TMPDIR, Claude Code will
+      // use the system default /tmp which has proper permissions for symlink creation.
+      delete env['TMPDIR'];
+
       if (hooksConfigPath) {
         env['CLAUDE_CODE_HOOKS_FILE'] = hooksConfigPath;
       }

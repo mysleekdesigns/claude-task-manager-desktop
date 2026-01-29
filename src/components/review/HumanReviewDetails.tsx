@@ -88,15 +88,15 @@ const REVIEW_LABELS: Record<ReviewType, string> = {
 const SEVERITY_ICONS: Record<FindingSeverity, React.ComponentType<{ className?: string }>> = {
   critical: AlertCircle,
   high: AlertTriangle,
-  medium: Info,
-  low: CheckCircle,
+  medium: AlertCircle,
+  low: Info,
 };
 
 const SEVERITY_COLORS: Record<FindingSeverity, string> = {
   critical: 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
-  high: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
-  medium: 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
-  low: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+  high: 'text-red-500 bg-red-500/10 dark:bg-red-500/20 dark:text-red-400 border-red-500/30 dark:border-red-500/40',
+  medium: 'text-amber-500 bg-amber-500/10 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/30 dark:border-amber-500/40',
+  low: 'text-green-500 bg-green-500/10 dark:bg-green-500/20 dark:text-green-400 border-green-500/30 dark:border-green-500/40',
 };
 
 const SEVERITY_ORDER: FindingSeverity[] = ['critical', 'high', 'medium', 'low'];
