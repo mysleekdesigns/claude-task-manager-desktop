@@ -2,7 +2,8 @@
  * Terminals Page
  *
  * Main page for managing Claude Code terminal sessions.
- * Integrates TerminalToolbar, TerminalGrid, TerminalPane, and XTermWrapper.
+ * Uses a tabbed interface where only one terminal is visible at a time.
+ * Integrates TerminalToolbar, TerminalPane, and XTermWrapper.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -12,8 +13,9 @@ import { TerminalToolbar } from '@/components/terminal/TerminalToolbar';
 import { TerminalPane } from '@/components/terminal/TerminalPane';
 import { XTermWrapper } from '@/components/terminal/XTermWrapper';
 import { InvokeClaudeModal } from '@/components/terminal/InvokeClaudeModal';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import type { TerminalStatus } from '@/types/ipc';
 
 // ============================================================================
@@ -22,47 +24,9 @@ import type { TerminalStatus } from '@/types/ipc';
 
 const MAX_TERMINALS = 4;
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
 /**
- * Calculate number of grid columns based on terminal count
- */
-function getGridColumnCount(count: number): number {
-  if (count === 0) return 1;
-  if (count === 1) return 1;
-  if (count === 2) return 2;
-  if (count <= 4) return 2;
-  if (count <= 6) return 3;
-  if (count <= 9) return 3;
-  return 4;
-}
-
-/**
- * Calculate number of grid rows based on terminal count
- */
-function getGridRowCount(count: number): number {
-  if (count === 0) return 1;
-  if (count === 1) return 1;
-  if (count === 2) return 1;
-  if (count <= 4) return 2;
-  if (count <= 6) return 2;
-  if (count <= 9) return 3;
-  return 3;
-}
-
-/**
- * Minimum terminal dimensions to support Claude Code's minimum 80x24 requirement
- * - Width: 480px ensures ~80 columns at 14px monospace font (each char ~6px wide)
- * - Height: 350px ensures ~20+ rows at 14px font with 1.2 line height (~17px per row)
- */
-const MIN_TERMINAL_WIDTH = 480; // px - ensures ~80 columns for Claude Code
-const MIN_TERMINAL_HEIGHT = 350; // px - ensures ~20+ rows for Claude Code
-
-/**
- * CSS transition duration for grid layout changes (ms)
- * XTermWrapper must wait for this duration before fitting terminal
+ * CSS transition duration for layout changes (ms)
+ * XTermWrapper still uses this for resize timing
  */
 export const GRID_TRANSITION_DURATION_MS = 300;
 
@@ -82,8 +46,8 @@ export interface TerminalsPageProps {
 export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
   const currentProject = useProjectStore((state) => state.currentProject);
 
-  // State for expanded terminal
-  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null);
+  // State for active terminal tab
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
 
   // State for local terminal status updates
   const [terminalStatuses, setTerminalStatuses] = useState<Record<string, TerminalStatus>>({});
@@ -121,6 +85,29 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
   }));
 
   // ============================================================================
+  // Effects
+  // ============================================================================
+
+  // Ensure active terminal is valid when terminals list changes
+  useEffect(() => {
+    if (activeTerminals.length > 0) {
+      const firstTerminal = activeTerminals[0];
+      if (firstTerminal && (!activeTerminalId || !activeTerminals.find(t => t.id === activeTerminalId))) {
+        setActiveTerminalId(firstTerminal.id);
+      }
+    } else {
+      setActiveTerminalId(null);
+    }
+  }, [activeTerminals, activeTerminalId]);
+
+  // Clear local status cache when terminals are refetched
+  useEffect(() => {
+    if (terminals) {
+      setTerminalStatuses({});
+    }
+  }, [terminals]);
+
+  // ============================================================================
   // Handlers
   // ============================================================================
 
@@ -146,10 +133,15 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
             name: terminalName,
           };
 
-      await createTerminalMutation.mutate(createInput);
+      const result = await createTerminalMutation.mutate(createInput);
 
       // Refetch terminal list
       await refetch();
+
+      // Set the new terminal as active
+      if (result?.id) {
+        setActiveTerminalId(result.id);
+      }
     } catch (err) {
       console.error('Failed to create terminal:', err);
       alert('Failed to create terminal. Please try again.');
@@ -159,13 +151,16 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
   const handleCloseTerminal = useCallback(
     async (id: string) => {
       try {
-        // If the closed terminal was expanded, reset expanded state immediately
-        if (expandedTerminalId === id) {
-          setExpandedTerminalId(null);
-        }
+        const currentIndex = activeTerminals.findIndex(t => t.id === id);
 
         // Close the terminal via IPC
         await closeTerminalMutation.mutate(id);
+
+        // Switch to adjacent tab if closing active tab
+        if (id === activeTerminalId && activeTerminals.length > 1) {
+          const nextIndex = currentIndex > 0 ? currentIndex - 1 : 1;
+          setActiveTerminalId(activeTerminals[nextIndex]?.id || null);
+        }
 
         // Refetch terminal list to update UI
         await refetch();
@@ -174,16 +169,8 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
         alert('Failed to close terminal. Please try again.');
       }
     },
-    [closeTerminalMutation, expandedTerminalId, refetch]
+    [closeTerminalMutation, activeTerminalId, activeTerminals, refetch]
   );
-
-  const handleExpandTerminal = useCallback((id: string) => {
-    setExpandedTerminalId(id);
-  }, []);
-
-  const handleCollapseExpanded = useCallback(() => {
-    setExpandedTerminalId(null);
-  }, []);
 
   const handleInvokeClaudeAll = useCallback(() => {
     setShowInvokeClaudeModal(true);
@@ -275,21 +262,29 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
   );
 
   // ============================================================================
-  // Effects
+  // Helper Functions
   // ============================================================================
 
-  // Clear local status cache when terminals are refetched
-  useEffect(() => {
-    if (terminals) {
-      setTerminalStatuses({});
+  /**
+   * Get status indicator color for terminal tab
+   */
+  const getStatusDotColor = (status: string) => {
+    switch (status) {
+      case 'running':
+        return 'bg-green-500';
+      case 'exited':
+        return 'bg-red-500';
+      case 'idle':
+      default:
+        return 'bg-gray-400';
     }
-  }, [terminals]);
+  };
 
   // ============================================================================
   // Render Helpers
   // ============================================================================
 
-  const renderTerminalGrid = () => {
+  const renderTerminalTabs = () => {
     if (!currentProject) return null;
 
     // Empty state
@@ -297,7 +292,7 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
       return (
         <div className="flex items-center justify-center h-full">
           <div className="text-center space-y-4">
-            <div className="text-6xl opacity-20">⌨️</div>
+            <div className="text-6xl opacity-20">&#x2328;</div>
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-muted-foreground">
                 No Terminals Open
@@ -311,101 +306,101 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
       );
     }
 
-    // If a terminal is expanded, show only that terminal
-    if (expandedTerminalId) {
-      const expandedTerminal = activeTerminals.find((t) => t.id === expandedTerminalId);
-      if (!expandedTerminal) {
-        // If expanded terminal not found, reset expanded state
-        handleCollapseExpanded();
-        return null;
-      }
-
-      return (
-        <div className="h-full w-full p-4">
-          <TerminalPane
-            terminal={{
-              id: expandedTerminal.id,
-              name: expandedTerminal.name,
-              status: expandedTerminal.status,
-              claudeStatus: expandedTerminal.claudeStatus,
-              worktreeId: expandedTerminal.worktreeId,
-            }}
-            projectId={currentProject.id}
-            isExpanded={true}
-            onClose={(id: string) => { void handleCloseTerminal(id); }}
-            onExpand={handleExpandTerminal}
-            onCollapse={handleCollapseExpanded}
-            onLaunchClaude={(id: string) => { void handleLaunchClaude(id); }}
-            onWorktreeChange={(terminalId: string, worktreeId: string | null, path: string) => { void handleWorktreeChange(terminalId, worktreeId, path); }}
-          >
-            <XTermWrapper
-              terminalId={expandedTerminal.id}
-              isVisible={isVisible}
-              onExit={(exitCode) => { handleTerminalExit(expandedTerminal.id, exitCode); }}
-            />
-          </TerminalPane>
-        </div>
-      );
-    }
-
-    // Grid layout for multiple terminals
-    // Use CSS minmax() to enforce minimum terminal sizes while allowing flex growth
-    const colCount = getGridColumnCount(activeTerminals.length);
-    const rowCount = getGridRowCount(activeTerminals.length);
-
-    // Generate grid template with minmax constraints
-    // This ensures terminals never shrink below MIN_TERMINAL_WIDTH/HEIGHT
-    const gridStyle: React.CSSProperties = {
-      display: 'grid',
-      gridTemplateColumns: `repeat(${colCount}, minmax(${MIN_TERMINAL_WIDTH}px, 1fr))`,
-      gridTemplateRows: `repeat(${rowCount}, minmax(${MIN_TERMINAL_HEIGHT}px, 1fr))`,
-      gap: '1rem', // 16px gap
-      padding: '1rem', // 16px padding
-      height: '100%',
-      width: '100%',
-      // Allow horizontal scroll if terminals can't fit at minimum size
-      overflow: 'auto',
-      // Smooth transition for grid layout changes
-      transition: `all ${GRID_TRANSITION_DURATION_MS}ms ease-in-out`,
-    };
-
     return (
-      <div style={gridStyle}>
-        {activeTerminals.map((terminal) => (
-          <div
-            key={terminal.id}
-            className="min-h-0 min-w-0"
-            style={{
-              // Critical: Allow flex/grid children to shrink below content size
-              minWidth: 0,
-              minHeight: 0,
-            }}
-          >
-            <TerminalPane
-              terminal={{
-                id: terminal.id,
-                name: terminal.name,
-                status: terminal.status,
-                claudeStatus: terminal.claudeStatus,
-                worktreeId: terminal.worktreeId,
-              }}
-              projectId={currentProject.id}
-              isExpanded={false}
-              onClose={(id: string) => { void handleCloseTerminal(id); }}
-              onExpand={handleExpandTerminal}
-              onCollapse={handleCollapseExpanded}
-              onLaunchClaude={(id: string) => { void handleLaunchClaude(id); }}
-              onWorktreeChange={(terminalId: string, worktreeId: string | null, path: string) => { void handleWorktreeChange(terminalId, worktreeId, path); }}
+      <Tabs
+        value={activeTerminalId ?? ''}
+        onValueChange={setActiveTerminalId}
+        className="h-full grid grid-rows-[auto_1fr] gap-0"
+      >
+        {/* Tab List */}
+        <TabsList className="mx-4 mt-2 bg-muted/80 h-auto p-1 flex-shrink-0">
+          {activeTerminals.map((terminal) => (
+            <TabsTrigger
+              key={terminal.id}
+              value={terminal.id}
+              className="relative gap-2 pr-7 data-[state=active]:bg-background"
             >
-              <XTermWrapper
-                terminalId={terminal.id}
-                isVisible={isVisible}
-                onExit={(exitCode) => { handleTerminalExit(terminal.id, exitCode); }}
+              {/* Status indicator dot */}
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(terminal.status)}`}
+                title={terminal.status}
               />
-            </TerminalPane>
-          </div>
-        ))}
-      </div>
+              {/* Terminal name */}
+              <span className="truncate max-w-[120px]">{terminal.name}</span>
+              {/* Close button - using span instead of button to avoid nested button error */}
+              <span
+                role="button"
+                tabIndex={0}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void handleCloseTerminal(terminal.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    void handleCloseTerminal(terminal.id);
+                  }
+                }}
+                title="Close terminal"
+              >
+                <X className="h-3 w-3" />
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {/* Tab Content - All terminals mounted with forceMount, visibility controlled via CSS */}
+        {/* IMPORTANT: Use visibility:hidden instead of display:none for inactive tabs.
+            display:none causes zero dimensions which breaks xterm FitAddon on initial mount.
+            visibility:hidden preserves layout dimensions while hiding the content. */}
+        {/* HEIGHT FIX: Using CSS Grid with grid-rows-[auto_1fr] on parent Tabs.
+            The TabsList takes auto height (row 1) and this content div is in row 2 (1fr).
+            Grid children stretch to fill by default, so this div gets the full row height.
+            The relative positioning allows absolutely positioned TabsContent children. */}
+        <div className="relative mx-4 mb-4 mt-2 overflow-hidden">
+          {activeTerminals.map((terminal) => {
+            const isActive = terminal.id === activeTerminalId;
+            return (
+            <TabsContent
+              key={terminal.id}
+              value={terminal.id}
+              forceMount
+              className="absolute inset-0 m-0 h-full"
+              style={{
+                // Use visibility:hidden instead of display:none to preserve dimensions
+                // This prevents xterm.js FitAddon from getting zero dimensions
+                visibility: isActive ? 'visible' : 'hidden',
+                // Disable pointer events when hidden to prevent accidental interactions
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+            >
+              <TerminalPane
+                terminal={{
+                  id: terminal.id,
+                  name: terminal.name,
+                  status: terminal.status,
+                  claudeStatus: terminal.claudeStatus,
+                  worktreeId: terminal.worktreeId,
+                }}
+                projectId={currentProject.id}
+                onClose={(id: string) => { void handleCloseTerminal(id); }}
+                onLaunchClaude={(id: string) => { void handleLaunchClaude(id); }}
+                onWorktreeChange={(terminalId: string, worktreeId: string | null, path: string) => { void handleWorktreeChange(terminalId, worktreeId, path); }}
+              >
+                <XTermWrapper
+                  terminalId={terminal.id}
+                  isVisible={terminal.id === activeTerminalId && isVisible}
+                  onExit={(exitCode) => { handleTerminalExit(terminal.id, exitCode); }}
+                />
+              </TerminalPane>
+            </TabsContent>
+            );
+          })}
+        </div>
+      </Tabs>
     );
   };
 
@@ -453,17 +448,20 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
         </div>
       )}
 
-      {/* Terminal Grid */}
-      <div className="flex-1 overflow-hidden">
+      {/* Terminal Tabs */}
+      {/* CRITICAL: Use h-0 with flex-1 for proper height in flex column layout.
+          flex-1 alone can collapse to 0 when children use absolute positioning.
+          h-0 + flex-1 = "start at 0 height, then grow to fill available space" */}
+      <div className="flex-1 h-0 overflow-hidden">
         {loading && !activeTerminals.length ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center space-y-4">
-              <div className="text-6xl opacity-20">⏳</div>
+              <div className="text-6xl opacity-20">&#x23F3;</div>
               <p className="text-muted-foreground">Loading terminals...</p>
             </div>
           </div>
         ) : (
-          renderTerminalGrid()
+          renderTerminalTabs()
         )}
       </div>
 

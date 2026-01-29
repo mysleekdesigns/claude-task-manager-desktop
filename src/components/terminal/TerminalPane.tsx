@@ -2,7 +2,8 @@
  * Terminal Pane Component
  *
  * Individual terminal pane with header controls and content area.
- * Supports expand/collapse, status indicators, and worktree selection.
+ * Supports status indicators, worktree selection, and Claude integration.
+ * Used within a tabbed interface where each terminal gets full viewport space.
  */
 
 import { useState } from 'react';
@@ -27,8 +28,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Maximize2,
-  Minimize2,
   X,
   MoreVertical,
   Pencil,
@@ -52,10 +51,7 @@ export interface TerminalPaneProps {
     taskId?: string | null;
   };
   projectId: string;
-  isExpanded?: boolean;
   onClose: (id: string) => void;
-  onExpand: (id: string) => void;
-  onCollapse: () => void;
   onLaunchClaude?: (id: string) => void;
   onWorktreeChange?: (terminalId: string, worktreeId: string | null, path: string) => void;
   onViewTask?: (taskId: string) => void;
@@ -69,10 +65,7 @@ export interface TerminalPaneProps {
 export function TerminalPane({
   terminal,
   projectId,
-  isExpanded = false,
   onClose,
-  onExpand,
-  onCollapse,
   onLaunchClaude,
   onWorktreeChange,
   onViewTask,
@@ -153,11 +146,11 @@ export function TerminalPane({
     <>
       {/*
         min-w-0 and min-h-0 are critical for flex/grid children to allow shrinking below content size.
-        Without these, the Card may overflow its grid cell when content (especially xterm) has intrinsic sizing.
+        Without these, the Card may overflow its container when content (especially xterm) has intrinsic sizing.
         @container enables container queries for responsive header elements.
       */}
-      <Card className={`flex flex-col h-full min-w-0 min-h-0 py-0 gap-0 @container ${isExpanded ? 'shadow-lg' : ''}`}>
-        {/* Header - using flex instead of grid for compact layout */}
+      <Card className="flex flex-col h-full min-w-0 min-h-0 py-0 gap-0 @container">
+        {/* Header - using flex for compact layout */}
         <CardHeader className="!flex !flex-row items-center px-2 !py-1 border-b flex-shrink-0">
           <div className="flex items-center justify-between gap-1.5 w-full">
             {/* Left side: Status and Name */}
@@ -253,16 +246,14 @@ export function TerminalPane({
                 </Button>
               )}
 
-              {/* Worktree selector - hidden at narrow widths */}
-              <div className="hidden @[580px]:block">
-                <WorktreeSelector
-                  projectId={projectId}
-                  value={terminal.worktreeId}
-                  onChange={handleWorktreeChange}
-                  disabled={terminal.status !== 'running'}
-                  size="sm"
-                />
-              </div>
+              {/* Worktree selector */}
+              <WorktreeSelector
+                projectId={projectId}
+                value={terminal.worktreeId}
+                onChange={handleWorktreeChange}
+                disabled={terminal.status !== 'running'}
+                size="sm"
+              />
 
               {/* More options */}
               <DropdownMenu>
@@ -294,21 +285,6 @@ export function TerminalPane({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Expand/Collapse button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={isExpanded ? onCollapse : () => { onExpand(terminal.id); }}
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? (
-                  <Minimize2 className="h-3 w-3" />
-                ) : (
-                  <Maximize2 className="h-3 w-3" />
-                )}
-              </Button>
-
               {/* Close button */}
               <Button
                 variant="ghost"
@@ -325,7 +301,8 @@ export function TerminalPane({
 
         {/* Content - XTermWrapper will be rendered here */}
         {/* min-w-0 and min-h-0 allow proper shrinking in flex container */}
-        <CardContent className="p-0 flex-1 overflow-hidden bg-black min-w-0 min-h-0">
+        {/* h-0 + flex-1 ensures the CardContent grows to fill remaining space */}
+        <CardContent className="p-0 flex-1 h-0 overflow-hidden bg-black min-w-0 min-h-0">
           {children || (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Terminal content will appear here

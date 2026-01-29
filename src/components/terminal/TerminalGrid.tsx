@@ -1,9 +1,11 @@
 /**
  * Terminal Grid Component
  *
+ * @deprecated This component is no longer used. The terminals page now uses
+ * a tabbed interface instead of a grid layout. Kept for backwards compatibility.
+ *
  * Grid layout for displaying multiple terminal panes.
  * Supports 1-12 terminals with automatic grid adjustment.
- * Handles expand/collapse states for individual terminals.
  */
 
 import { TerminalPane } from './TerminalPane';
@@ -19,10 +21,7 @@ export interface TerminalGridProps {
     name: string;
     status: 'idle' | 'running' | 'exited';
   }[];
-  expandedTerminalId?: string | null;
   onTerminalClose: (id: string) => void;
-  onTerminalExpand: (id: string) => void;
-  onCollapseExpanded: () => void;
   children?: React.ReactNode; // Optional custom content per terminal
 }
 
@@ -66,52 +65,29 @@ function getGridRows(count: number): string {
 // Component
 // ============================================================================
 
+/**
+ * @deprecated Use the tabbed interface in TerminalsPage instead
+ */
 export function TerminalGrid({
   projectId,
   terminals,
-  expandedTerminalId,
   onTerminalClose,
-  onTerminalExpand,
-  onCollapseExpanded,
 }: TerminalGridProps) {
   // Empty state
   if (terminals.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-4">
-          <div className="text-6xl opacity-20">⌨️</div>
+          <div className="text-6xl opacity-20">&#x2328;</div>
           <div className="space-y-2">
             <h3 className="text-xl font-semibold text-muted-foreground">
               No Terminals Open
             </h3>
             <p className="text-sm text-muted-foreground">
-              Click "New Terminal" to get started
+              Click &quot;New Terminal&quot; to get started
             </p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // If a terminal is expanded, show only that terminal
-  if (expandedTerminalId) {
-    const expandedTerminal = terminals.find((t) => t.id === expandedTerminalId);
-    if (!expandedTerminal) {
-      // If expanded terminal not found, reset expanded state
-      onCollapseExpanded();
-      return null;
-    }
-
-    return (
-      <div className="h-full w-full p-4">
-        <TerminalPane
-          terminal={expandedTerminal}
-          projectId={projectId}
-          isExpanded={true}
-          onClose={onTerminalClose}
-          onExpand={onTerminalExpand}
-          onCollapse={onCollapseExpanded}
-        />
       </div>
     );
   }
@@ -129,10 +105,7 @@ export function TerminalGrid({
           <TerminalPane
             terminal={terminal}
             projectId={projectId}
-            isExpanded={false}
             onClose={onTerminalClose}
-            onExpand={onTerminalExpand}
-            onCollapse={onCollapseExpanded}
           />
         </div>
       ))}

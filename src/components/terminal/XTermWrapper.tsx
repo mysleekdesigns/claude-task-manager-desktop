@@ -38,6 +38,27 @@ import { GRID_TRANSITION_DURATION_MS } from '@/routes/terminals';
 import '@xterm/xterm/css/xterm.css';
 
 // ============================================================================
+// Timing Constants
+// ============================================================================
+
+/**
+ * Delay for initial mount fit operations.
+ * This is much shorter than the resize debounce because we want quick initial rendering,
+ * but still need a small delay to allow CSS grid to calculate dimensions.
+ */
+const INITIAL_MOUNT_DELAY_MS = 50;
+
+/**
+ * Maximum number of retry attempts for initial fit when dimensions are invalid.
+ */
+const INITIAL_FIT_MAX_RETRIES = 5;
+
+/**
+ * Delay between retry attempts for initial fit.
+ */
+const INITIAL_FIT_RETRY_DELAY_MS = 50;
+
+// ============================================================================
 // DEC Mode 2026 Debug Configuration
 // ============================================================================
 
@@ -129,6 +150,8 @@ export function XTermWrapper({
   const serializeAddonRef = useRef<SerializeAddon | null>(null);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const resizeRAFRef = useRef<number | null>(null);
+  const initialFitRetryRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialMountRef = useRef<boolean>(true);
   const prevIsVisibleRef = useRef<boolean>(isVisible);
   const prevVisibleForSaveRef = useRef<boolean>(true);
   const isRestoringRef = useRef<boolean>(false);
@@ -154,6 +177,41 @@ export function XTermWrapper({
   // ============================================================================
 
   /**
+   * Retry count for initial fit operations.
+   */
+  const retryCountRef = useRef(0);
+
+  /**
+   * Reference to the handleResize function for use in retry logic.
+   * This avoids circular dependency between handleResize and scheduleInitialFitRetry.
+   */
+  const handleResizeRef = useRef<(entries?: ResizeObserverEntry[]) => void>(() => {});
+
+  /**
+   * Schedule a retry for initial fit when dimensions are invalid.
+   * Uses fixed delay up to INITIAL_FIT_MAX_RETRIES attempts.
+   */
+  const scheduleInitialFitRetry = useCallback(() => {
+    if (retryCountRef.current >= INITIAL_FIT_MAX_RETRIES) {
+      console.warn('[XTermWrapper] Max initial fit retries reached, giving up');
+      isInitialMountRef.current = false;
+      return;
+    }
+
+    // Clear any existing retry
+    if (initialFitRetryRef.current) {
+      clearTimeout(initialFitRetryRef.current);
+    }
+
+    retryCountRef.current += 1;
+    console.log(`[XTermWrapper] Scheduling initial fit retry ${retryCountRef.current}/${INITIAL_FIT_MAX_RETRIES}`);
+
+    initialFitRetryRef.current = setTimeout(() => {
+      handleResizeRef.current();
+    }, INITIAL_FIT_RETRY_DELAY_MS);
+  }, []);
+
+  /**
    * Handle terminal resize with CSS transition awareness and RAF-based execution.
    *
    * The terminal grid uses CSS transitions (duration: GRID_TRANSITION_DURATION_MS)
@@ -170,10 +228,29 @@ export function XTermWrapper({
    * which can cause rendering issues if resize signals arrive too rapidly. The RAF
    * ensures smooth visual updates by aligning terminal rendering with display refresh.
    *
-   * The debounce delay is set to GRID_TRANSITION_DURATION_MS + 50ms buffer.
+   * IMPORTANT: This callback uses DIFFERENT timing for initial mount vs user resize:
+   * - Initial mount: Short delay (INITIAL_MOUNT_DELAY_MS) for fast startup
+   * - User resize: Full debounce (GRID_TRANSITION_DURATION_MS + 50ms) for CSS transitions
    */
-  const handleResize = useCallback(() => {
+  const handleResize = useCallback((entries?: ResizeObserverEntry[]) => {
     if (!fitAddonRef.current || !terminalRef.current) return;
+
+    // Check if container has valid dimensions (non-zero)
+    // This prevents fitting when CSS grid hasn't calculated dimensions yet
+    if (entries && entries.length > 0) {
+      const entry = entries[0];
+      console.log('[XTermWrapper] handleResize: ResizeObserver entry:', {
+        width: entry?.contentRect.width,
+        height: entry?.contentRect.height,
+        target: entry?.target,
+        clientWidth: containerRef.current?.clientWidth,
+        clientHeight: containerRef.current?.clientHeight,
+      });
+      if (entry && (entry.contentRect.width === 0 || entry.contentRect.height === 0)) {
+        console.log('[XTermWrapper] handleResize: Skipping - container has zero dimensions');
+        return;
+      }
+    }
 
     // Clear any pending debounce timeout
     if (resizeTimeoutRef.current) {
@@ -187,20 +264,27 @@ export function XTermWrapper({
       resizeRAFRef.current = null;
     }
 
-    // Wait for CSS transition to complete before fitting
-    const resizeDelay = GRID_TRANSITION_DURATION_MS + 50; // Add 50ms buffer
+    // Use shorter delay for initial mount, full debounce for user-triggered resize
+    const isInitial = isInitialMountRef.current;
+    const resizeDelay = isInitial ? INITIAL_MOUNT_DELAY_MS : GRID_TRANSITION_DURATION_MS + 50;
 
     // Stage 1: Debounce - wait for resize events to settle
     resizeTimeoutRef.current = setTimeout(() => {
-      // Stage 2: RAF - sync fit operation with browser's render cycle
-      resizeRAFRef.current = requestAnimationFrame(() => {
+      // Stage 2: Double RAF for initial mount, single RAF for resize
+      // Double RAF ensures CSS grid has fully calculated dimensions
+      const executeResize = () => {
         if (!fitAddonRef.current || !terminalRef.current) return;
 
         try {
           // Validate dimensions BEFORE fitting to prevent corrupt 10x5 resize
           const dims = fitAddonRef.current.proposeDimensions();
           if (!dims || dims.cols < 20 || dims.rows < 10) {
-            console.log('[XTermWrapper] handleResize: Skipping fit - invalid dimensions:', dims);
+            console.log('[XTermWrapper] handleResize: Invalid dimensions:', dims);
+
+            // For initial mount, schedule a quick retry instead of giving up
+            if (isInitial) {
+              scheduleInitialFitRetry();
+            }
             return;
           }
 
@@ -215,7 +299,43 @@ export function XTermWrapper({
 
           // Double-check dimensions after fit (belt and suspenders)
           if (cols < 20 || rows < 10) {
-            console.log('[XTermWrapper] handleResize: Skipping resize IPC - invalid post-fit dimensions:', { cols, rows });
+            console.log('[XTermWrapper] handleResize: Invalid post-fit dimensions:', { cols, rows });
+
+            // For initial mount, schedule a quick retry
+            if (isInitial) {
+              scheduleInitialFitRetry();
+            }
+            return;
+          }
+
+          // Mark initial mount as complete on first successful fit
+          if (isInitial) {
+            console.log(`[XTermWrapper] Initial mount fit successful: ${cols}x${rows}`);
+            isInitialMountRef.current = false;
+
+            // Clear any pending retry
+            if (initialFitRetryRef.current) {
+              clearTimeout(initialFitRetryRef.current);
+              initialFitRetryRef.current = null;
+            }
+
+            // Force SIGWINCH after successful initial fit to ensure PTY gets correct dimensions
+            // This is critical for TUI applications like Claude Code to render correctly
+            window.electron
+              .invoke('terminal:resize', {
+                id: terminalId,
+                cols,
+                rows,
+              })
+              .then(() => {
+                console.log(`[XTermWrapper] Initial SIGWINCH sent: ${cols}x${rows}`);
+              })
+              .catch((error) => {
+                console.error('Failed to send initial SIGWINCH:', error);
+              });
+
+            // Call optional resize callback
+            onResize?.(cols, rows);
             return;
           }
 
@@ -240,9 +360,23 @@ export function XTermWrapper({
         } catch (error) {
           console.error('Error during terminal resize:', error);
         }
-      });
+      };
+
+      // Use double RAF for initial mount to ensure CSS grid has settled
+      if (isInitial) {
+        resizeRAFRef.current = requestAnimationFrame(() => {
+          requestAnimationFrame(executeResize);
+        });
+      } else {
+        resizeRAFRef.current = requestAnimationFrame(executeResize);
+      }
     }, resizeDelay);
-  }, [terminalId, onResize]);
+  }, [terminalId, onResize, scheduleInitialFitRetry]);
+
+  // Keep handleResizeRef in sync with handleResize
+  useEffect(() => {
+    handleResizeRef.current = handleResize;
+  }, [handleResize]);
 
   // ============================================================================
   // Terminal Lifecycle
@@ -312,7 +446,32 @@ export function XTermWrapper({
     // IMPORTANT: We need to send the correct dimensions to the PTY immediately after
     // the terminal opens. The PTY spawns with default 80x24, and if we don't send
     // an immediate resize, CLI applications may render incorrectly.
+
+    // Debug: Log container dimensions to diagnose zero-dimension issues
+    const containerEl = containerRef.current;
+    const logContainerDims = (label: string) => {
+      console.log(`[XTermWrapper] ${label}:`, {
+        clientWidth: containerEl.clientWidth,
+        clientHeight: containerEl.clientHeight,
+        offsetWidth: containerEl.offsetWidth,
+        offsetHeight: containerEl.offsetHeight,
+        boundingRect: containerEl.getBoundingClientRect(),
+      });
+    };
+    logContainerDims('Initial container dimensions (sync)');
+
+    // Use double RAF to ensure layout has been calculated
+    // First RAF: scheduled after current JS execution, layout may not be complete
+    // Second RAF: layout should be complete by now
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (isCleanedUp) return;
+        logContainerDims('Container dimensions after double RAF');
+      });
+    });
+
     const initialDims = fitAddon.proposeDimensions();
+    console.log('[XTermWrapper] Initial proposeDimensions:', initialDims);
 
     if (initialDims && initialDims.cols >= 20 && initialDims.rows >= 10) {
       fitAddon.fit();
@@ -397,7 +556,10 @@ export function XTermWrapper({
     // Resize Observer
     // ============================================================================
 
-    const resizeObserver = new ResizeObserver(handleResize);
+    // Pass entries to handleResize so it can validate container dimensions
+    const resizeObserver = new ResizeObserver((entries) => {
+      handleResize(entries);
+    });
     resizeObserver.observe(containerRef.current);
 
     // ============================================================================
@@ -520,6 +682,12 @@ export function XTermWrapper({
         resizeRAFRef.current = null;
       }
 
+      // Clear initial fit retry timeout
+      if (initialFitRetryRef.current) {
+        clearTimeout(initialFitRetryRef.current);
+        initialFitRetryRef.current = null;
+      }
+
       // Clear sync mode debug interval
       if (syncModeDebugInterval) {
         clearInterval(syncModeDebugInterval);
@@ -550,36 +718,43 @@ export function XTermWrapper({
   // ============================================================================
   // Visibility-Based Focus and Cursor Sync
   // ============================================================================
-  // When navigating back to the terminals view (isVisible changes from false to true),
-  // we need to restore focus and ensure the display is properly rendered.
-  // NOTE: With visibility:hidden (instead of display:none), terminal dimensions are
-  // preserved, so we no longer need to refit or resize. This prevents buffer reflow
-  // and content loss.
+  // When the terminal becomes visible (tab switching or navigation), we need to
+  // restore focus, refit the terminal if needed, and ensure proper rendering.
+  //
+  // With the tabbed interface using display:none for inactive tabs, we need to
+  // call fit() when becoming visible since the container dimensions may have
+  // changed while the terminal was hidden.
   useEffect(() => {
     const wasVisible = prevIsVisibleRef.current;
     prevIsVisibleRef.current = isVisible;
 
     // Only act when transitioning from hidden to visible
     if (!wasVisible && isVisible && terminalRef.current && fitAddonRef.current) {
-      // Use requestAnimationFrame to ensure browser has completed the visibility change
+      // Use double RAF to ensure layout has settled after display change
+      // First RAF: Browser schedules the layout recalculation
+      // Second RAF: Layout is complete, safe to measure and fit
       requestAnimationFrame(() => {
-        const terminal = terminalRef.current;
-        const fitAddon = fitAddonRef.current;
+        requestAnimationFrame(() => {
+          const terminal = terminalRef.current;
+          const fitAddon = fitAddonRef.current;
 
-        if (!terminal || !fitAddon) return;
+          if (!terminal || !fitAddon) return;
 
-        // With visibility:hidden, dimensions are preserved - check if they're still valid
-        const { cols, rows } = terminal;
+          // Store current dimensions to compare after fit
+          const prevCols = terminal.cols;
+          const prevRows = terminal.rows;
 
-        // Only call fit() if dimensions somehow became invalid (shouldn't happen with visibility:hidden)
-        if (cols < 20 || rows < 10) {
+          // With tab switching (display:none), container dimensions may have changed
+          // Always try to fit to get correct dimensions
           const dims = fitAddon.proposeDimensions();
           if (dims && dims.cols >= 20 && dims.rows >= 10) {
             fitAddon.fit();
-            // Send resize to backend if dimensions changed
+
+            // Send resize to PTY if dimensions changed
             const newCols = terminal.cols;
             const newRows = terminal.rows;
-            if (newCols !== cols || newRows !== rows) {
+            if (newCols !== prevCols || newRows !== prevRows) {
+              console.log(`[XTermWrapper] Tab switch resize: ${prevCols}x${prevRows} -> ${newCols}x${newRows}`);
               window.electron.invoke('terminal:resize', {
                 id: terminalId,
                 cols: newCols,
@@ -589,33 +764,33 @@ export function XTermWrapper({
               });
             }
           }
-        }
 
-        // Clear texture atlas to fix any WebGL rendering artifacts from visibility change
-        terminal.clearTextureAtlas();
+          // Clear texture atlas to fix any WebGL rendering artifacts from visibility change
+          terminal.clearTextureAtlas();
 
-        // Verify cursor is visible in viewport
-        const buffer = terminal.buffer.active;
-        const cursorAbsoluteY = buffer.baseY + buffer.cursorY;
-        const viewportTop = buffer.viewportY;
-        const viewportBottom = viewportTop + terminal.rows;
+          // Verify cursor is visible in viewport
+          const buffer = terminal.buffer.active;
+          const cursorAbsoluteY = buffer.baseY + buffer.cursorY;
+          const viewportTop = buffer.viewportY;
+          const viewportBottom = viewportTop + terminal.rows;
 
-        // If cursor is not in viewport, scroll to make it visible
-        if (cursorAbsoluteY < viewportTop || cursorAbsoluteY >= viewportBottom) {
-          terminal.scrollToLine(Math.max(0, cursorAbsoluteY - terminal.rows + 1));
-        }
+          // If cursor is not in viewport, scroll to make it visible
+          if (cursorAbsoluteY < viewportTop || cursorAbsoluteY >= viewportBottom) {
+            terminal.scrollToLine(Math.max(0, cursorAbsoluteY - terminal.rows + 1));
+          }
 
-        // Force full refresh of all rows to sync cursor rendering layer
-        terminal.refresh(0, terminal.rows - 1);
+          // Force full refresh of all rows to sync cursor rendering layer
+          terminal.refresh(0, terminal.rows - 1);
 
-        // Focus the terminal for keyboard input
-        terminal.focus();
+          // Focus the terminal for keyboard input
+          terminal.focus();
 
-        // Force PTY to send SIGWINCH to redraw full TUI applications like Claude Code
-        window.electron.invoke('terminal:forceRedraw', terminalId).then((result) => {
-          console.log('[XTermWrapper] forceRedraw result:', result);
-        }).catch((err) => {
-          console.error('[XTermWrapper] forceRedraw error:', err);
+          // Force PTY to send SIGWINCH to redraw full TUI applications like Claude Code
+          window.electron.invoke('terminal:forceRedraw', terminalId).then((result) => {
+            console.log('[XTermWrapper] forceRedraw result:', result);
+          }).catch((err) => {
+            console.error('[XTermWrapper] forceRedraw error:', err);
+          });
         });
       });
     }

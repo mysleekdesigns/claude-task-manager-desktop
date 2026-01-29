@@ -1,6 +1,9 @@
 /**
  * Terminal Components Example
  *
+ * @deprecated This example uses the old grid layout. The main TerminalsPage
+ * now uses a tabbed interface instead.
+ *
  * Demo/test page showing how to use TerminalGrid and TerminalToolbar together.
  * This can be used for development and testing until the actual terminal
  * integration with XTermWrapper is ready.
@@ -24,13 +27,15 @@ interface Terminal {
 // Component
 // ============================================================================
 
+/**
+ * @deprecated Use TerminalsPage with tabbed interface instead
+ */
 export function TerminalExample() {
   const [terminals, setTerminals] = useState<Terminal[]>([
     { id: '1', name: 'Terminal 1', status: 'running' },
     { id: '2', name: 'Terminal 2', status: 'idle' },
     { id: '3', name: 'Terminal 3', status: 'running' },
   ]);
-  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null);
 
   const handleNewTerminal = () => {
     const newId = (terminals.length + 1).toString();
@@ -44,17 +49,6 @@ export function TerminalExample() {
 
   const handleTerminalClose = (id: string) => {
     setTerminals(terminals.filter((t) => t.id !== id));
-    if (expandedTerminalId === id) {
-      setExpandedTerminalId(null);
-    }
-  };
-
-  const handleTerminalExpand = (id: string) => {
-    setExpandedTerminalId(id);
-  };
-
-  const handleCollapseExpanded = () => {
-    setExpandedTerminalId(null);
   };
 
   const handleInvokeClaudeAll = () => {
@@ -77,10 +71,7 @@ export function TerminalExample() {
         <TerminalGrid
           projectId="example-project-id"
           terminals={terminals}
-          expandedTerminalId={expandedTerminalId}
           onTerminalClose={handleTerminalClose}
-          onTerminalExpand={handleTerminalExpand}
-          onCollapseExpanded={handleCollapseExpanded}
         />
       </div>
     </div>
