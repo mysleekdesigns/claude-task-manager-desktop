@@ -22,7 +22,7 @@ import type { TerminalStatus } from '@/types/ipc';
 // Constants
 // ============================================================================
 
-const MAX_TERMINALS = 4;
+const MAX_TERMINALS = 10;
 
 /**
  * CSS transition duration for layout changes (ms)

@@ -73,8 +73,8 @@ async function handleCreateTerminal(
   }
 
   // Check terminal limit before creating
-  if (terminalManager.getActiveCount() >= 4) {
-    throw new Error('Maximum terminal limit (4) reached');
+  if (terminalManager.getActiveCount() >= 10) {
+    throw new Error('Maximum terminal limit (10) reached');
   }
 
   // Generate terminal name if not provided

@@ -10,7 +10,7 @@ import { platform } from 'os';
 import { execSync } from 'child_process';
 
 /** Maximum number of terminals allowed */
-const MAX_TERMINALS = 4;
+const MAX_TERMINALS = 10;
 
 /**
  * Options for spawning a new terminal
