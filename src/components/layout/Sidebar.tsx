@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -17,6 +17,11 @@ import {
   ChevronRight,
   CheckSquare,
   LogOut,
+  Folder,
+  FolderPlus,
+  Check,
+  ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,10 +30,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useSidebarStore } from '@/store/useSidebarStore';
 import { useAuth } from '@/hooks/useAuth';
+import { useProjectStore } from '@/store/useProjectStore';
+import { CreateProjectModal } from '@/components/projects';
+import type { Project } from '@/types/ipc';
 
 interface NavItem {
   id: string;
@@ -72,6 +88,43 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const {
+    projects,
+    currentProject,
+    isLoading: projectsLoading,
+    error: projectsError,
+    fetchProjects,
+    setCurrentProject,
+    clearError: clearProjectError,
+  } = useProjectStore();
+  const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
+
+  // Fetch projects when user changes
+  useEffect(() => {
+    if (user?.id) {
+      void fetchProjects(user.id);
+    }
+  }, [user?.id, fetchProjects]);
+
+  // Handle project dropdown open
+  const handleProjectDropdownOpen = (open: boolean) => {
+    if (open && projectsError) {
+      clearProjectError();
+    }
+  };
+
+  // Handle project selection
+  const handleProjectSelect = (projectId: string) => {
+    setCurrentProject(projectId);
+  };
+
+  // Handle project creation
+  const handleProjectCreated = async (project: Project) => {
+    if (user?.id) {
+      await fetchProjects(user.id);
+    }
+    setCurrentProject(project.id);
+  };
 
   // Keyboard shortcut handler
   useEffect(() => {
@@ -137,6 +190,112 @@ export function Sidebar() {
               {collapsed ? 'Expand' : 'Collapse'} (⌘B)
             </TooltipContent>
           </Tooltip>
+        </div>
+
+        {/* Project Selector Section */}
+        <div className="border-b border-border px-2 py-3">
+          <DropdownMenu onOpenChange={handleProjectDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              {collapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-full"
+                      aria-label="Select project"
+                    >
+                      {projectsLoading && projects.length === 0 ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Folder className="size-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {currentProject?.name || 'Select Project'}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="w-full h-auto px-3 py-2 justify-between font-normal"
+                  aria-label="Select project"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {projectsLoading && projects.length === 0 ? (
+                      <Loader2 className="size-4 shrink-0 animate-spin" />
+                    ) : (
+                      <Folder className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="flex flex-col items-start min-w-0">
+                      <span className="text-xs text-muted-foreground">Project</span>
+                      <span className="text-sm truncate max-w-[160px]">
+                        {projectsLoading && projects.length === 0
+                          ? 'Loading...'
+                          : currentProject?.name || 'Select Project'}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronDown className="size-4 shrink-0 opacity-50" />
+                </Button>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              className="w-64"
+              align={collapsed ? 'start' : 'start'}
+              side={collapsed ? 'right' : 'bottom'}
+            >
+              <DropdownMenuLabel>Projects</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              {/* Error state */}
+              {projectsError && (
+                <div className="px-2 py-1.5 text-xs text-destructive">
+                  {projectsError}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!projectsLoading && projects.length === 0 && (
+                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                  No projects yet
+                </div>
+              )}
+
+              {/* Project list */}
+              {projects.map((project) => (
+                <DropdownMenuItem
+                  key={project.id}
+                  onClick={() => { handleProjectSelect(project.id); }}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                      <span className="text-sm font-medium truncate">{project.name}</span>
+                      {project.targetPath && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          {project.targetPath}
+                        </span>
+                      )}
+                    </div>
+                    {currentProject?.id === project.id && (
+                      <Check className="size-4 ml-2 shrink-0" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              ))}
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => { setCreateProjectModalOpen(true); }}
+                className="cursor-pointer"
+              >
+                <FolderPlus className="mr-2 size-4" />
+                <span>Create New Project</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Navigation Items */}
@@ -259,6 +418,13 @@ export function Sidebar() {
           </div>
         )}
       </aside>
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        open={createProjectModalOpen}
+        onOpenChange={setCreateProjectModalOpen}
+        onSuccess={(project: Project) => { void handleProjectCreated(project); }}
+      />
     </TooltipProvider>
   );
 }

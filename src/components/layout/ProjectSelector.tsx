@@ -5,8 +5,9 @@
  * Uses Zustand store for state management and IPC for data fetching.
  */
 
-import { useEffect, useState } from 'react';
-import { Check, ChevronDown, FolderPlus, Loader2 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Check, ChevronDown, FolderPlus, Loader2, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -34,13 +35,29 @@ export function ProjectSelector() {
   } = useProjectStore();
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const prevErrorRef = useRef<string | null>(null);
 
   // Fetch projects when component mounts or user changes
   useEffect(() => {
+    console.log('[ProjectSelector] useEffect triggered, user?.id:', user?.id);
     if (user?.id) {
+      console.log('[ProjectSelector] Fetching projects for user:', user.id);
       void fetchProjects(user.id);
+    } else {
+      console.log('[ProjectSelector] No user ID available, skipping project fetch');
     }
   }, [user?.id, fetchProjects]);
+
+  // Show toast notification when there's a new error
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      console.error('[ProjectSelector] Error loading projects:', error);
+      toast.error('Failed to load projects', {
+        description: error,
+      });
+    }
+    prevErrorRef.current = error;
+  }, [error]);
 
   // Clear error when dropdown opens
   const handleOpenChange = (open: boolean) => {
@@ -83,6 +100,7 @@ export function ProjectSelector() {
 
   // Display current project name or fallback
   const displayName = currentProject?.name || 'Select Project';
+  const hasError = !!error;
 
   return (
     <>
@@ -90,9 +108,10 @@ export function ProjectSelector() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-9 px-3 gap-2 justify-start font-normal"
+          className={`h-9 px-3 gap-2 justify-start font-normal ${hasError ? 'text-destructive' : ''}`}
           aria-label="Select project"
         >
+          {hasError && <AlertCircle className="h-4 w-4 text-destructive" />}
           <span className="max-w-[200px] truncate">{displayName}</span>
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>

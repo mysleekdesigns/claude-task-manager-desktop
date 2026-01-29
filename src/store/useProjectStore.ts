@@ -122,27 +122,42 @@ export const useProjectStore = create<ProjectState>()(
        * Fetch all projects for the current user
        */
       fetchProjects: async (userId: string) => {
+        console.log('[ProjectStore] fetchProjects called with userId:', userId);
         set({ isLoading: true, error: null });
         try {
           const projects = await invoke('projects:list', userId);
-
-          set({ projects, isLoading: false });
+          console.log('[ProjectStore] fetchProjects received projects:', projects.length);
 
           // If we have a currentProjectId stored, restore it from the fetched projects
           const state = get();
-          if (state.currentProject?.id) {
-            const restoredProject = projects.find(p => p.id === state.currentProject?.id);
+          let currentProject = state.currentProject;
+
+          if (currentProject?.id) {
+            const restoredProject = projects.find(p => p.id === currentProject?.id);
             if (restoredProject) {
-              set({ currentProject: restoredProject });
+              console.log('[ProjectStore] Restored previously selected project:', restoredProject.name);
+              currentProject = restoredProject;
             } else {
               // Project no longer exists, clear it
-              set({ currentProject: null });
+              console.log('[ProjectStore] Previously selected project no longer exists');
+              currentProject = null;
             }
           }
+
+          // Auto-select first project if none is selected and projects exist
+          if (!currentProject && projects.length > 0) {
+            const firstProject = projects[0];
+            if (firstProject) {
+              console.log('[ProjectStore] Auto-selecting first project:', firstProject.name);
+              currentProject = firstProject;
+            }
+          }
+
+          set({ projects, currentProject, isLoading: false });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to fetch projects';
           set({ error: errorMessage, isLoading: false });
-          console.error('Failed to fetch projects:', error);
+          console.error('[ProjectStore] Failed to fetch projects:', error);
         }
       },
 

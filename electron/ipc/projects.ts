@@ -57,11 +57,13 @@ async function handleListProjects(
   _event: IpcMainInvokeEvent,
   userId: string
 ): Promise<ProjectWithMembers[]> {
+  console.log('[projects:list] Called with userId:', userId);
   if (!userId) {
     throw IPCErrors.invalidArguments('User ID is required');
   }
 
   const prisma = databaseService.getClient();
+  console.log('[projects:list] Querying database for project memberships...');
   const projectMembers = await prisma.projectMember.findMany({
     where: {
       userId,
@@ -94,7 +96,10 @@ async function handleListProjects(
     },
   });
 
-  return projectMembers.map((pm) => pm.project);
+  console.log('[projects:list] Found', projectMembers.length, 'project memberships');
+  const projects = projectMembers.map((pm) => pm.project);
+  console.log('[projects:list] Returning', projects.length, 'projects');
+  return projects;
 }
 
 /**

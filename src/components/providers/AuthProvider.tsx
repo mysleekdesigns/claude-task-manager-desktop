@@ -154,28 +154,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // The main process manages session tokens in electron-store
   useEffect(() => {
     const checkSession = async () => {
+      console.log('[AuthProvider] checkSession starting...');
       if (!isMountedRef.current) return;
 
       try {
         // Check if Supabase authentication is being used
+        console.log('[AuthProvider] Checking if Supabase auth is being used...');
         const usingSupabase = await invoke('auth:isSupabaseAuth');
+        console.log('[AuthProvider] isSupabaseAuth:', usingSupabase);
         if (isMountedRef.current) {
           setIsUsingSupabase(usingSupabase);
         }
 
         // Main process checks for stored session automatically
+        console.log('[AuthProvider] Getting current user...');
         const currentUser = await invoke('auth:getCurrentUser');
+        console.log('[AuthProvider] getCurrentUser result:', currentUser ? `User: ${currentUser.email}` : 'No user');
 
         if (isMountedRef.current) {
           if (currentUser) {
+            console.log('[AuthProvider] Setting user:', currentUser.id);
             setUser(convertAuthUser(currentUser));
           } else {
+            console.log('[AuthProvider] No current user, setting user to null');
             setUser(null);
           }
           setIsLoading(false);
         }
       } catch (error) {
-        console.error('Failed to load current user:', error);
+        console.error('[AuthProvider] Failed to load current user:', error);
         if (isMountedRef.current) {
           setUser(null);
           setIsLoading(false);
