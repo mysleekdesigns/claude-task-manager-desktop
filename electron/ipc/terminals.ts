@@ -464,6 +464,90 @@ async function handleGetLastStatus(
 }
 
 /**
+ * Save serialized terminal state (from xterm SerializeAddon)
+ * This preserves cursor position, attributes, and buffer content for restoration
+ */
+async function handleSaveSerializedState(
+  _event: IpcMainInvokeEvent,
+  data: { id: string; state: string; cursorX: number; cursorY: number }
+): Promise<void> {
+  // DEBUG: Log IPC handler invocation
+  console.log('[IPC terminal:saveSerializedState] received data.id=' + data?.id);
+  console.log('[IPC terminal:saveSerializedState] data.state length=' + (data?.state ? data.state.length : 'undefined'));
+  console.log('[IPC terminal:saveSerializedState] data.state is empty:', data?.state === '');
+
+  if (!data.id || data.state === undefined) {
+    throw IPCErrors.invalidArguments('Terminal ID and state are required');
+  }
+
+  terminalManager.saveSerializedState(data.id, data.state, data.cursorX, data.cursorY);
+}
+
+/**
+ * Get serialized terminal state
+ * Returns the serialized state or null if not available
+ */
+async function handleGetSerializedState(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<{ content: string; cursorX: number; cursorY: number } | null> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  return terminalManager.getSerializedState(terminalId);
+}
+
+/**
+ * Clear serialized terminal state
+ */
+async function handleClearSerializedState(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<void> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  terminalManager.clearSerializedState(terminalId);
+}
+
+/**
+ * Force a terminal to redraw by resizing to different dimensions, then back.
+ * This sends SIGWINCH to the PTY process, which triggers TUI applications
+ * like Claude Code to perform a full UI redraw.
+ *
+ * Note: Resizing to the same dimensions doesn't trigger a real SIGWINCH response
+ * from Claude Code, so we must actually change the dimensions temporarily.
+ */
+async function handleForceRedraw(
+  _event: IpcMainInvokeEvent,
+  terminalId: string
+): Promise<boolean> {
+  if (!terminalId) {
+    throw IPCErrors.invalidArguments('Terminal ID is required');
+  }
+
+  const terminal = terminalManager.get(terminalId);
+  if (terminal && terminal.pty) {
+    const cols = terminal.pty.cols;
+    const rows = terminal.pty.rows;
+
+    // Resize to slightly different dimensions to trigger SIGWINCH
+    terminal.pty.resize(Math.max(1, cols - 1), Math.max(1, rows - 1));
+
+    // Wait a brief moment, then resize back
+    await new Promise(resolve => setTimeout(resolve, 50));
+    terminal.pty.resize(cols, rows);
+
+    console.log(`[Terminal IPC] Forced redraw for terminal ${terminalId} (${cols}x${rows})`);
+    return true;
+  }
+  console.log(`[Terminal IPC] Terminal ${terminalId} not found for forceRedraw`);
+  return false;
+}
+
+/**
  * Register all terminal-related IPC handlers.
  * Requires mainWindow reference for output streaming.
  *
@@ -537,6 +621,30 @@ export function registerTerminalHandlers(mainWindow: BrowserWindow): void {
     'terminal:get-last-status',
     wrapWithLogging('terminal:get-last-status', wrapHandler(handleGetLastStatus))
   );
+
+  // terminal:saveSerializedState - Save serialized terminal state for restoration
+  ipcMain.handle(
+    'terminal:saveSerializedState',
+    wrapWithLogging('terminal:saveSerializedState', wrapHandler(handleSaveSerializedState))
+  );
+
+  // terminal:getSerializedState - Get serialized terminal state
+  ipcMain.handle(
+    'terminal:getSerializedState',
+    wrapWithLogging('terminal:getSerializedState', wrapHandler(handleGetSerializedState))
+  );
+
+  // terminal:clearSerializedState - Clear serialized terminal state
+  ipcMain.handle(
+    'terminal:clearSerializedState',
+    wrapWithLogging('terminal:clearSerializedState', wrapHandler(handleClearSerializedState))
+  );
+
+  // terminal:forceRedraw - Force a terminal to redraw by sending SIGWINCH
+  ipcMain.handle(
+    'terminal:forceRedraw',
+    wrapWithLogging('terminal:forceRedraw', wrapHandler(handleForceRedraw))
+  );
 }
 
 /**
@@ -554,6 +662,10 @@ export function unregisterTerminalHandlers(): void {
   ipcMain.removeHandler('terminal:getBuffer');
   ipcMain.removeHandler('terminal:clearOutputBuffer');
   ipcMain.removeHandler('terminal:get-last-status');
+  ipcMain.removeHandler('terminal:saveSerializedState');
+  ipcMain.removeHandler('terminal:getSerializedState');
+  ipcMain.removeHandler('terminal:clearSerializedState');
+  ipcMain.removeHandler('terminal:forceRedraw');
 }
 
 /**

@@ -122,6 +122,10 @@ const VALID_INVOKE_CHANNELS = [
   'terminal:getBuffer',
   'terminal:clearOutputBuffer',
   'terminal:get-last-status',
+  'terminal:saveSerializedState',
+  'terminal:getSerializedState',
+  'terminal:clearSerializedState',
+  'terminal:forceRedraw',
   // Worktrees
   'worktrees:list',
   'worktrees:create',

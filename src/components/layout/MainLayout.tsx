@@ -10,10 +10,11 @@ import { TerminalsPage } from '@/routes/terminals';
  * and renders child routes in the main content area.
  *
  * IMPORTANT: The TerminalsPage is always mounted (after first visit) to prevent
- * xterm.js terminals from being destroyed when navigating away. CSS display
+ * xterm.js terminals from being destroyed when navigating away. CSS visibility
  * property is used to show/hide the terminals container based on the current route.
- * This preserves terminal state, buffer content, and avoids race conditions with
- * buffer restoration.
+ * Using visibility:hidden instead of display:none preserves terminal dimensions,
+ * preventing xterm.js buffer reflow/corruption that occurs when container dimensions
+ * become 0 (which happens with display:none).
  */
 export function MainLayout() {
   const location = useLocation();
@@ -42,21 +43,29 @@ export function MainLayout() {
         {/* Main Content - pt-6 accounts for macOS titlebar spacing */}
         <main className="flex-1 overflow-hidden bg-background pt-6 relative">
           {/* Regular routed content - hidden when on terminals route */}
+          {/* Uses visibility:hidden to allow terminals layer to show through */}
           <div
             className="absolute inset-0 overflow-y-auto"
-            style={{ display: isOnTerminals ? 'none' : 'block' }}
+            style={{
+              visibility: isOnTerminals ? 'hidden' : 'visible',
+              pointerEvents: isOnTerminals ? 'none' : 'auto'
+            }}
           >
             <Outlet />
           </div>
 
           {/* Terminals - always mounted after first visit, hidden via CSS when not active */}
-          {/* This prevents xterm.js from being destroyed on navigation */}
+          {/* Uses visibility:hidden instead of display:none to preserve terminal dimensions */}
+          {/* This prevents xterm.js buffer reflow/corruption that occurs when dimensions become 0 */}
           {hasVisitedTerminals && (
             <div
               className="absolute inset-0"
-              style={{ display: isOnTerminals ? 'block' : 'none' }}
+              style={{
+                visibility: isOnTerminals ? 'visible' : 'hidden',
+                pointerEvents: isOnTerminals ? 'auto' : 'none'
+              }}
             >
-              <TerminalsPage />
+              <TerminalsPage isVisible={isOnTerminals} />
             </div>
           )}
         </main>

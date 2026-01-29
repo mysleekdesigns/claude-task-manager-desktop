@@ -53,10 +53,19 @@ function getGridRows(count: number): string {
 }
 
 // ============================================================================
+// Types
+// ============================================================================
+
+export interface TerminalsPageProps {
+  /** Whether the terminals page is currently visible (used for focus management) */
+  isVisible?: boolean;
+}
+
+// ============================================================================
 // Component
 // ============================================================================
 
-export function TerminalsPage() {
+export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
   const currentProject = useProjectStore((state) => state.currentProject);
 
   // State for expanded terminal
@@ -317,6 +326,7 @@ export function TerminalsPage() {
           >
             <XTermWrapper
               terminalId={expandedTerminal.id}
+              isVisible={isVisible}
               onExit={(exitCode) => { handleTerminalExit(expandedTerminal.id, exitCode); }}
             />
           </TerminalPane>
@@ -352,6 +362,7 @@ export function TerminalsPage() {
             >
               <XTermWrapper
                 terminalId={terminal.id}
+                isVisible={isVisible}
                 onExit={(exitCode) => { handleTerminalExit(terminal.id, exitCode); }}
               />
             </TerminalPane>

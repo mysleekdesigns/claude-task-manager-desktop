@@ -1293,6 +1293,10 @@ export interface IpcChannels {
   'terminal:getBuffer': (terminalId: string) => Promise<string[]>;
   'terminal:clearOutputBuffer': (terminalId: string) => Promise<void>;
   'terminal:get-last-status': (terminalId: string) => Promise<ClaudeStatusMessage | null>;
+  'terminal:getSerializedState': (terminalId: string) => Promise<{ content: string; cursorX: number; cursorY: number } | null>;
+  'terminal:saveSerializedState': (data: { id: string; state: string; cursorX: number; cursorY: number }) => Promise<void>;
+  'terminal:clearSerializedState': (terminalId: string) => Promise<void>;
+  'terminal:forceRedraw': (terminalId: string) => Promise<boolean>;
 
   // Worktree channels
   'worktrees:list': (projectId: string) => Promise<WorktreeWithStatus[]>;
@@ -2127,6 +2131,10 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'terminal:getBuffer',
   'terminal:clearOutputBuffer',
   'terminal:get-last-status',
+  'terminal:getSerializedState',
+  'terminal:saveSerializedState',
+  'terminal:clearSerializedState',
+  'terminal:forceRedraw',
   'worktrees:list',
   'worktrees:create',
   'worktrees:get',

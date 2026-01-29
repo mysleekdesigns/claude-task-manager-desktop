@@ -62,6 +62,9 @@ class TerminalManager {
   /** Incomplete line fragments from previous chunks */
   private incompleteLines = new Map<string, string>();
 
+  /** Serialized terminal state from xterm SerializeAddon (preserves cursor position, attributes, buffer content) */
+  private serializedStates = new Map<string, { content: string; cursorX: number; cursorY: number }>();
+
   /** Maximum number of lines to buffer per terminal */
   private readonly MAX_BUFFER_LINES = 100;
 
@@ -282,6 +285,7 @@ class TerminalManager {
       this.terminals.delete(id);
       this.outputBuffers.delete(id);
       this.incompleteLines.delete(id);
+      this.serializedStates.delete(id);
       console.log(`[TerminalManager] Killed terminal ${id}`);
       return true;
     } catch (error) {
@@ -290,6 +294,7 @@ class TerminalManager {
       this.terminals.delete(id);
       this.outputBuffers.delete(id);
       this.incompleteLines.delete(id);
+      this.serializedStates.delete(id);
       // Return true since we cleaned up the terminal from our tracking
       return true;
     }
@@ -335,6 +340,7 @@ class TerminalManager {
     this.terminals.clear();
     this.outputBuffers.clear();
     this.incompleteLines.clear();
+    this.serializedStates.clear();
   }
 
   /**
@@ -468,6 +474,52 @@ class TerminalManager {
   clearOutputBuffer(id: string): void {
     this.outputBuffers.set(id, []);
     this.incompleteLines.set(id, '');
+  }
+
+  /**
+   * Save serialized terminal state (from xterm SerializeAddon).
+   * This preserves cursor position, attributes, and buffer content.
+   *
+   * @param id - Terminal ID
+   * @param state - Serialized state string from SerializeAddon.serialize()
+   * @param cursorX - Cursor X position (column)
+   * @param cursorY - Cursor Y position (row)
+   */
+  saveSerializedState(id: string, state: string, cursorX: number, cursorY: number): void {
+    // DEBUG: Log what we're receiving from renderer
+    console.log('[TerminalManager] saveSerializedState called for id=' + id);
+    console.log('[TerminalManager] saveSerializedState state.length=' + (state ? state.length : 'null'));
+    console.log('[TerminalManager] saveSerializedState cursorX=' + cursorX + ', cursorY=' + cursorY);
+    console.log('[TerminalManager] saveSerializedState state is empty:', state === '');
+    if (state && state.length > 0) {
+      console.log('[TerminalManager] saveSerializedState first 200 chars:', state.substring(0, 200));
+    }
+
+    this.serializedStates.set(id, { content: state, cursorX, cursorY });
+  }
+
+  /**
+   * Get serialized terminal state.
+   * Returns the serialized state or null if not available.
+   *
+   * @param id - Terminal ID
+   * @returns The serialized state object with content and cursor position, or null if not found
+   */
+  getSerializedState(id: string): { content: string; cursorX: number; cursorY: number } | null {
+    const state = this.serializedStates.get(id) || null;
+    // DEBUG: Log what we're returning to renderer
+    console.log('[TerminalManager] getSerializedState for id=' + id);
+    console.log('[TerminalManager] getSerializedState result:', state ? 'found (length=' + state.content.length + ')' : 'null');
+    return state;
+  }
+
+  /**
+   * Clear serialized terminal state.
+   *
+   * @param id - Terminal ID
+   */
+  clearSerializedState(id: string): void {
+    this.serializedStates.delete(id);
   }
 
   /**
