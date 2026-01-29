@@ -154,8 +154,9 @@ export function TerminalPane({
       {/*
         min-w-0 and min-h-0 are critical for flex/grid children to allow shrinking below content size.
         Without these, the Card may overflow its grid cell when content (especially xterm) has intrinsic sizing.
+        @container enables container queries for responsive header elements.
       */}
-      <Card className={`flex flex-col h-full min-w-0 min-h-0 py-0 gap-0 ${isExpanded ? 'shadow-lg' : ''}`}>
+      <Card className={`flex flex-col h-full min-w-0 min-h-0 py-0 gap-0 @container ${isExpanded ? 'shadow-lg' : ''}`}>
         {/* Header - using flex instead of grid for compact layout */}
         <CardHeader className="!flex !flex-row items-center px-2 !py-1 border-b flex-shrink-0">
           <div className="flex items-center justify-between gap-1.5 w-full">
@@ -204,39 +205,40 @@ export function TerminalPane({
                 {terminal.status}
               </Badge>
 
-              {/* Claude status badge */}
+              {/* Claude status badge - compact at narrow widths */}
               {terminal.claudeStatus && terminal.claudeStatus !== 'inactive' && (
                 <Badge
                   variant={getClaudeStatusBadgeVariant(terminal.claudeStatus)}
                   className="h-5 py-0 text-[10px] flex-shrink-0 gap-0.5"
+                  title={`Claude ${terminal.claudeStatus}`}
                 >
                   <Sparkles className="h-2.5 w-2.5" />
-                  Claude {terminal.claudeStatus}
+                  <span className="hidden @[400px]:inline">Claude</span> {terminal.claudeStatus}
                 </Badge>
               )}
 
-              {/* Linked task badge */}
+              {/* Linked task badge - hidden at narrow widths, truncates on medium */}
               {linkedTask && (
                 <Badge
                   variant="outline"
-                  className="h-5 py-0 text-[10px] flex-shrink-0 gap-0.5 cursor-pointer hover:bg-accent"
+                  className="hidden @[450px]:flex h-5 py-0 text-[10px] flex-shrink gap-0.5 cursor-pointer hover:bg-accent min-w-0"
                   onClick={() => onViewTask?.(linkedTask.id)}
                   title={linkedTask.title}
                 >
-                  <CheckSquare className="h-2.5 w-2.5" />
-                  <span className="max-w-[150px] truncate">{linkedTask.title}</span>
+                  <CheckSquare className="h-2.5 w-2.5 flex-shrink-0" />
+                  <span className="truncate max-w-[80px] @[550px]:max-w-[150px]">{linkedTask.title}</span>
                 </Badge>
               )}
             </div>
 
-            {/* Right side: Controls */}
-            <div className="flex items-center gap-0.5">
-              {/* Launch/Re-launch Claude button */}
+            {/* Right side: Controls - min-w-0 allows shrinking below content size */}
+            <div className="flex items-center gap-0.5 min-w-0 flex-shrink-0">
+              {/* Launch/Re-launch Claude button - icon only at narrow widths */}
               {onLaunchClaude && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-1.5 gap-1 text-xs"
+                  className="h-6 px-1.5 gap-1 text-xs flex-shrink-0"
                   onClick={() => { onLaunchClaude(terminal.id); }}
                   title={
                     terminal.claudeStatus === 'inactive'
@@ -244,19 +246,23 @@ export function TerminalPane({
                       : 'Re-launch Claude Code'
                   }
                 >
-                  <Sparkles className="h-3 w-3" />
-                  {terminal.claudeStatus === 'inactive' ? 'Launch' : 'Re-launch'} Claude
+                  <Sparkles className="h-3 w-3 flex-shrink-0" />
+                  <span className="hidden @[520px]:inline">
+                    {terminal.claudeStatus === 'inactive' ? 'Launch' : 'Re-launch'} Claude
+                  </span>
                 </Button>
               )}
 
-              {/* Worktree selector */}
-              <WorktreeSelector
-                projectId={projectId}
-                value={terminal.worktreeId}
-                onChange={handleWorktreeChange}
-                disabled={terminal.status !== 'running'}
-                size="sm"
-              />
+              {/* Worktree selector - hidden at narrow widths */}
+              <div className="hidden @[580px]:block">
+                <WorktreeSelector
+                  projectId={projectId}
+                  value={terminal.worktreeId}
+                  onChange={handleWorktreeChange}
+                  disabled={terminal.status !== 'running'}
+                  size="sm"
+                />
+              </div>
 
               {/* More options */}
               <DropdownMenu>
