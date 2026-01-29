@@ -115,7 +115,7 @@ class TerminalManager {
       // If Claude Code is run in this terminal, its sandbox creates working directory
       // symlinks in /tmp/claude-<uid>/ which fails if TMPDIR points to a restricted location.
       // Only delete if not explicitly set in options.env to allow user override.
-      if (!options.env?.TMPDIR) {
+      if (!options.env?.['TMPDIR']) {
         delete env['TMPDIR'];
       }
 
