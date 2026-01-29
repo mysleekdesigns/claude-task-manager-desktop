@@ -69,7 +69,10 @@ import type {
 // Constants
 // ============================================================================
 
-const REVIEW_ICONS: Record<ReviewType, React.ComponentType<{ className?: string }>> = {
+const REVIEW_ICONS: Record<
+  ReviewType,
+  React.ComponentType<{ className?: string }>
+> = {
   security: Shield,
   quality: Code,
   performance: Zap,
@@ -85,7 +88,10 @@ const REVIEW_LABELS: Record<ReviewType, string> = {
   research: 'Research',
 };
 
-const SEVERITY_ICONS: Record<FindingSeverity, React.ComponentType<{ className?: string }>> = {
+const SEVERITY_ICONS: Record<
+  FindingSeverity,
+  React.ComponentType<{ className?: string }>
+> = {
   critical: AlertCircle,
   high: AlertTriangle,
   medium: AlertCircle,
@@ -93,9 +99,11 @@ const SEVERITY_ICONS: Record<FindingSeverity, React.ComponentType<{ className?: 
 };
 
 const SEVERITY_COLORS: Record<FindingSeverity, string> = {
-  critical: 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+  critical:
+    'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
   high: 'text-red-500 bg-red-500/10 dark:bg-red-500/20 dark:text-red-400 border-red-500/30 dark:border-red-500/40',
-  medium: 'text-amber-500 bg-amber-500/10 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/30 dark:border-amber-500/40',
+  medium:
+    'text-amber-500 bg-amber-500/10 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/30 dark:border-amber-500/40',
   low: 'text-green-500 bg-green-500/10 dark:bg-green-500/20 dark:text-green-400 border-green-500/30 dark:border-green-500/40',
 };
 
@@ -149,29 +157,29 @@ interface ScoreBadgeProps {
 
 function ScoreBadge({ score, size = 'sm', className }: ScoreBadgeProps) {
   const getScoreColor = (s: number): string => {
-    if (s >= 80) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-    if (s >= 60) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+    if (s >= 80)
+      return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    if (s >= 60)
+      return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
     return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
   };
 
   if (size === 'lg') {
     return (
-      <div className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-lg',
-        getScoreColor(score),
-        className
-      )}>
+      <div
+        className={cn(
+          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-lg',
+          getScoreColor(score),
+          className
+        )}
+      >
         <span>{score}</span>
         <span className="text-sm font-normal opacity-75">/100</span>
       </div>
     );
   }
 
-  return (
-    <Badge className={cn(getScoreColor(score), className)}>
-      {score}
-    </Badge>
-  );
+  return <Badge className={cn(getScoreColor(score), className)}>{score}</Badge>;
 }
 
 interface ReviewStatusBadgeProps {
@@ -179,7 +187,10 @@ interface ReviewStatusBadgeProps {
 }
 
 function ReviewStatusBadge({ status }: ReviewStatusBadgeProps) {
-  const config: Record<HumanReviewStatus, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
+  const config: Record<
+    HumanReviewStatus,
+    { label: string; variant: 'default' | 'secondary' | 'outline' }
+  > = {
     PENDING: { label: 'Pending', variant: 'secondary' },
     IN_PROGRESS: { label: 'In Progress', variant: 'default' },
     COMPLETED: { label: 'Completed', variant: 'outline' },
@@ -218,7 +229,8 @@ function formatSingleFinding(finding: ReviewFinding): string {
 function FindingCard({ finding, category }: FindingCardProps) {
   const [copied, setCopied] = useState(false);
   const SeverityIcon = SEVERITY_ICONS[finding.severity] || HelpCircle;
-  const severityColor = SEVERITY_COLORS[finding.severity] || SEVERITY_COLORS.medium;
+  const severityColor =
+    SEVERITY_COLORS[finding.severity] || SEVERITY_COLORS.medium;
 
   const handleFileClick = useCallback(() => {
     // Copy the file location to clipboard
@@ -230,75 +242,88 @@ function FindingCard({ finding, category }: FindingCardProps) {
     }
   }, [finding.file, finding.line]);
 
-  const handleCopyFinding = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const content = formatSingleFinding(finding);
+  const handleCopyFinding = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const content = formatSingleFinding(finding);
 
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      toast.success('Finding copied to clipboard');
+      try {
+        await navigator.clipboard.writeText(content);
+        setCopied(true);
+        toast.success('Finding copied to clipboard');
 
-      // Reset after 2 seconds
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy finding:', err);
-      toast.error('Failed to copy to clipboard');
-    }
-  }, [finding]);
-
-  const handleResearch = useCallback(async (
-    searchType: 'google' | 'stackoverflow' | 'github'
-  ) => {
-    // Build the finding data, only including optional fields if they have values
-    const findingData: {
-      title: string;
-      description: string;
-      severity: string;
-      category: 'security' | 'quality' | 'performance' | 'documentation' | 'research';
-      file?: string;
-      line?: number;
-    } = {
-      title: finding.title,
-      description: finding.description,
-      severity: finding.severity,
-      category: category as 'security' | 'quality' | 'performance' | 'documentation' | 'research',
-    };
-
-    // Only add file/line if they are defined
-    if (finding.file) {
-      findingData.file = finding.file;
-    }
-    if (finding.line !== undefined) {
-      findingData.line = finding.line;
-    }
-
-    try {
-      switch (searchType) {
-        case 'google':
-          await invoke('research:searchSolution', findingData);
-          break;
-        case 'stackoverflow':
-          await invoke('research:searchStackOverflow', findingData);
-          break;
-        case 'github':
-          await invoke('research:searchGitHub', findingData);
-          break;
+        // Reset after 2 seconds
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy finding:', err);
+        toast.error('Failed to copy to clipboard');
       }
-      toast.success('Opening search...');
-    } catch (err) {
-      console.error(`Failed to open ${searchType} search:`, err);
-      toast.error(`Failed to open search: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  }, [finding, category]);
+    },
+    [finding]
+  );
+
+  const handleResearch = useCallback(
+    async (searchType: 'google' | 'stackoverflow' | 'github') => {
+      // Build the finding data, only including optional fields if they have values
+      const findingData: {
+        title: string;
+        description: string;
+        severity: string;
+        category:
+          | 'security'
+          | 'quality'
+          | 'performance'
+          | 'documentation'
+          | 'research';
+        file?: string;
+        line?: number;
+      } = {
+        title: finding.title,
+        description: finding.description,
+        severity: finding.severity,
+        category: category as
+          | 'security'
+          | 'quality'
+          | 'performance'
+          | 'documentation'
+          | 'research',
+      };
+
+      // Only add file/line if they are defined
+      if (finding.file) {
+        findingData.file = finding.file;
+      }
+      if (finding.line !== undefined) {
+        findingData.line = finding.line;
+      }
+
+      try {
+        switch (searchType) {
+          case 'google':
+            await invoke('research:searchSolution', findingData);
+            break;
+          case 'stackoverflow':
+            await invoke('research:searchStackOverflow', findingData);
+            break;
+          case 'github':
+            await invoke('research:searchGitHub', findingData);
+            break;
+        }
+        toast.success('Opening search...');
+      } catch (err) {
+        console.error(`Failed to open ${searchType} search:`, err);
+        toast.error(
+          `Failed to open search: ${err instanceof Error ? err.message : 'Unknown error'}`
+        );
+      }
+    },
+    [finding, category]
+  );
 
   return (
-    <div className={cn(
-      'p-4 rounded-lg border w-full',
-      severityColor
-    )}>
+    <div className={cn('p-4 rounded-lg border w-full', severityColor)}>
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -333,12 +358,17 @@ function FindingCard({ finding, category }: FindingCardProps) {
                   <ChevronDown className="h-3 w-3 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuContent
+                align="end"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <DropdownMenuItem onClick={() => handleResearch('google')}>
                   <Globe className="h-4 w-4 mr-2" />
                   Search Google
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleResearch('stackoverflow')}>
+                <DropdownMenuItem
+                  onClick={() => handleResearch('stackoverflow')}
+                >
                   <Code2 className="h-4 w-4 mr-2" />
                   Search Stack Overflow
                 </DropdownMenuItem>
@@ -374,9 +404,7 @@ function FindingCard({ finding, category }: FindingCardProps) {
       )}
 
       {/* Description */}
-      <p className="text-sm leading-relaxed">
-        {finding.description}
-      </p>
+      <p className="text-sm leading-relaxed">{finding.description}</p>
     </div>
   );
 }
@@ -429,7 +457,10 @@ export function HumanReviewDetails({
                 });
                 findings = fetchedFindings || [];
               } catch (err) {
-                console.error(`Failed to fetch findings for ${review.reviewType}:`, err);
+                console.error(
+                  `Failed to fetch findings for ${review.reviewType}:`,
+                  err
+                );
               }
             }
 
@@ -456,7 +487,9 @@ export function HumanReviewDetails({
         }
       } catch (err) {
         console.error('Failed to fetch review data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load review data');
+        setError(
+          err instanceof Error ? err.message : 'Failed to load review data'
+        );
       } finally {
         setIsLoading(false);
       }
@@ -467,7 +500,10 @@ export function HumanReviewDetails({
 
   // Group all findings by severity
   const findingsBySeverity = useMemo(() => {
-    const grouped = new Map<FindingSeverity, Array<{ finding: ReviewFinding; category: ReviewType }>>();
+    const grouped = new Map<
+      FindingSeverity,
+      Array<{ finding: ReviewFinding; category: ReviewType }>
+    >();
 
     for (const severity of SEVERITY_ORDER) {
       grouped.set(severity, []);
@@ -501,7 +537,10 @@ export function HumanReviewDetails({
     return counts;
   }, [findingsBySeverity]);
 
-  const totalFindings = Object.values(findingsCounts).reduce((a, b) => a + b, 0);
+  const totalFindings = Object.values(findingsCounts).reduce(
+    (a, b) => a + b,
+    0
+  );
 
   // Prepare data for copy button
   const copyData = useMemo(() => {
@@ -517,7 +556,7 @@ export function HumanReviewDetails({
       }>;
     } = {
       taskTitle: task?.title || '',
-      reviews: reviews.map(r => {
+      reviews: reviews.map((r) => {
         const reviewItem: {
           reviewType: ReviewType;
           score?: number;
@@ -584,10 +623,7 @@ export function HumanReviewDetails({
               </SheetDescription>
             </div>
             {!isLoading && reviews.length > 0 && (
-              <CopyReviewButton
-                reviewData={copyData}
-                className="shrink-0"
-              />
+              <CopyReviewButton reviewData={copyData} className="shrink-0" />
             )}
           </div>
 
@@ -602,9 +638,15 @@ export function HumanReviewDetails({
                   const count = findingsCounts[severity];
                   if (count === 0) return null;
 
-                  const severityColor = SEVERITY_COLORS[severity].split(' ').slice(0, 2).join(' ');
+                  const severityColor = SEVERITY_COLORS[severity]
+                    .split(' ')
+                    .slice(0, 2)
+                    .join(' ');
                   return (
-                    <Badge key={severity} className={cn('text-xs', severityColor)}>
+                    <Badge
+                      key={severity}
+                      className={cn('text-xs', severityColor)}
+                    >
                       {count} {SEVERITY_LABELS[severity]}
                     </Badge>
                   );
@@ -623,11 +665,18 @@ export function HumanReviewDetails({
             <div className="flex items-center gap-3 mt-4 pt-4 border-t">
               <Avatar className="h-8 w-8">
                 {humanReview.reviewer.avatar && (
-                  <AvatarImage src={humanReview.reviewer.avatar} alt={humanReview.reviewer.name || ''} />
+                  <AvatarImage
+                    src={humanReview.reviewer.avatar}
+                    alt={humanReview.reviewer.name || ''}
+                  />
                 )}
                 <AvatarFallback>
                   {humanReview.reviewer.name
-                    ? humanReview.reviewer.name.split(' ').map(n => n[0]).join('').toUpperCase()
+                    ? humanReview.reviewer.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
                     : (humanReview.reviewer.email[0] ?? '?').toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -635,7 +684,9 @@ export function HumanReviewDetails({
                 <p className="text-sm font-medium truncate">
                   {humanReview.reviewer.name || humanReview.reviewer.email}
                 </p>
-                <p className="text-xs text-muted-foreground">Assigned Reviewer</p>
+                <p className="text-xs text-muted-foreground">
+                  Assigned Reviewer
+                </p>
               </div>
               <ReviewStatusBadge status={humanReview.status} />
             </div>
@@ -678,7 +729,8 @@ export function HumanReviewDetails({
                   <h3 className="text-sm font-semibold">Review Scores</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {reviews.map((review) => {
-                      const Icon = REVIEW_ICONS[review.reviewType] || HelpCircle;
+                      const Icon =
+                        REVIEW_ICONS[review.reviewType] || HelpCircle;
                       return (
                         <div
                           key={review.reviewType}
@@ -694,7 +746,10 @@ export function HumanReviewDetails({
                             {review.score !== undefined && (
                               <ScoreBadge score={review.score} />
                             )}
-                            <Badge variant="outline" className="text-xs tabular-nums">
+                            <Badge
+                              variant="outline"
+                              className="text-xs tabular-nums"
+                            >
                               {review.findingsCount}
                             </Badge>
                           </div>
@@ -707,7 +762,11 @@ export function HumanReviewDetails({
                 <Separator />
 
                 {/* Findings Grouped by Severity */}
-                <Accordion type="single" collapsible className="space-y-2 w-full">
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="space-y-2 w-full"
+                >
                   {SEVERITY_ORDER.map((severity) => {
                     const items = findingsBySeverity.get(severity) || [];
                     if (items.length === 0) return null;
@@ -715,12 +774,22 @@ export function HumanReviewDetails({
                     const SeverityIcon = SEVERITY_ICONS[severity];
 
                     return (
-                      <AccordionItem key={severity} value={severity} className="border rounded-lg w-full overflow-hidden">
+                      <AccordionItem
+                        key={severity}
+                        value={severity}
+                        className="border rounded-lg w-full overflow-hidden"
+                      >
                         <AccordionTrigger className="px-4 hover:no-underline">
                           <div className="flex items-center gap-2">
-                            <SeverityIcon className={cn('h-4 w-4', SEVERITY_COLORS[severity].split(' ')[0])} />
+                            <SeverityIcon
+                              className={cn(
+                                'h-4 w-4',
+                                SEVERITY_COLORS[severity].split(' ')[0]
+                              )}
+                            />
                             <span className="text-sm font-semibold">
-                              {SEVERITY_LABELS[severity]} Issues ({items.length})
+                              {SEVERITY_LABELS[severity]} Issues ({items.length}
+                              )
                             </span>
                           </div>
                         </AccordionTrigger>
@@ -757,11 +826,7 @@ export function HumanReviewDetails({
 
         {/* Footer */}
         <SheetFooter className="px-6 py-4 border-t flex-shrink-0">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={onClose}
-          >
+          <Button variant="outline" className="w-full" onClick={onClose}>
             Close
           </Button>
         </SheetFooter>

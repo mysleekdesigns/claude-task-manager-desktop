@@ -4,6 +4,10 @@
  * Central route definitions for the application.
  * Public routes are accessible without authentication.
  * Protected routes require authentication via ProtectedRoute wrapper.
+ *
+ * NOTE: TerminalsPage is NOT in the route configuration because it is always
+ * rendered (and kept alive) in MainLayout to preserve xterm.js terminal state
+ * during navigation. See MainLayout.tsx for the implementation.
  */
 
 import { RouteObject } from 'react-router-dom';
@@ -16,8 +20,8 @@ import { RegisterPage } from './register';
 import { InviteAcceptPage } from './invite-accept';
 
 // Protected pages
+// Note: TerminalsPage is imported directly in MainLayout for keep-alive functionality
 import { KanbanPage } from './kanban';
-import { TerminalsPage } from './terminals';
 import { InsightsPage } from './insights';
 import { RoadmapPage } from './roadmap';
 import { IdeationPage } from './ideation';
@@ -68,8 +72,10 @@ export const routes: RouteObject[] = [
         element: <KanbanPage />,
       },
       {
+        // Terminals route - renders null because TerminalsPage is always
+        // mounted in MainLayout for keep-alive functionality (preserves xterm.js state)
         path: 'terminals',
-        element: <TerminalsPage />,
+        element: null,
       },
       {
         path: 'insights',

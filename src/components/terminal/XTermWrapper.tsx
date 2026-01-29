@@ -3,6 +3,11 @@
  *
  * React wrapper for xterm.js terminal emulator with node-pty integration.
  * Handles terminal lifecycle, IPC communication, and addon management.
+ *
+ * Features:
+ * - Restores terminal content from backend buffer on remount (navigation resilience)
+ * - Supports output streaming via IPC
+ * - Handles resize and fit to container
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -10,6 +15,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
+import { SerializeAddon } from '@xterm/addon-serialize';
+import { invoke } from '@/lib/ipc';
 import type { AllEventChannels } from '@/types/ipc';
 import '@xterm/xterm/css/xterm.css';
 
@@ -82,6 +89,7 @@ export function XTermWrapper({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const serializeAddonRef = useRef<SerializeAddon | null>(null);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // ============================================================================
@@ -147,6 +155,9 @@ export function XTermWrapper({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Track cleanup state to prevent operations after unmount
+    let isCleanedUp = false;
+
     // Create terminal instance
     const terminal = new Terminal(TERMINAL_OPTIONS);
 
@@ -154,10 +165,12 @@ export function XTermWrapper({
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
     const unicode11Addon = new Unicode11Addon();
+    const serializeAddon = new SerializeAddon();
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(unicode11Addon);
+    terminal.loadAddon(serializeAddon);
 
     // Activate Unicode 11 support
     terminal.unicode.activeVersion = '11';
@@ -171,22 +184,25 @@ export function XTermWrapper({
     // Store refs
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    serializeAddonRef.current = serializeAddon;
 
-    // Subscribe to terminal input
+    // ============================================================================
+    // Register ALL event handlers BEFORE any async operations
+    // ============================================================================
+
+    // Subscribe to terminal input (user typing)
     const inputDisposable = terminal.onData(handleInput);
-
-    // ============================================================================
-    // IPC Event Handlers
-    // ============================================================================
 
     // Handle output from main process
     const handleOutput = (...args: unknown[]) => {
+      if (isCleanedUp) return;
       const data = args[0] as string;
       terminal.write(data);
     };
 
     // Handle terminal exit
     const handleTerminalExit = (...args: unknown[]) => {
+      if (isCleanedUp) return;
       const exitCode = args[0] as number;
       const color = exitCode === 0 ? '\x1b[32m' : '\x1b[31m'; // Green or red
       terminal.writeln(
@@ -210,14 +226,56 @@ export function XTermWrapper({
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(containerRef.current);
 
-    // Focus terminal on mount
-    terminal.focus();
+    // ============================================================================
+    // Async Initialization: Restore Buffer then Focus
+    // ============================================================================
+    // When the component remounts (e.g., after navigation), restore any buffered
+    // output from the backend. This prevents content loss when navigating away
+    // and back to the terminal view.
+    //
+    // CRITICAL: Focus must be called AFTER buffer restoration completes,
+    // otherwise the terminal will not respond to input after navigation.
+    (async () => {
+      try {
+        const buffer = await invoke('terminal:getBuffer', terminalId);
+        if (isCleanedUp) return;
+
+        if (buffer && buffer.length > 0) {
+          // Write each buffered line to restore previous output
+          for (const line of buffer) {
+            terminal.write(line);
+          }
+          // Clear the backend buffer after restoring to prevent duplicates
+          await invoke('terminal:clearOutputBuffer', terminalId);
+        }
+      } catch (error) {
+        console.error('Failed to restore terminal buffer:', error);
+      }
+
+      // Don't proceed if component was unmounted during async operation
+      if (isCleanedUp) return;
+
+      // Focus terminal AFTER buffer restoration is complete
+      // This ensures the terminal is ready to receive input
+      terminal.focus();
+
+      // Small delay to ensure DOM is fully ready, then re-focus
+      // This handles edge cases where React state updates interfere with focus
+      setTimeout(() => {
+        if (!isCleanedUp && terminalRef.current) {
+          terminalRef.current.focus();
+        }
+      }, 50);
+    })();
 
     // ============================================================================
     // Cleanup
     // ============================================================================
 
     return () => {
+      // Mark as cleaned up to prevent operations after unmount
+      isCleanedUp = true;
+
       // Clear resize timeout
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
@@ -239,6 +297,7 @@ export function XTermWrapper({
       // Clear refs
       terminalRef.current = null;
       fitAddonRef.current = null;
+      serializeAddonRef.current = null;
     };
   }, [terminalId, handleInput, handleResize, onExit]);
 
