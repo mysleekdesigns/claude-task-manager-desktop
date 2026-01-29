@@ -72,6 +72,11 @@ async function handleCreateTerminal(
     throw new Error('Project not found');
   }
 
+  // Check terminal limit before creating
+  if (terminalManager.getActiveCount() >= 4) {
+    throw new Error('Maximum terminal limit (4) reached');
+  }
+
   // Generate terminal name if not provided
   const terminalName = data.name ?? `Terminal ${String(Date.now())}`;
 

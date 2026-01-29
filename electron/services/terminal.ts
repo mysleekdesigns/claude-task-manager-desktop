@@ -9,6 +9,9 @@ import * as pty from 'node-pty';
 import { platform } from 'os';
 import { execSync } from 'child_process';
 
+/** Maximum number of terminals allowed */
+const MAX_TERMINALS = 4;
+
 /**
  * Options for spawning a new terminal
  */
@@ -117,6 +120,11 @@ class TerminalManager {
       // Check if terminal with this ID already exists
       if (this.terminals.has(id)) {
         throw new Error(`Terminal with ID ${id} already exists`);
+      }
+
+      // Check if we've reached the maximum number of terminals
+      if (this.terminals.size >= MAX_TERMINALS) {
+        throw new Error(`Maximum terminal limit (${MAX_TERMINALS}) reached`);
       }
 
       // Get the default shell

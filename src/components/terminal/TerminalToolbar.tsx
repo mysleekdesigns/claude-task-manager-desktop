@@ -33,7 +33,7 @@ export interface TerminalToolbarProps {
 
 export function TerminalToolbar({
   terminalCount,
-  maxTerminals = 12,
+  maxTerminals = 4,
   onNewTerminal,
   onInvokeClaudeAll,
 }: TerminalToolbarProps) {

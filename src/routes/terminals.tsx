@@ -20,7 +20,7 @@ import type { TerminalStatus } from '@/types/ipc';
 // Constants
 // ============================================================================
 
-const MAX_TERMINALS = 12;
+const MAX_TERMINALS = 4;
 
 // ============================================================================
 // Helper Functions
@@ -53,11 +53,12 @@ function getGridRowCount(count: number): number {
 }
 
 /**
- * Minimum terminal dimensions to maintain usability
- * These values ensure terminals don't shrink below readable/interactive sizes
+ * Minimum terminal dimensions to support Claude Code's minimum 80x24 requirement
+ * - Width: 480px ensures ~80 columns at 14px monospace font (each char ~6px wide)
+ * - Height: 350px ensures ~20+ rows at 14px font with 1.2 line height (~17px per row)
  */
-const MIN_TERMINAL_WIDTH = 300; // px - ensures ~40 columns visible
-const MIN_TERMINAL_HEIGHT = 200; // px - ensures ~10 rows visible
+const MIN_TERMINAL_WIDTH = 480; // px - ensures ~80 columns for Claude Code
+const MIN_TERMINAL_HEIGHT = 350; // px - ensures ~20+ rows for Claude Code
 
 /**
  * CSS transition duration for grid layout changes (ms)
