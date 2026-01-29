@@ -155,10 +155,10 @@ export function TerminalPane({
         min-w-0 and min-h-0 are critical for flex/grid children to allow shrinking below content size.
         Without these, the Card may overflow its grid cell when content (especially xterm) has intrinsic sizing.
       */}
-      <Card className={`flex flex-col h-full min-w-0 min-h-0 ${isExpanded ? 'shadow-lg' : ''}`}>
-        {/* Header */}
-        <CardHeader className="px-2 py-1 border-b flex-shrink-0">
-          <div className="flex items-center justify-between gap-1.5">
+      <Card className={`flex flex-col h-full min-w-0 min-h-0 py-0 gap-0 ${isExpanded ? 'shadow-lg' : ''}`}>
+        {/* Header - using flex instead of grid for compact layout */}
+        <CardHeader className="!flex !flex-row items-center px-2 !py-1 border-b flex-shrink-0">
+          <div className="flex items-center justify-between gap-1.5 w-full">
             {/* Left side: Status and Name */}
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               {/* Status indicator dot */}
