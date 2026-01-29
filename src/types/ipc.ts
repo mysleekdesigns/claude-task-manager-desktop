@@ -627,6 +627,10 @@ export interface CreateTerminalInput {
   projectId: string;
   name?: string;
   cwd?: string;
+  /** Initial number of columns for terminal dimensions (defaults to 80) */
+  cols?: number;
+  /** Initial number of rows for terminal dimensions (defaults to 24) */
+  rows?: number;
 }
 
 /**

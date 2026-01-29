@@ -17,6 +17,10 @@ export interface TerminalOptions {
   cwd?: string;
   /** Environment variables for the terminal process */
   env?: Record<string, string>;
+  /** Initial number of columns (defaults to 80) */
+  cols?: number;
+  /** Initial number of rows (defaults to 24) */
+  rows?: number;
   /** Callback for terminal output data */
   onData: (data: string) => void;
   /** Callback for terminal exit */
@@ -37,6 +41,10 @@ interface ManagedTerminal {
   pid: number;
   /** Output buffer for session capture */
   outputBuffer: string;
+  /** Current terminal columns */
+  cols: number;
+  /** Current terminal rows */
+  rows: number;
 }
 
 /**
@@ -67,6 +75,12 @@ class TerminalManager {
 
   /** Maximum number of lines to buffer per terminal */
   private readonly MAX_BUFFER_LINES = 100;
+
+  /** Pending resize timers for debouncing (per terminal) */
+  private resizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** Debounce delay for resize operations in milliseconds */
+  private readonly RESIZE_DEBOUNCE_MS = 100;
 
   /**
    * Get the default shell based on the current platform.
@@ -125,11 +139,22 @@ class TerminalManager {
       // Default to current working directory if not specified
       const cwd = options.cwd || process.cwd();
 
+      // Use provided dimensions or defaults
+      const cols = options.cols || 80;
+      const rows = options.rows || 24;
+
+      // Add terminal dimension environment variables for Claude Code / Ink detection.
+      // These help CLI applications detect terminal width when process.stdout.columns
+      // returns undefined in embedded PTY environments.
+      env['COLUMNS'] = String(cols);
+      env['LINES'] = String(rows);
+      env['CLI_WIDTH'] = String(cols);  // For cli-width package used by Ink
+
       // Spawn the terminal process
       const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
-        cols: 80,
-        rows: 24,
+        cols,
+        rows,
         cwd,
         env,
       });
@@ -178,13 +203,15 @@ class TerminalManager {
         }
       });
 
-      // Store the managed terminal
+      // Store the managed terminal with initial dimensions
       const managedTerminal: ManagedTerminal = {
         id,
         pty: ptyProcess,
         name,
         pid: ptyProcess.pid,
         outputBuffer: '',
+        cols,
+        rows,
       };
 
       this.terminals.set(id, managedTerminal);
@@ -234,13 +261,20 @@ class TerminalManager {
     }
   }
 
+  /** Minimum number of columns for terminal resize */
+  private readonly MIN_COLS = 10;
+
+  /** Minimum number of rows for terminal resize */
+  private readonly MIN_ROWS = 5;
+
   /**
-   * Resize a terminal.
+   * Resize a terminal with debouncing to prevent SIGWINCH flooding.
    *
    * @param id - Terminal ID
-   * @param cols - Number of columns
-   * @param rows - Number of rows
-   * @returns True if resize was successful, false if terminal not found
+   * @param cols - Number of columns (minimum: 10)
+   * @param rows - Number of rows (minimum: 5)
+   * @returns True if resize was scheduled/executed, false if terminal not found
+   * @throws Error if dimensions are below minimums
    */
   resize(id: string, cols: number, rows: number): boolean {
     const terminal = this.terminals.get(id);
@@ -251,17 +285,74 @@ class TerminalManager {
       return false;
     }
 
+    // Validate minimum dimensions to prevent unusable terminal sizes
+    if (cols < this.MIN_COLS || rows < this.MIN_ROWS) {
+      throw new Error(
+        `Invalid terminal dimensions: ${cols}x${rows}. Minimum is ${this.MIN_COLS}x${this.MIN_ROWS}.`
+      );
+    }
+
+    // Check if dimensions actually changed
+    if (terminal.cols === cols && terminal.rows === rows) {
+      console.debug(
+        `[TerminalManager] Skipping resize for terminal ${id} - dimensions unchanged (${String(cols)}x${String(rows)})`
+      );
+      return true;
+    }
+
+    // Clear any pending resize timer for this terminal
+    const existingTimer = this.resizeTimers.get(id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Schedule the resize with debouncing
+    const timer = setTimeout(() => {
+      this.resizeTimers.delete(id);
+      this.executeResize(id, cols, rows);
+    }, this.RESIZE_DEBOUNCE_MS);
+
+    this.resizeTimers.set(id, timer);
+    return true;
+  }
+
+  /**
+   * Execute the actual PTY resize operation.
+   * This is called after debouncing and performs the low-level resize.
+   *
+   * @param id - Terminal ID
+   * @param cols - Number of columns
+   * @param rows - Number of rows
+   */
+  private executeResize(id: string, cols: number, rows: number): void {
+    const terminal = this.terminals.get(id);
+
+    if (!terminal) {
+      // Terminal may have been closed during debounce delay
+      console.debug(`[TerminalManager] Terminal ${id} no longer exists for deferred resize`);
+      return;
+    }
+
+    // Double-check dimensions haven't changed to match current state
+    // (another resize may have come in with different dimensions)
+    if (terminal.cols === cols && terminal.rows === rows) {
+      console.debug(
+        `[TerminalManager] Skipping deferred resize for terminal ${id} - dimensions already match (${String(cols)}x${String(rows)})`
+      );
+      return;
+    }
+
     try {
       terminal.pty.resize(cols, rows);
+      // Update tracked dimensions after successful resize
+      terminal.cols = cols;
+      terminal.rows = rows;
       console.log(
         `[TerminalManager] Resized terminal ${id} to ${String(cols)}x${String(rows)}`
       );
-      return true;
     } catch (error) {
       console.error(`[TerminalManager] Failed to resize terminal ${id}:`, error);
-      throw new Error(
-        `Failed to resize terminal: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      // Don't throw - this is called from a timer callback
     }
   }
 
@@ -278,6 +369,13 @@ class TerminalManager {
     if (!terminal) {
       console.debug(`[TerminalManager] Terminal ${id} not found - already cleaned up`);
       return false;
+    }
+
+    // Clear any pending resize timer
+    const resizeTimer = this.resizeTimers.get(id);
+    if (resizeTimer) {
+      clearTimeout(resizeTimer);
+      this.resizeTimers.delete(id);
     }
 
     try {
@@ -327,6 +425,12 @@ class TerminalManager {
     console.log(
       `[TerminalManager] Killing all terminals (${String(this.terminals.size)} active)`
     );
+
+    // Clear all pending resize timers
+    for (const timer of this.resizeTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.resizeTimers.clear();
 
     for (const [id, terminal] of this.terminals.entries()) {
       try {

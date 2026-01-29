@@ -8,6 +8,22 @@
  * - Restores terminal content from backend buffer on remount (navigation resilience)
  * - Supports output streaming via IPC
  * - Handles resize and fit to container
+ * - DEC Mode 2026 (Synchronized Output) support for flicker-free rendering
+ *
+ * DEC Mode 2026 (Synchronized Output):
+ * ------------------------------------
+ * This mode prevents screen tearing/flickering when TUI applications (like Claude Code
+ * which uses Ink/React for CLI) re-render their entire screen buffer on every streaming
+ * chunk. When an application sends:
+ *   - CSI ?2026h (Begin Synchronized Update) - xterm.js buffers all screen updates
+ *   - CSI ?2026l (End Synchronized Update) - xterm.js flushes and renders atomically
+ *
+ * xterm.js 6.0.0+ has native support for this mode. The feature is enabled automatically
+ * and requires no configuration. The terminal.modes.synchronizedOutputMode property
+ * reflects the current state.
+ *
+ * If flickering persists, enable DEBUG_SYNC_MODE below to diagnose whether the
+ * application is sending the sync sequences correctly.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -18,7 +34,25 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { invoke } from '@/lib/ipc';
 import type { AllEventChannels } from '@/types/ipc';
+import { GRID_TRANSITION_DURATION_MS } from '@/routes/terminals';
 import '@xterm/xterm/css/xterm.css';
+
+// ============================================================================
+// DEC Mode 2026 Debug Configuration
+// ============================================================================
+
+/**
+ * Enable debug logging for DEC Mode 2026 (Synchronized Output).
+ *
+ * When enabled, logs messages when:
+ * - Synchronized output mode is activated (CSI ?2026h received)
+ * - Synchronized output mode is deactivated (CSI ?2026l received)
+ * - The automatic 1-second safety timeout triggers
+ *
+ * Use this to diagnose flickering issues with Claude Code or other TUI applications.
+ * Set to true if terminal flickering persists despite xterm.js 6.0.0+ support.
+ */
+const DEBUG_SYNC_MODE = false;
 
 // ============================================================================
 // Types
@@ -94,6 +128,7 @@ export function XTermWrapper({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const serializeAddonRef = useRef<SerializeAddon | null>(null);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const resizeRAFRef = useRef<number | null>(null);
   const prevIsVisibleRef = useRef<boolean>(isVisible);
   const prevVisibleForSaveRef = useRef<boolean>(true);
   const isRestoringRef = useRef<boolean>(false);
@@ -118,63 +153,95 @@ export function XTermWrapper({
   // Terminal Resize Handler
   // ============================================================================
 
+  /**
+   * Handle terminal resize with CSS transition awareness and RAF-based execution.
+   *
+   * The terminal grid uses CSS transitions (duration: GRID_TRANSITION_DURATION_MS)
+   * for smooth layout changes. If we call fitAddon.fit() during a transition,
+   * ResizeObserver fires at intermediate states causing incorrect dimensions.
+   *
+   * Resize Pattern (debounce + requestAnimationFrame):
+   * -------------------------------------------------
+   * We use a two-stage approach recommended by xterm.js documentation:
+   * 1. setTimeout debounce: Waits for resize events to settle (CSS transitions complete)
+   * 2. requestAnimationFrame: Syncs the actual fit() call with browser's render cycle
+   *
+   * This pattern prevents SIGWINCH flooding to TUI applications (like Claude Code)
+   * which can cause rendering issues if resize signals arrive too rapidly. The RAF
+   * ensures smooth visual updates by aligning terminal rendering with display refresh.
+   *
+   * The debounce delay is set to GRID_TRANSITION_DURATION_MS + 50ms buffer.
+   */
   const handleResize = useCallback(() => {
     if (!fitAddonRef.current || !terminalRef.current) return;
 
-    // Debounce resize to avoid excessive IPC calls
+    // Clear any pending debounce timeout
     if (resizeTimeoutRef.current) {
       clearTimeout(resizeTimeoutRef.current);
+      resizeTimeoutRef.current = null;
     }
 
+    // Clear any pending animation frame
+    if (resizeRAFRef.current) {
+      cancelAnimationFrame(resizeRAFRef.current);
+      resizeRAFRef.current = null;
+    }
+
+    // Wait for CSS transition to complete before fitting
+    const resizeDelay = GRID_TRANSITION_DURATION_MS + 50; // Add 50ms buffer
+
+    // Stage 1: Debounce - wait for resize events to settle
     resizeTimeoutRef.current = setTimeout(() => {
-      if (!fitAddonRef.current || !terminalRef.current) return;
+      // Stage 2: RAF - sync fit operation with browser's render cycle
+      resizeRAFRef.current = requestAnimationFrame(() => {
+        if (!fitAddonRef.current || !terminalRef.current) return;
 
-      try {
-        // Validate dimensions BEFORE fitting to prevent corrupt 10x5 resize
-        const dims = fitAddonRef.current.proposeDimensions();
-        if (!dims || dims.cols < 20 || dims.rows < 10) {
-          console.log('[XTermWrapper] handleResize: Skipping fit - invalid dimensions:', dims);
-          return;
+        try {
+          // Validate dimensions BEFORE fitting to prevent corrupt 10x5 resize
+          const dims = fitAddonRef.current.proposeDimensions();
+          if (!dims || dims.cols < 20 || dims.rows < 10) {
+            console.log('[XTermWrapper] handleResize: Skipping fit - invalid dimensions:', dims);
+            return;
+          }
+
+          // Get current dimensions before fit to check if they actually changed
+          const prevCols = terminalRef.current.cols;
+          const prevRows = terminalRef.current.rows;
+
+          // Fit terminal to container
+          fitAddonRef.current.fit();
+
+          const { cols, rows } = terminalRef.current;
+
+          // Double-check dimensions after fit (belt and suspenders)
+          if (cols < 20 || rows < 10) {
+            console.log('[XTermWrapper] handleResize: Skipping resize IPC - invalid post-fit dimensions:', { cols, rows });
+            return;
+          }
+
+          // Skip IPC if dimensions haven't actually changed
+          if (cols === prevCols && rows === prevRows) {
+            return;
+          }
+
+          // Notify main process of new dimensions
+          window.electron
+            .invoke('terminal:resize', {
+              id: terminalId,
+              cols,
+              rows,
+            })
+            .catch((error) => {
+              console.error('Failed to resize terminal:', error);
+            });
+
+          // Call optional resize callback
+          onResize?.(cols, rows);
+        } catch (error) {
+          console.error('Error during terminal resize:', error);
         }
-
-        // Get current dimensions before fit to check if they actually changed
-        const prevCols = terminalRef.current.cols;
-        const prevRows = terminalRef.current.rows;
-
-        // Fit terminal to container
-        fitAddonRef.current.fit();
-
-        const { cols, rows } = terminalRef.current;
-
-        // Double-check dimensions after fit (belt and suspenders)
-        if (cols < 20 || rows < 10) {
-          console.log('[XTermWrapper] handleResize: Skipping resize IPC - invalid post-fit dimensions:', { cols, rows });
-          return;
-        }
-
-        // Skip IPC if dimensions haven't actually changed
-        if (cols === prevCols && rows === prevRows) {
-          console.log('[XTermWrapper] handleResize: Skipping resize IPC - dimensions unchanged:', { cols, rows });
-          return;
-        }
-
-        // Notify main process of new dimensions
-        window.electron
-          .invoke('terminal:resize', {
-            id: terminalId,
-            cols,
-            rows,
-          })
-          .catch((error) => {
-            console.error('Failed to resize terminal:', error);
-          });
-
-        // Call optional resize callback
-        onResize?.(cols, rows);
-      } catch (error) {
-        console.error('Error during terminal resize:', error);
-      }
-    }, 100); // 100ms debounce
+      });
+    }, resizeDelay);
   }, [terminalId, onResize]);
 
   // ============================================================================
@@ -207,10 +274,78 @@ export function XTermWrapper({
     // Open terminal in container
     terminal.open(containerRef.current);
 
+    // ============================================================================
+    // DEC Mode 2026 (Synchronized Output) Monitoring
+    // ============================================================================
+    // xterm.js 6.0.0+ natively supports DEC Mode 2026 for flicker-free rendering.
+    // When applications send CSI ?2026h, rendering is buffered until CSI ?2026l.
+    // This prevents screen tearing when Claude Code (using Ink) re-renders on each chunk.
+    //
+    // The mode state is available via terminal.modes.synchronizedOutputMode
+    // A 1-second safety timeout automatically flushes if ESU isn't received.
+    let syncModeDebugInterval: NodeJS.Timeout | null = null;
+    let lastSyncModeState = false;
+
+    if (DEBUG_SYNC_MODE) {
+      // Poll the sync mode state periodically for debug logging
+      // Note: xterm.js doesn't expose a mode change event, so we poll
+      syncModeDebugInterval = setInterval(() => {
+        if (isCleanedUp || !terminal) return;
+
+        const currentSyncMode = terminal.modes.synchronizedOutputMode;
+        if (currentSyncMode !== lastSyncModeState) {
+          if (currentSyncMode) {
+            console.log(`[XTermWrapper:${terminalId}] DEC Mode 2026: Synchronized output ACTIVATED - buffering updates`);
+          } else {
+            console.log(`[XTermWrapper:${terminalId}] DEC Mode 2026: Synchronized output DEACTIVATED - rendering flushed`);
+          }
+          lastSyncModeState = currentSyncMode;
+        }
+      }, 50); // Poll every 50ms when debugging
+    }
+
+    // Track whether initial resize was sent to avoid duplicate resize from ResizeObserver
+    // Use an object so we can update the property asynchronously
+    const initialResizeRef = { sent: false };
+
     // Initial fit with dimension validation to prevent corrupt 10x5 resize
+    // IMPORTANT: We need to send the correct dimensions to the PTY immediately after
+    // the terminal opens. The PTY spawns with default 80x24, and if we don't send
+    // an immediate resize, CLI applications may render incorrectly.
     const initialDims = fitAddon.proposeDimensions();
+
     if (initialDims && initialDims.cols >= 20 && initialDims.rows >= 10) {
       fitAddon.fit();
+
+      // Send immediate resize to PTY with the correct dimensions
+      // This is critical to ensure the PTY has correct dimensions from the start,
+      // rather than waiting for the debounced ResizeObserver callback.
+      const cols = terminal.cols;
+      const rows = terminal.rows;
+
+      if (cols >= 20 && rows >= 10) {
+        console.log(`[XTermWrapper] Sending immediate initial resize: ${cols}x${rows}`);
+        // Mark as sent immediately (optimistically) to prevent race with async IIFE
+        initialResizeRef.sent = true;
+
+        window.electron
+          .invoke('terminal:resize', {
+            id: terminalId,
+            cols,
+            rows,
+          })
+          .then(() => {
+            console.log(`[XTermWrapper] Initial resize sent successfully: ${cols}x${rows}`);
+          })
+          .catch((error) => {
+            console.error('[XTermWrapper] Failed to send initial resize:', error);
+            // On error, allow deferred resize to try again
+            initialResizeRef.sent = false;
+          });
+
+        // Call optional resize callback
+        onResize?.(cols, rows);
+      }
     } else {
       console.log('[XTermWrapper] Initial fit: Skipping - invalid dimensions:', initialDims);
       // ResizeObserver will handle fit once container has proper dimensions
@@ -317,6 +452,45 @@ export function XTermWrapper({
 
       if (isCleanedUp) return;
 
+      // ============================================================================
+      // Ensure PTY has correct dimensions after restoration
+      // ============================================================================
+      // If the initial fit didn't happen (container had invalid dimensions),
+      // we need to retry now that the DOM is fully ready. This ensures the PTY
+      // gets correct dimensions even if the container wasn't ready at mount time.
+      if (!initialResizeRef.sent) {
+        // Wait a frame for layout to settle
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        if (isCleanedUp) return;
+
+        const dims = fitAddon.proposeDimensions();
+        if (dims && dims.cols >= 20 && dims.rows >= 10) {
+          fitAddon.fit();
+          const cols = terminal.cols;
+          const rows = terminal.rows;
+
+          if (cols >= 20 && rows >= 10) {
+            console.log(`[XTermWrapper] Sending deferred initial resize: ${cols}x${rows}`);
+            window.electron
+              .invoke('terminal:resize', {
+                id: terminalId,
+                cols,
+                rows,
+              })
+              .then(() => {
+                console.log(`[XTermWrapper] Deferred resize sent successfully: ${cols}x${rows}`);
+              })
+              .catch((error) => {
+                console.error('[XTermWrapper] Failed to send deferred resize:', error);
+              });
+
+            // Call optional resize callback
+            onResize?.(cols, rows);
+          }
+        }
+      }
+
       // Focus terminal AFTER buffer restoration is complete
       terminal.focus();
 
@@ -336,9 +510,19 @@ export function XTermWrapper({
       // Mark as cleaned up to prevent operations after unmount
       isCleanedUp = true;
 
-      // Clear resize timeout
+      // Clear resize timeout and animation frame
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
+        resizeTimeoutRef.current = null;
+      }
+      if (resizeRAFRef.current) {
+        cancelAnimationFrame(resizeRAFRef.current);
+        resizeRAFRef.current = null;
+      }
+
+      // Clear sync mode debug interval
+      if (syncModeDebugInterval) {
+        clearInterval(syncModeDebugInterval);
       }
 
       // Unsubscribe from IPC events (using disposer pattern)
@@ -481,6 +665,22 @@ export function XTermWrapper({
   // Render
   // ============================================================================
 
+  /**
+   * Padding Chain Documentation:
+   * ----------------------------
+   * The terminal content area has multiple padding layers:
+   *
+   * 1. TerminalsPage grid:      padding: 1rem (16px)  - outer container
+   * 2. Grid gap:                gap: 1rem (16px)      - between grid cells
+   * 3. TerminalPane CardContent: p-0                  - no padding
+   * 4. XTermWrapper:            padding: 8px          - inner terminal padding
+   *
+   * Total padding from grid edge to terminal content:
+   *   16px (grid padding) + 8px (xterm padding) = 24px per side
+   *
+   * When calculating available terminal space, these values must be considered.
+   * The minmax() constraints on the grid account for the outer padding.
+   */
   return (
     <div
       ref={containerRef}
@@ -488,6 +688,11 @@ export function XTermWrapper({
       style={{
         padding: '8px',
         backgroundColor: TERMINAL_THEME.background,
+        // Critical for flex/grid children: allow shrinking below content size
+        minWidth: 0,
+        minHeight: 0,
+        // Ensure xterm canvas fills available space
+        overflow: 'hidden',
       }}
     />
   );

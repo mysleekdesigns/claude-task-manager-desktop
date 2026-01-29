@@ -26,6 +26,10 @@ export interface CreateTerminalInput {
   projectId: string;
   name?: string;
   cwd?: string;
+  /** Initial number of columns for terminal dimensions */
+  cols?: number;
+  /** Initial number of rows for terminal dimensions */
+  rows?: number;
 }
 
 export interface WriteTerminalInput {
@@ -84,9 +88,11 @@ async function handleCreateTerminal(
     // Determine working directory
     const cwd = data.cwd || project.targetPath;
 
-    // Spawn the terminal process
+    // Spawn the terminal process with initial dimensions if provided
     const { id, pid } = terminalManager.spawn(terminal.id, terminalName, {
       ...(cwd && { cwd }),
+      ...(data.cols && { cols: data.cols }),
+      ...(data.rows && { rows: data.rows }),
       onData: (outputData: string) => {
         // Stream output to renderer process (check window exists during shutdown)
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -181,32 +187,27 @@ async function handleWriteTerminal(
 
 /**
  * Resize a terminal
+ *
+ * Note: Database lookup is intentionally skipped for performance.
+ * Resize events fire frequently during window resizing, and the
+ * TerminalManager already handles missing terminals gracefully.
  */
 async function handleResizeTerminal(
   _event: IpcMainInvokeEvent,
   data: ResizeTerminalInput
 ): Promise<void> {
-  if (!data.id || !data.cols || !data.rows) {
-    throw IPCErrors.invalidArguments('Terminal ID, cols, and rows are required');
+  // Use proper numeric validation - falsy check fails for 0 which is a valid (but rejected) dimension
+  if (!data.id || !Number.isFinite(data.cols) || data.cols <= 0 || !Number.isFinite(data.rows) || data.rows <= 0) {
+    throw IPCErrors.invalidArguments('Terminal ID and positive cols/rows are required');
   }
 
-  const prisma = databaseService.getClient();
-
-  // Verify terminal exists in database
-  const terminal = await prisma.terminal.findUnique({
-    where: { id: data.id },
-  });
-
-  if (!terminal) {
-    // Gracefully handle the case where terminal was already deleted
-    // This can happen during component unmount when resize events fire
-    // after the terminal has been closed
-    console.debug(`[Terminal IPC] Resize event for non-existent terminal ${data.id} - ignoring`);
-    return;
+  // Resize the terminal process directly - TerminalManager handles missing terminals gracefully
+  // by returning false (no database lookup needed for this high-frequency operation)
+  const success = terminalManager.resize(data.id, data.cols, data.rows);
+  if (!success) {
+    // Terminal not found in manager - it may have been closed or never existed
+    console.debug(`[Terminal IPC] Terminal ${data.id} not found in manager for resize - ignoring`);
   }
-
-  // Resize the terminal process
-  terminalManager.resize(data.id, data.cols, data.rows);
 }
 
 /**

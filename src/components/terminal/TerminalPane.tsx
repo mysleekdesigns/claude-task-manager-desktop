@@ -151,7 +151,11 @@ export function TerminalPane({
 
   return (
     <>
-      <Card className={`flex flex-col h-full ${isExpanded ? 'shadow-lg' : ''}`}>
+      {/*
+        min-w-0 and min-h-0 are critical for flex/grid children to allow shrinking below content size.
+        Without these, the Card may overflow its grid cell when content (especially xterm) has intrinsic sizing.
+      */}
+      <Card className={`flex flex-col h-full min-w-0 min-h-0 ${isExpanded ? 'shadow-lg' : ''}`}>
         {/* Header */}
         <CardHeader className="p-3 pb-2 border-b flex-shrink-0">
           <div className="flex items-center justify-between gap-2">
@@ -314,7 +318,8 @@ export function TerminalPane({
         </CardHeader>
 
         {/* Content - XTermWrapper will be rendered here */}
-        <CardContent className="p-0 flex-1 overflow-hidden bg-black">
+        {/* min-w-0 and min-h-0 allow proper shrinking in flex container */}
+        <CardContent className="p-0 flex-1 overflow-hidden bg-black min-w-0 min-h-0">
           {children || (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Terminal content will appear here

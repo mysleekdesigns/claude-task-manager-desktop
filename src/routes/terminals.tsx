@@ -27,30 +27,43 @@ const MAX_TERMINALS = 12;
 // ============================================================================
 
 /**
- * Calculate grid columns based on terminal count
+ * Calculate number of grid columns based on terminal count
  */
-function getGridColumns(count: number): string {
-  if (count === 0) return 'grid-cols-1';
-  if (count === 1) return 'grid-cols-1';
-  if (count === 2) return 'grid-cols-2';
-  if (count <= 4) return 'grid-cols-2';
-  if (count <= 6) return 'grid-cols-3';
-  if (count <= 9) return 'grid-cols-3';
-  return 'grid-cols-4';
+function getGridColumnCount(count: number): number {
+  if (count === 0) return 1;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  if (count <= 4) return 2;
+  if (count <= 6) return 3;
+  if (count <= 9) return 3;
+  return 4;
 }
 
 /**
- * Calculate grid rows based on terminal count
+ * Calculate number of grid rows based on terminal count
  */
-function getGridRows(count: number): string {
-  if (count === 0) return 'grid-rows-1';
-  if (count === 1) return 'grid-rows-1';
-  if (count === 2) return 'grid-rows-1';
-  if (count <= 4) return 'grid-rows-2';
-  if (count <= 6) return 'grid-rows-2';
-  if (count <= 9) return 'grid-rows-3';
-  return 'grid-rows-3';
+function getGridRowCount(count: number): number {
+  if (count === 0) return 1;
+  if (count === 1) return 1;
+  if (count === 2) return 1;
+  if (count <= 4) return 2;
+  if (count <= 6) return 2;
+  if (count <= 9) return 3;
+  return 3;
 }
+
+/**
+ * Minimum terminal dimensions to maintain usability
+ * These values ensure terminals don't shrink below readable/interactive sizes
+ */
+const MIN_TERMINAL_WIDTH = 300; // px - ensures ~40 columns visible
+const MIN_TERMINAL_HEIGHT = 200; // px - ensures ~10 rows visible
+
+/**
+ * CSS transition duration for grid layout changes (ms)
+ * XTermWrapper must wait for this duration before fitting terminal
+ */
+export const GRID_TRANSITION_DURATION_MS = 300;
 
 // ============================================================================
 // Types
@@ -335,15 +348,38 @@ export function TerminalsPage({ isVisible = true }: TerminalsPageProps) {
     }
 
     // Grid layout for multiple terminals
-    const gridCols = getGridColumns(activeTerminals.length);
-    const gridRows = getGridRows(activeTerminals.length);
+    // Use CSS minmax() to enforce minimum terminal sizes while allowing flex growth
+    const colCount = getGridColumnCount(activeTerminals.length);
+    const rowCount = getGridRowCount(activeTerminals.length);
+
+    // Generate grid template with minmax constraints
+    // This ensures terminals never shrink below MIN_TERMINAL_WIDTH/HEIGHT
+    const gridStyle: React.CSSProperties = {
+      display: 'grid',
+      gridTemplateColumns: `repeat(${colCount}, minmax(${MIN_TERMINAL_WIDTH}px, 1fr))`,
+      gridTemplateRows: `repeat(${rowCount}, minmax(${MIN_TERMINAL_HEIGHT}px, 1fr))`,
+      gap: '1rem', // 16px gap
+      padding: '1rem', // 16px padding
+      height: '100%',
+      width: '100%',
+      // Allow horizontal scroll if terminals can't fit at minimum size
+      overflow: 'auto',
+      // Smooth transition for grid layout changes
+      transition: `all ${GRID_TRANSITION_DURATION_MS}ms ease-in-out`,
+    };
 
     return (
-      <div
-        className={`grid ${gridCols} ${gridRows} gap-4 p-4 h-full w-full transition-all duration-300`}
-      >
+      <div style={gridStyle}>
         {activeTerminals.map((terminal) => (
-          <div key={terminal.id} className="min-h-0">
+          <div
+            key={terminal.id}
+            className="min-h-0 min-w-0"
+            style={{
+              // Critical: Allow flex/grid children to shrink below content size
+              minWidth: 0,
+              minHeight: 0,
+            }}
+          >
             <TerminalPane
               terminal={{
                 id: terminal.id,
