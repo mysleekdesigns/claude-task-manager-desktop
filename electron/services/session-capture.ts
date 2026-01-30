@@ -9,10 +9,29 @@
 import { databaseService } from './database.js';
 
 /**
- * ANSI escape code regex for stripping terminal formatting
+ * Comprehensive ANSI escape code regex for stripping terminal formatting.
+ * Handles:
+ * - CSI sequences (colors, cursor, formatting): \x1b[...m
+ * - Private mode sequences (bracketed paste): \x1b[?2004h, \x1b[?2004l
+ * - Bracketed paste markers: \x1b[200~, \x1b[201~
+ * - OSC sequences (window titles, hyperlinks): \x1b]...\x07 or \x1b]...\x1b\\
+ * - DCS sequences: \x1bP...\x1b\\
+ * - Single character escape sequences
  */
 // eslint-disable-next-line no-control-regex -- intentionally matching ANSI escape sequences
-const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]/g;
+const ANSI_REGEX = new RegExp(
+  [
+    // CSI sequences including private mode like [?2004h and bracketed paste like [200~
+    '[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]',
+    // OSC sequences: ESC ] ... BEL or ESC ] ... ST
+    '\u001b\\][^\u0007]*(?:\u0007|\u001b\\\\)',
+    // DCS sequences: ESC P ... ST
+    '\u001bP[^\u001b]*\u001b\\\\',
+    // Single character escape sequences
+    '\u001b[=>Mc78NODEFHlm]',
+  ].join('|'),
+  'g'
+);
 
 /**
  * Parsed session insight data
@@ -27,13 +46,69 @@ export interface SessionInsight {
 }
 
 /**
- * Strip ANSI escape codes from terminal output
+ * Strip ANSI escape codes from terminal output.
+ * Uses comprehensive regex plus secondary cleanup for edge cases.
  *
  * @param text - Raw terminal output with ANSI codes
  * @returns Clean text without ANSI formatting
  */
 function stripAnsi(text: string): string {
-  return text.replace(ANSI_REGEX, '');
+  // Primary pass with comprehensive regex
+  let result = text.replace(ANSI_REGEX, '');
+
+  // Secondary cleanup for any remaining escape sequences
+  // Remove any stray ESC characters and their immediate followers
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/\x1b./g, '');
+
+  // Remove any remaining control characters except newline, tab, carriage return
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+
+  return result;
+}
+
+/**
+ * Remove consecutive duplicate lines from text.
+ * This handles repeated shell prompts that appear in terminal output.
+ *
+ * @param text - Text with potential duplicate lines
+ * @returns Text with consecutive duplicates removed
+ */
+function removeConsecutiveDuplicates(text: string): string {
+  const lines = text.split('\n');
+  return lines
+    .filter((line, index) => {
+      // Always keep the first line
+      if (index === 0) return true;
+      // Keep line if it's different from the previous line
+      return line !== lines[index - 1];
+    })
+    .join('\n');
+}
+
+/**
+ * Remove empty prompt-only lines (lines that are just shell prompts with no command).
+ * Filters out lines that match common shell prompt patterns without any command.
+ *
+ * @param text - Text with potential empty prompt lines
+ * @returns Text with empty prompt lines removed
+ */
+function removeEmptyPromptLines(text: string): string {
+  // Common shell prompt patterns - lines that are ONLY a prompt
+  // Matches: username@hostname directory % or $ or # or >
+  const promptOnlyPattern = /^[\w.-]+@[\w.-]+\s+[\w./-]+\s*[%$#>]\s*$/;
+
+  const lines = text.split('\n');
+  return lines
+    .filter((line) => {
+      const trimmed = line.trim();
+      // Keep empty lines between actual content
+      if (!trimmed) return true;
+      // Filter out lines that are ONLY a shell prompt
+      return !promptOnlyPattern.test(trimmed);
+    })
+    .join('\n');
 }
 
 /**
@@ -107,8 +182,40 @@ function extractFilePaths(output: string): string[] {
 }
 
 /**
+ * Patterns that indicate system/infrastructure errors to ignore.
+ * These are not actual code problems and should not be shown to users.
+ */
+const IGNORE_ERROR_PATTERNS = [
+  /operation not permitted/i,
+  /TAR_ENTRY_ERROR/i,
+  /npm warn/i,
+  /npm WARN/i,
+  /zsh:\d+:/i,
+  /bash:\d+:/i,
+  /permission denied/i,
+  /EPERM/i,
+  /EACCES/i,
+  /sandbox/i,
+  /exit code \d+\s+zsh/i,
+  /gyp ERR!/i,
+  /node-gyp/i,
+  /prebuild-install/i,
+];
+
+/**
+ * Check if an error line should be ignored (system/infrastructure error).
+ *
+ * @param line - The error line to check
+ * @returns true if the error should be ignored
+ */
+function shouldIgnoreError(line: string): boolean {
+  return IGNORE_ERROR_PATTERNS.some(pattern => pattern.test(line));
+}
+
+/**
  * Extract error messages from output.
  * Looks for common error patterns across different tools.
+ * Filters out system/infrastructure errors that are not actual code problems.
  *
  * @param output - Clean terminal output
  * @returns Array of error messages
@@ -120,7 +227,12 @@ function extractErrors(output: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Common error patterns
+    // Skip system/infrastructure errors
+    if (shouldIgnoreError(trimmed)) {
+      continue;
+    }
+
+    // Common error patterns (actual code errors)
     if (
       (/^error:/i.exec(trimmed)) ||
       (/^fatal:/i.exec(trimmed)) ||
@@ -139,58 +251,94 @@ function extractErrors(output: string): string[] {
 }
 
 /**
- * Generate a summary title for the session based on commands and activity.
+ * Detect the type of work based on modified files.
+ *
+ * @param files - List of file paths modified
+ * @returns Session type string or null if no pattern matched
+ */
+function detectSessionType(files: string[]): string | null {
+  const patterns = {
+    test: /\.(test|spec)\.[jt]sx?$|__tests__|tests?\//i,
+    docs: /\.md$|\/docs\//i,
+    config: /config\.[jt]s$|package\.json$|tsconfig|\.eslintrc|\.prettierrc/i,
+    style: /\.css$|\.scss$|\.less$|tailwind/i,
+    database: /prisma|migration|schema\./i,
+  };
+
+  for (const [type, pattern] of Object.entries(patterns)) {
+    if (files.some(f => pattern.test(f))) {
+      return type;
+    }
+  }
+  return null;
+}
+
+/**
+ * Generate a descriptive title for the session based on accomplishments.
+ * Follows Conventional Commits-style format when possible.
  *
  * @param commands - List of commands executed
  * @param errors - List of errors encountered
+ * @param files - List of files modified
  * @returns A concise title for the session
  */
-function generateTitle(commands: string[], errors: string[]): string {
-  if (errors.length > 0) {
+function generateTitle(commands: string[], errors: string[], files: string[]): string {
+  const sessionType = detectSessionType(files);
+
+  // If files were modified, focus on that
+  if (files.length > 0) {
+    const fileCount = files.length;
+
+    if (sessionType === 'test') {
+      return `test: Updated ${fileCount} test file${fileCount > 1 ? 's' : ''}`;
+    }
+    if (sessionType === 'docs') {
+      return `docs: Updated documentation`;
+    }
+    if (sessionType === 'config') {
+      return `chore: Updated configuration`;
+    }
+    if (sessionType === 'style') {
+      return `style: Updated styles`;
+    }
+    if (sessionType === 'database') {
+      return `db: Database changes`;
+    }
+
+    // Generic file changes
+    return `Updated ${fileCount} file${fileCount > 1 ? 's' : ''}`;
+  }
+
+  // If commands were run but no files changed
+  if (commands.length > 0) {
     const firstCmd = commands[0];
-    const cmdName = firstCmd ? firstCmd.split(' ')[0] ?? 'terminal activity' : 'terminal activity';
-    return `Session with errors: ${cmdName}`;
+    const cmdName = firstCmd?.split(' ')[0] || 'commands';
+
+    // Identify common command types
+    if (['npm', 'yarn', 'pnpm'].includes(cmdName)) {
+      return `chore: Package management`;
+    }
+    if (['git'].includes(cmdName)) {
+      return `git: Repository operations`;
+    }
+    if (['test', 'vitest', 'jest', 'playwright'].includes(cmdName)) {
+      return `test: Ran tests`;
+    }
+
+    return `Ran ${cmdName}`;
   }
 
-  if (commands.length === 0) {
-    return 'Terminal session';
+  // Only show errors if nothing else was accomplished
+  if (errors.length > 0) {
+    return `Session with issues`;
   }
 
-  const firstCommand = commands[0];
-  if (!firstCommand) {
-    return 'Terminal session';
-  }
-
-  const cmdParts = firstCommand.split(' ');
-  const cmdName = cmdParts[0];
-  if (!cmdName) {
-    return 'Terminal session';
-  }
-
-  // Common command patterns
-  if (cmdName === 'git') {
-    const gitSubcommand = cmdParts[1];
-    return `Git ${gitSubcommand || 'operations'}`;
-  }
-
-  if (['npm', 'yarn', 'pnpm'].includes(cmdName)) {
-    return `Package management: ${cmdName}`;
-  }
-
-  if (['cd', 'ls', 'pwd', 'mkdir', 'rm', 'cp', 'mv'].includes(cmdName)) {
-    return `File operations: ${cmdName}`;
-  }
-
-  if (['node', 'python', 'ruby', 'go'].includes(cmdName)) {
-    return `Running ${cmdName} script`;
-  }
-
-  // Default
-  return `Terminal session: ${cmdName}`;
+  return `Terminal session`;
 }
 
 /**
  * Generate a textual summary of the session.
+ * Focuses on accomplishments (files changed, commands run) rather than errors.
  *
  * @param insight - Parsed session insight data
  * @returns Formatted summary text
@@ -198,23 +346,39 @@ function generateTitle(commands: string[], errors: string[]): string {
 function generateSummary(insight: Omit<SessionInsight, 'summary'>): string {
   const parts: string[] = [];
 
-  if (insight.commands.length > 0) {
-    parts.push(`Commands executed:\n${insight.commands.map(c => `  - ${c}`).join('\n')}`);
-  }
-
+  // Files section FIRST - this is the most important info
   if (insight.filesModified.length > 0) {
-    parts.push(`Files modified:\n${insight.filesModified.map(f => `  - ${f}`).join('\n')}`);
+    parts.push('Files modified:');
+    const displayFiles = insight.filesModified.slice(0, 10);
+    displayFiles.forEach(file => parts.push(`  - ${file}`));
+    if (insight.filesModified.length > 10) {
+      parts.push(`  ... and ${insight.filesModified.length - 10} more`);
+    }
   }
 
-  if (insight.errors.length > 0) {
-    parts.push(`Errors encountered:\n${insight.errors.map(e => `  - ${e}`).join('\n')}`);
+  // Commands section - show what was done
+  const validCommands = insight.commands.filter(cmd => cmd && cmd.trim().length > 0);
+  if (validCommands.length > 0) {
+    if (parts.length > 0) parts.push('');
+    parts.push('Commands executed:');
+    const displayCommands = validCommands.slice(0, 10);
+    displayCommands.forEach(cmd => {
+      const truncated = cmd.length > 100 ? cmd.slice(0, 100) + '...' : cmd;
+      parts.push(`  - ${truncated}`);
+    });
+    if (validCommands.length > 10) {
+      parts.push(`  ... and ${validCommands.length - 10} more`);
+    }
   }
 
+  // NO errors section - we've filtered them out and they're not useful to display
+
+  // If nothing was extracted, indicate that
   if (parts.length === 0) {
-    return 'No significant activity recorded in this session.';
+    return 'No significant activity detected in this session.';
   }
 
-  return parts.join('\n\n');
+  return parts.join('\n');
 }
 
 /**
@@ -227,13 +391,19 @@ export function parseSessionOutput(output: string): SessionInsight {
   // Strip ANSI codes first
   const cleanOutput = stripAnsi(output);
 
-  // Extract key information
-  const commands = extractCommands(cleanOutput);
-  const filesModified = extractFilePaths(cleanOutput);
-  const errors = extractErrors(cleanOutput);
+  // Remove consecutive duplicate lines (handles repeated prompts)
+  const dedupedOutput = removeConsecutiveDuplicates(cleanOutput);
+
+  // Remove empty prompt-only lines
+  const filteredOutput = removeEmptyPromptLines(dedupedOutput);
+
+  // Extract key information from filtered output
+  const commands = extractCommands(filteredOutput);
+  const filesModified = extractFilePaths(filteredOutput);
+  const errors = extractErrors(filteredOutput);
 
   // Generate title and summary
-  const title = generateTitle(commands, errors);
+  const title = generateTitle(commands, errors, filesModified);
   const summary = generateSummary({ title, commands, filesModified, errors });
 
   return {

@@ -1348,6 +1348,7 @@ export interface IpcChannels {
   'memories:get': (id: string) => Promise<Memory | null>;
   'memories:update': (id: string, data: UpdateMemoryInput) => Promise<Memory>;
   'memories:delete': (id: string) => Promise<void>;
+  'memories:cleanup': () => Promise<{ deleted: number; checked: number }>;
 
   // Idea channels (Phase 13.2)
   'ideas:list': (
@@ -2210,6 +2211,7 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'memories:get',
   'memories:update',
   'memories:delete',
+  'memories:cleanup',
   'mcp:list',
   'mcp:create',
   'mcp:get',

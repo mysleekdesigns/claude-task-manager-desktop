@@ -318,6 +318,59 @@ async function handleSearchMemories(
   }));
 }
 
+/**
+ * Clean up memories with bad/gibberish content from terminal capture issues.
+ * Only affects auto_session memories, not manually created ones.
+ */
+async function handleCleanupBadMemories(
+  _event: IpcMainInvokeEvent
+): Promise<{ deleted: number; checked: number }> {
+  const prisma = databaseService.getClient();
+
+  // Get all auto-session memories
+  const memories = await prisma.memory.findMany({
+    where: {
+      source: 'auto_session',
+    },
+    select: {
+      id: true,
+      content: true,
+    },
+  });
+
+  // Patterns that indicate bad content
+  const badPatterns = [
+    /\[\?2004[hl]/,           // Bracketed paste mode
+    /\[20[01]~/,              // Paste markers
+    /\x1b/,                   // Raw escape chars
+    // Repeated prompt pattern (same text 3+ times)
+    /(.{20,})\1{2,}/,
+  ];
+
+  const idsToDelete: string[] = [];
+
+  for (const memory of memories) {
+    const hasBadContent = badPatterns.some(pattern => pattern.test(memory.content));
+    if (hasBadContent) {
+      idsToDelete.push(memory.id);
+    }
+  }
+
+  // Delete bad memories
+  if (idsToDelete.length > 0) {
+    await prisma.memory.deleteMany({
+      where: {
+        id: { in: idsToDelete },
+      },
+    });
+  }
+
+  return {
+    deleted: idsToDelete.length,
+    checked: memories.length,
+  };
+}
+
 // ============================================================================
 // Handler Registration
 // ============================================================================
@@ -361,6 +414,12 @@ export function registerMemoryHandlers(): void {
     'memories:search',
     wrapWithLogging('memories:search', wrapHandler(handleSearchMemories))
   );
+
+  // memories:cleanup - Clean up bad/gibberish memories from terminal capture
+  ipcMain.handle(
+    'memories:cleanup',
+    wrapWithLogging('memories:cleanup', wrapHandler(handleCleanupBadMemories))
+  );
 }
 
 /**
@@ -373,6 +432,7 @@ export function unregisterMemoryHandlers(): void {
   ipcMain.removeHandler('memories:update');
   ipcMain.removeHandler('memories:delete');
   ipcMain.removeHandler('memories:search');
+  ipcMain.removeHandler('memories:cleanup');
 }
 
 /**
