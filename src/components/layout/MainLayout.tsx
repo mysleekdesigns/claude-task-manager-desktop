@@ -44,25 +44,40 @@ export function MainLayout() {
         <main className="flex-1 overflow-hidden bg-background pt-6 relative">
           {/* Regular routed content - hidden when on terminals route */}
           {/* Uses visibility:hidden to allow terminals layer to show through */}
+          {/* z-index ensures proper layering: higher when active, lower when terminals are shown */}
           <div
             className="absolute inset-0 overflow-y-auto"
             style={{
               visibility: isOnTerminals ? 'hidden' : 'visible',
-              pointerEvents: isOnTerminals ? 'none' : 'auto'
+              pointerEvents: isOnTerminals ? 'none' : 'auto',
+              zIndex: isOnTerminals ? 0 : 10
             }}
           >
             <Outlet />
           </div>
 
           {/* Terminals - always mounted after first visit, hidden via CSS when not active */}
-          {/* Uses visibility:hidden instead of display:none to preserve terminal dimensions */}
-          {/* This prevents xterm.js buffer reflow/corruption that occurs when dimensions become 0 */}
+          {/* Uses visibility:hidden + off-screen positioning to truly hide while preserving dimensions */}
+          {/* This is the xterm.js recommended pattern: move off-screen (left: -9999px) keeps the */}
+          {/* container sized correctly for FitAddon while making it truly invisible */}
+          {/* z-index ensures proper layering: higher when active, lower when other routes are shown */}
           {hasVisitedTerminals && (
             <div
-              className="absolute inset-0"
+              className={isOnTerminals ? "absolute inset-0" : ""}
               style={{
                 visibility: isOnTerminals ? 'visible' : 'hidden',
-                pointerEvents: isOnTerminals ? 'auto' : 'none'
+                opacity: isOnTerminals ? 1 : 0,
+                pointerEvents: isOnTerminals ? 'auto' : 'none',
+                zIndex: isOnTerminals ? 10 : 0,
+                // Move completely off-screen when hidden - xterm.js recommended pattern
+                // This keeps dimensions intact for FitAddon while truly hiding the terminals
+                ...(isOnTerminals ? {} : {
+                  position: 'fixed' as const,
+                  left: '-9999px',
+                  top: 0,
+                  width: '100vw',
+                  height: '100vh'
+                })
               }}
             >
               <TerminalsPage isVisible={isOnTerminals} />
