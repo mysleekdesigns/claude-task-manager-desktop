@@ -30,6 +30,7 @@ import { registerResearchHandlers, unregisterResearchHandlers } from './research
 import { registerSyncHandlers, unregisterSyncHandlers } from './sync.js';
 import { registerNetworkHandlers, unregisterNetworkHandlers } from './network.js';
 import { registerSoftDeleteHandlers, unregisterSoftDeleteHandlers } from './soft-delete.js';
+import { registerContextHandlers, unregisterContextHandlers } from './context.js';
 import { createIPCLogger } from '../utils/ipc-logger.js';
 import type { BrowserWindow } from 'electron';
 
@@ -86,6 +87,7 @@ export function registerIPCHandlers(mainWindow: BrowserWindow): void {
     registerSyncHandlers(mainWindow);
     registerNetworkHandlers(mainWindow);
     registerSoftDeleteHandlers();
+    registerContextHandlers();
 
     isRegistered = true;
     logger.info('IPC handlers registered successfully.');
@@ -134,6 +136,7 @@ export function unregisterIPCHandlers(): void {
     unregisterSyncHandlers();
     unregisterNetworkHandlers();
     unregisterSoftDeleteHandlers();
+    unregisterContextHandlers();
 
     isRegistered = false;
     logger.info('IPC handlers unregistered successfully.');

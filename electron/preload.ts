@@ -210,6 +210,11 @@ const VALID_INVOKE_CHANNELS = [
   'sync:performIncrementalSync',
   'sync:performSync',
   'sync:resetSyncState',
+  // Context channels
+  'context:getClaudeMd',
+  'context:get',
+  'context:upsert',
+  'context:scan',
 ] as const;
 
 /**

@@ -28,6 +28,7 @@
 | 8 | Git Worktree Management | ✅ Complete |
 | 9 | Roadmap and Planning | ✅ Complete |
 | 10 | Context and Memory | ✅ Complete |
+| 10A | Context & Memory Enhancement | Planned |
 | 11 | MCP Configuration | ✅ Complete |
 | 12 | GitHub Integration | ✅ Complete |
 | 13 | Additional Features | ✅ Complete |
@@ -1011,6 +1012,110 @@ Latest 5 commits:
 - [x] Memory cards expand/collapse
 - [x] Can create memories manually
 - [x] Session insights auto-captured on terminal close
+
+---
+
+## Phase 10A: Context & Memory Enhancement
+
+### Tasks
+
+- [ ] **10A.1** Update PRD.md with this enhanced specification
+- [ ] **10A.2** Database schema migration (Memory fields + ProjectContext model)
+- [ ] **10A.3** Implement missing `memories:update` IPC handler
+- [ ] **10A.4** Create ProjectContext IPC handlers
+- [ ] **10A.5** Build Project Index tab components
+- [ ] **10A.6** Implement CLAUDE.md detection and viewer
+- [ ] **10A.7** Add tech stack auto-detection
+- [ ] **10A.8** Enhance MemoryCard with edit/archive actions
+- [ ] **10A.9** Create EditMemoryModal component
+- [ ] **10A.10** Add task linking to memories
+- [ ] **10A.11** Enhance session capture with task association
+- [ ] **10A.12** Add filters (source, task, archived) to Memories tab
+- [ ] **10A.13** Integration testing and verification
+
+### Problem Statement
+
+The current Context & Memory page shows "garbage" memories because:
+1. Memories are manually created and disconnected from actual project work
+2. The "Project Index" tab is completely unimplemented (placeholder only)
+3. No integration with terminals, tasks, or git operations
+4. Memory types (session, pr_review, codebase, pattern, gotcha) don't align with actual workflows
+5. Missing `memories:update` IPC handler (typed but not implemented)
+
+### What This Page Should Do
+
+Based on research into Claude Code, Cursor, Windsurf, and other AI tools:
+
+#### Context Tab (Project Index)
+Shows **active context** that informs AI sessions:
+- CLAUDE.md content viewer (project instructions)
+- Tech stack badges (auto-detected)
+- Key files and project structure
+- Recent decisions and patterns
+
+#### Memories Tab
+Shows **persistent knowledge** across sessions:
+- Auto-captured learnings from terminal sessions
+- Task-linked memories (decisions made during a task)
+- Patterns and gotchas discovered during development
+- Searchable, filterable knowledge base
+
+### Schema Changes
+
+**Memory Model Updates:**
+- Add `taskId` (optional relation to Task)
+- Add `terminalId` (optional, for session capture source)
+- Add `source` field: manual, auto_session, auto_commit
+- Add `isArchived` boolean for soft delete
+
+**New ProjectContext Model:**
+- `projectId` (unique relation to Project)
+- `claudeMdPath` and `claudeMdContent`
+- `techStack` (JSON array)
+- `keyFiles` (JSON array)
+- `lastIndexedAt` timestamp
+
+### New IPC Handlers
+
+**Memories:**
+- `memories:update` - Update existing memory
+- `memories:archive` - Soft delete
+
+**ProjectContext:**
+- `context:get` - Get ProjectContext for project
+- `context:syncClaudeMd` - Find and cache CLAUDE.md content
+- `context:detectTechStack` - Analyze project for tech stack
+
+### New Components
+
+| Component | Purpose |
+|-----------|---------|
+| `ProjectIndexTab.tsx` | Main container for index tab |
+| `ClaudeMdViewer.tsx` | Read-only CLAUDE.md display with syntax highlighting |
+| `TechStackBadges.tsx` | Display detected technologies |
+| `KeyFilesList.tsx` | Important files tree/list |
+| `RecentDecisions.tsx` | Last 5 decision-type memories |
+| `EditMemoryModal.tsx` | Edit existing memory with task linking |
+
+### Memory Types
+
+| Type | Description | Typical Source |
+|------|-------------|----------------|
+| `context` | Project setup, CLAUDE.md rules | auto |
+| `decision` | Why something was built a certain way | manual/auto |
+| `pattern` | Reusable code/workflow patterns | auto/manual |
+| `gotcha` | Pitfalls, bugs, workarounds | auto/manual |
+| `session` | Session summaries and learnings | auto |
+| `task` | Task completion insights | auto |
+
+**Phase 10A Verification:**
+- [ ] CLAUDE.md content displays correctly in Project Index tab
+- [ ] Tech stack auto-detected and displayed as badges
+- [ ] Memories can be edited via EditMemoryModal
+- [ ] Memories can be archived (soft delete)
+- [ ] Memories can be linked to tasks
+- [ ] Session capture includes task association
+- [ ] Filters work for source, task, and archived status
 
 ---
 

@@ -252,13 +252,15 @@ export function parseSessionOutput(output: string): SessionInsight {
  * @param output - Terminal output buffer
  * @param projectId - Project ID the terminal belongs to
  * @param terminalName - Name of the terminal (optional)
+ * @param taskId - Task ID the terminal was working on (optional)
  * @returns Created Memory record ID
  */
 export async function captureSessionInsight(
   terminalId: string,
   output: string,
   projectId: string,
-  terminalName?: string
+  terminalName?: string,
+  taskId?: string
 ): Promise<string> {
   try {
     // Parse the output
@@ -286,7 +288,7 @@ export async function captureSessionInsight(
       timestamp: new Date().toISOString(),
     };
 
-    // Create the memory entry
+    // Create the memory entry with task association and source tracking
     const memory = await prisma.memory.create({
       data: {
         type: 'session',
@@ -294,11 +296,14 @@ export async function captureSessionInsight(
         content: insight.summary,
         metadata: JSON.stringify(metadata),
         projectId,
+        terminalId,
+        source: 'auto_session',
+        ...(taskId && { taskId }),
       },
     });
 
     console.log(
-      `[SessionCapture] Captured session "${insight.title}" for terminal ${terminalId} (Memory ID: ${memory.id})`
+      `[SessionCapture] Captured session "${insight.title}" for terminal ${terminalId}${taskId ? ` (Task: ${taskId})` : ''} (Memory ID: ${memory.id})`
     );
 
     return memory.id;

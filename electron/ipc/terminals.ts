@@ -246,9 +246,10 @@ async function handleCloseTerminal(
         id,
         output,
         terminal.projectId,
-        terminal.name
+        terminal.name,
+        terminal.taskId ?? undefined
       );
-      console.log(`[Terminal IPC] Captured session insight for terminal ${id}`);
+      console.log(`[Terminal IPC] Captured session insight for terminal ${id}${terminal.taskId ? ` (Task: ${terminal.taskId})` : ''}`);
     }
   } catch (error) {
     // Log error but don't fail the close operation
@@ -320,12 +321,13 @@ async function handleCaptureSession(
     throw new Error('No output to capture');
   }
 
-  // Capture the session
+  // Capture the session with task association
   const memoryId = await captureSessionInsight(
     id,
     output,
     terminal.projectId,
-    terminal.name
+    terminal.name,
+    terminal.taskId ?? undefined
   );
 
   if (!memoryId) {

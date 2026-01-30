@@ -483,7 +483,17 @@ export interface CreateTaskFromFeatureResponse {
 /**
  * Memory type enum
  */
-export type MemoryType = 'session' | 'pr_review' | 'codebase' | 'pattern' | 'gotcha';
+export type MemoryType = 'context' | 'decision' | 'pattern' | 'gotcha' | 'session' | 'task' | 'pr_review' | 'codebase';
+
+/**
+ * Memory source type enum
+ */
+export type MemorySource = 'manual' | 'auto_session' | 'auto_commit';
+
+/**
+ * Archive filter options for UI
+ */
+export type ArchiveFilter = 'active' | 'archived' | 'all';
 
 /**
  * Memory entity for project context
@@ -495,8 +505,16 @@ export interface Memory {
   content: string;
   metadata: Record<string, unknown>;
   projectId: string;
+  taskId: string | null;
+  terminalId: string | null;
+  source: MemorySource;
+  isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  task?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
 /**
@@ -508,6 +526,7 @@ export interface CreateMemoryInput {
   content: string;
   metadata?: Record<string, unknown>;
   projectId: string;
+  taskId?: string;
 }
 
 /**
@@ -516,7 +535,10 @@ export interface CreateMemoryInput {
 export interface UpdateMemoryInput {
   title?: string;
   content?: string;
+  type?: MemoryType;
   metadata?: Record<string, unknown>;
+  taskId?: string | null;
+  isArchived?: boolean;
 }
 
 /**
@@ -525,6 +547,9 @@ export interface UpdateMemoryInput {
 export interface MemoryListFilters {
   type?: MemoryType;
   search?: string;
+  source?: MemorySource;
+  taskId?: string;
+  isArchived?: boolean;
 }
 
 // ============================================================================
@@ -1485,6 +1510,12 @@ export interface IpcChannels {
   'network:getStatus': () => Promise<NetworkStatusInfo>;
   'network:ping': () => Promise<NetworkStatusInfo>;
   'network:isOnline': () => Promise<boolean>;
+
+  // Context channels
+  'context:getClaudeMd': (projectId: string) => Promise<string | null>;
+  'context:get': (projectId: string) => Promise<ProjectContext | null>;
+  'context:upsert': (projectId: string, data: UpsertProjectContextInput) => Promise<ProjectContext>;
+  'context:scan': (projectId: string) => Promise<ProjectContext>;
 }
 
 /**
@@ -2022,6 +2053,33 @@ export interface ConflictLogEntry {
 }
 
 // ============================================================================
+// ProjectContext Types
+// ============================================================================
+
+/**
+ * ProjectContext entity for storing project-level context
+ */
+export interface ProjectContext {
+  id: string;
+  projectId: string;
+  claudeMd: string | null;
+  techStack: string[];
+  keyFiles: string[];
+  lastScanned: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Input for upserting a ProjectContext
+ */
+export interface UpsertProjectContextInput {
+  claudeMd?: string | null;
+  techStack?: string[];
+  keyFiles?: string[];
+}
+
+// ============================================================================
 // Research Types
 // ============================================================================
 
@@ -2238,6 +2296,11 @@ export const VALID_INVOKE_CHANNELS: readonly IpcChannelName[] = [
   'network:getStatus',
   'network:ping',
   'network:isOnline',
+  // Context channels
+  'context:getClaudeMd',
+  'context:get',
+  'context:upsert',
+  'context:scan',
 ] as const;
 
 /**

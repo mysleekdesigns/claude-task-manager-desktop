@@ -7,15 +7,25 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useMemoryManager } from '@/hooks/useMemory';
+import { useTasks } from '@/hooks/useTasks';
 import { MemoryCard } from '@/components/memory/MemoryCard';
 import { AddMemoryModal } from '@/components/memory/AddMemoryModal';
+import { EditMemoryModal } from '@/components/memory/EditMemoryModal';
+import { ProjectIndexTab } from '@/components/context/ProjectIndexTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus, Search, AlertCircle, BookOpen } from 'lucide-react';
-import type { MemoryType, CreateMemoryInput, Memory } from '@/types/ipc';
+import type { MemoryType, MemorySource, ArchiveFilter, CreateMemoryInput, UpdateMemoryInput, Memory } from '@/types/ipc';
 
 // ============================================================================
 // Constants
@@ -24,7 +34,6 @@ import type { MemoryType, CreateMemoryInput, Memory } from '@/types/ipc';
 const MEMORY_TYPE_FILTERS: {
   value: MemoryType | 'all';
   label: string;
-  count?: number;
 }[] = [
   { value: 'all', label: 'All' },
   { value: 'session', label: 'Sessions' },
@@ -32,6 +41,28 @@ const MEMORY_TYPE_FILTERS: {
   { value: 'codebase', label: 'Codebase' },
   { value: 'pattern', label: 'Patterns' },
   { value: 'gotcha', label: 'Gotchas' },
+  { value: 'context', label: 'Context' },
+  { value: 'decision', label: 'Decisions' },
+  { value: 'task', label: 'Tasks' },
+];
+
+const SOURCE_FILTERS: {
+  value: MemorySource | 'all';
+  label: string;
+}[] = [
+  { value: 'all', label: 'All Sources' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'auto_session', label: 'Auto (Session)' },
+  { value: 'auto_commit', label: 'Auto (Commit)' },
+];
+
+const ARCHIVE_FILTERS: {
+  value: ArchiveFilter;
+  label: string;
+}[] = [
+  { value: 'active', label: 'Active Only' },
+  { value: 'archived', label: 'Archived Only' },
+  { value: 'all', label: 'Show All' },
 ];
 
 // ============================================================================
@@ -41,31 +72,73 @@ const MEMORY_TYPE_FILTERS: {
 export function ContextPage() {
   const currentProject = useProjectStore((state) => state.currentProject);
 
-  // Local state
+  // Local state - filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<MemoryType | 'all'>('all');
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState<MemorySource | 'all'>('all');
+  const [selectedTaskFilter, setSelectedTaskFilter] = useState<string>('all');
+  const [selectedArchiveFilter, setSelectedArchiveFilter] = useState<ArchiveFilter>('active');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
 
-  // Fetch memories
+  // Fetch tasks for the task filter dropdown
+  const { data: tasks } = useTasks(currentProject?.id || '');
+  const tasksArray = tasks ?? [];
+
+  // Build IPC filter parameters based on current filter state
+  const ipcFilters = useMemo(() => {
+    const filters: {
+      type?: MemoryType;
+      source?: MemorySource;
+      taskId?: string;
+      isArchived?: boolean;
+    } = {};
+
+    // Only pass non-"all" type filter to IPC
+    if (selectedTypeFilter !== 'all') {
+      filters.type = selectedTypeFilter;
+    }
+
+    // Only pass non-"all" source filter to IPC
+    if (selectedSourceFilter !== 'all') {
+      filters.source = selectedSourceFilter;
+    }
+
+    // Task filter: "all" = no filter, "unlinked" = null taskId, otherwise specific taskId
+    if (selectedTaskFilter === 'unlinked') {
+      filters.taskId = ''; // Empty string signals unlinked in the handler
+    } else if (selectedTaskFilter !== 'all') {
+      filters.taskId = selectedTaskFilter;
+    }
+
+    // Archive filter
+    if (selectedArchiveFilter === 'active') {
+      filters.isArchived = false;
+    } else if (selectedArchiveFilter === 'archived') {
+      filters.isArchived = true;
+    }
+    // "all" means we don't pass isArchived, showing both
+
+    return filters;
+  }, [selectedTypeFilter, selectedSourceFilter, selectedTaskFilter, selectedArchiveFilter]);
+
+  // Fetch memories with filters passed to IPC
   const {
     memories,
     loading,
     error,
     createMemory,
+    updateMemory,
     deleteMemory,
-  } = useMemoryManager(currentProject?.id || '');
+  } = useMemoryManager(currentProject?.id || '', ipcFilters);
 
-  // Filter memories by search and type
+  // The main filtering is done server-side via IPC filters
+  // We only do client-side search filtering here
   const memoriesArray = memories ?? [];
   const filteredMemories = useMemo(() => {
     let filtered = memoriesArray;
 
-    // Filter by type
-    if (selectedTypeFilter !== 'all') {
-      filtered = filtered.filter((m) => m.type === selectedTypeFilter);
-    }
-
-    // Filter by search query (title and content)
+    // Filter by search query (title and content) - client-side
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -76,18 +149,20 @@ export function ContextPage() {
     }
 
     return filtered;
-  }, [memoriesArray, selectedTypeFilter, searchQuery]);
+  }, [memoriesArray, searchQuery]);
 
-  // Count memories by type
+  // Count memories by type (from the already-filtered server results)
   const memoryCounts = useMemo(() => {
     const counts: Record<string, number> = {
       all: memoriesArray.length,
-      session: 0,
-      pr_review: 0,
-      codebase: 0,
-      pattern: 0,
-      gotcha: 0,
     };
+
+    // Initialize all type counts
+    MEMORY_TYPE_FILTERS.forEach((filter) => {
+      if (filter.value !== 'all') {
+        counts[filter.value] = 0;
+      }
+    });
 
     memoriesArray.forEach((m) => {
       counts[m.type] = (counts[m.type] || 0) + 1;
@@ -115,6 +190,29 @@ export function ContextPage() {
       await deleteMemory.mutate(memory.id);
     },
     [deleteMemory]
+  );
+
+  // Handle edit memory - open the modal
+  const handleEditMemory = useCallback((memory: Memory) => {
+    setEditingMemory(memory);
+  }, []);
+
+  // Handle save memory (from edit modal)
+  const handleSaveMemory = useCallback(
+    async (id: string, data: UpdateMemoryInput) => {
+      await updateMemory.mutate(id, data);
+    },
+    [updateMemory]
+  );
+
+  // Handle archive/unarchive memory
+  const handleArchiveMemory = useCallback(
+    async (memory: Memory) => {
+      await updateMemory.mutate(memory.id, {
+        isArchived: !memory.isArchived,
+      });
+    },
+    [updateMemory]
   );
 
   // No project selected
@@ -180,16 +278,7 @@ export function ContextPage() {
 
             {/* Project Index Tab */}
             <TabsContent value="project-index">
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold mb-2">
-                  Project Index Visualization
-                </h3>
-                <p className="text-muted-foreground max-w-md">
-                  File tree and architecture overview coming soon. This will show your
-                  project structure, dependencies, and key entry points.
-                </p>
-              </div>
+              <ProjectIndexTab projectId={currentProject.id} />
             </TabsContent>
 
             {/* Memories Tab */}
@@ -209,7 +298,7 @@ export function ContextPage() {
 
                 {/* Type Filter Chips */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-muted-foreground mr-2">Filter:</span>
+                  <span className="text-sm text-muted-foreground mr-2">Type:</span>
                   {MEMORY_TYPE_FILTERS.map((filter) => (
                     <Badge
                       key={filter.value}
@@ -220,11 +309,80 @@ export function ContextPage() {
                       onClick={() => { setSelectedTypeFilter(filter.value); }}
                     >
                       {filter.label}
-                      <span className="ml-1.5 text-xs">
-                        ({memoryCounts[filter.value] || 0})
-                      </span>
+                      {selectedTypeFilter === 'all' && (
+                        <span className="ml-1.5 text-xs">
+                          ({memoryCounts[filter.value] || 0})
+                        </span>
+                      )}
                     </Badge>
                   ))}
+                </div>
+
+                {/* Additional Filters Row */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  {/* Source Filter */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Source:</span>
+                    <Select
+                      value={selectedSourceFilter}
+                      onValueChange={(value) => { setSelectedSourceFilter(value as MemorySource | 'all'); }}
+                    >
+                      <SelectTrigger className="w-[160px]" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SOURCE_FILTERS.map((filter) => (
+                          <SelectItem key={filter.value} value={filter.value}>
+                            {filter.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Task Filter */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Task:</span>
+                    <Select
+                      value={selectedTaskFilter}
+                      onValueChange={setSelectedTaskFilter}
+                    >
+                      <SelectTrigger className="w-[200px]" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Tasks</SelectItem>
+                        <SelectItem value="unlinked">Unlinked (No Task)</SelectItem>
+                        {tasksArray.map((task) => (
+                          <SelectItem key={task.id} value={task.id}>
+                            {task.title.length > 25
+                              ? `${task.title.substring(0, 25)}...`
+                              : task.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Archive Filter */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Status:</span>
+                    <Select
+                      value={selectedArchiveFilter}
+                      onValueChange={(value) => { setSelectedArchiveFilter(value as ArchiveFilter); }}
+                    >
+                      <SelectTrigger className="w-[140px]" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ARCHIVE_FILTERS.map((filter) => (
+                          <SelectItem key={filter.value} value={filter.value}>
+                            {filter.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Memory Count */}
@@ -263,6 +421,8 @@ export function ContextPage() {
                       key={memory.id}
                       memory={memory}
                       onDelete={handleDeleteMemory}
+                      onEdit={handleEditMemory}
+                      onArchive={handleArchiveMemory}
                     />
                   ))}
                 </div>
@@ -278,6 +438,17 @@ export function ContextPage() {
         onClose={() => { setIsAddModalOpen(false); }}
         onSubmit={handleCreateMemory}
       />
+
+      {/* Edit Memory Modal */}
+      {editingMemory && (
+        <EditMemoryModal
+          memory={editingMemory}
+          isOpen={Boolean(editingMemory)}
+          onClose={() => { setEditingMemory(null); }}
+          onSave={handleSaveMemory}
+          tasks={tasksArray}
+        />
+      )}
     </div>
   );
 }

@@ -57,3 +57,5 @@ export type {
   ListDeletedOptions,
   DeletedRecordSummary,
 } from './soft-delete';
+export { claudeMdService } from './claudeMd';
+export type { ClaudeMdDetectionResult } from './claudeMd';

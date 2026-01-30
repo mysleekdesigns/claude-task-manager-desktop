@@ -66,16 +66,17 @@ model Project {
   lastSyncedAt DateTime? // Last successful sync time
 
   // Relations
-  members    ProjectMember[]
-  tasks      Task[]
-  terminals  Terminal[]
-  worktrees  Worktree[]
-  phases     Phase[]
+  members          ProjectMember[]
+  tasks            Task[]
+  terminals        Terminal[]
+  worktrees        Worktree[]
+  phases           Phase[]
   features         Feature[]
   memories         Memory[]
   mcpConfigs       McpConfig[]
   ideas            Idea[]
   changelogEntries ChangelogEntry[]
+  context          ProjectContext?
 
   @@index([createdAt])
   @@index([supabaseId])
@@ -162,6 +163,7 @@ model Task {
   fixes          TaskFix[]
   taskSummary    TaskSummary?
   humanReview    HumanReview?
+  memories       Memory[]
 
   @@index([projectId])
   @@index([status])
@@ -346,21 +348,46 @@ model Milestone {
 }
 
 model Memory {
-  id        String   @id @default(cuid())
-  type      String   // session, pr_review, codebase, pattern, gotcha
-  title     String
-  content   String
-  metadata  String   @default("{}") // JSON string for SQLite
-  projectId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  type       String   // session, pr_review, codebase, pattern, gotcha
+  title      String
+  content    String
+  metadata   String   @default("{}") // JSON string for SQLite
+  projectId  String
+  taskId     String?  // Optional relation to Task for task-specific memories
+  terminalId String?  // Terminal ID for session capture source (not a FK, just reference)
+  source     String   @default("manual") // Source type: "manual", "auto_session", "auto_commit"
+  isArchived Boolean  @default(false) // Soft delete for memories
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Relations
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([taskId])
   @@index([type])
+  @@index([source])
+  @@index([isArchived])
   @@index([createdAt])
+}
+
+model ProjectContext {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  claudeMd    String?  // CLAUDE.md content
+  techStack   String   @default("[]") // JSON array as string ["typescript", "react", "electron"]
+  keyFiles    String   @default("[]") // JSON array as string
+  lastScanned DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([lastScanned])
 }
 
 model McpConfig {

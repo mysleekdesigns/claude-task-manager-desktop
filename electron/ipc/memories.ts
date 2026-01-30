@@ -23,6 +23,7 @@ export interface CreateMemoryInput {
   title: string;
   content: string;
   metadata?: Record<string, unknown>;
+  taskId?: string;
 }
 
 export interface SearchMemoriesInput {
@@ -43,12 +44,23 @@ export type MemoryWithMetadata = Omit<Memory, 'metadata'> & {
 // ============================================================================
 
 /**
- * List memories for a project with optional type filter
+ * Filter options for listing memories
+ */
+interface MemoryListFilters {
+  type?: string;
+  search?: string;
+  source?: string;
+  taskId?: string;
+  isArchived?: boolean;
+}
+
+/**
+ * List memories for a project with optional filters
  */
 async function handleListMemories(
   _event: IpcMainInvokeEvent,
   projectId: string,
-  filters?: { type?: string; search?: string }
+  filters?: MemoryListFilters
 ): Promise<MemoryWithMetadata[]> {
   if (!projectId) {
     throw IPCErrors.invalidArguments('Project ID is required');
@@ -56,20 +68,52 @@ async function handleListMemories(
 
   const prisma = databaseService.getClient();
 
-  // Build where clause with optional type filter
+  // Build where clause with all filter options
   const where: {
     projectId: string;
     type?: string;
+    source?: string;
+    taskId?: string | null;
+    isArchived?: boolean;
   } = {
     projectId,
   };
 
+  // Apply type filter
   if (filters?.type) {
     where.type = filters.type;
   }
 
+  // Apply source filter
+  if (filters?.source) {
+    where.source = filters.source;
+  }
+
+  // Apply task filter
+  if (filters?.taskId !== undefined) {
+    // Special case: empty string means unlinked memories
+    if (filters.taskId === '') {
+      where.taskId = null;
+    } else {
+      where.taskId = filters.taskId;
+    }
+  }
+
+  // Apply archived filter (default to showing active only if not specified)
+  if (filters?.isArchived !== undefined) {
+    where.isArchived = filters.isArchived;
+  }
+
   const memories = await prisma.memory.findMany({
     where,
+    include: {
+      task: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -102,6 +146,7 @@ async function handleCreateMemory(
       title: data.title,
       content: data.content,
       metadata: JSON.stringify(data.metadata || {}),
+      taskId: data.taskId || null,
     },
   });
 
@@ -136,6 +181,67 @@ async function handleGetMemory(
     ...memory,
     metadata: JSON.parse(memory.metadata || '{}') as Record<string, unknown>,
   };
+}
+
+/**
+ * Update memory input data
+ */
+export interface UpdateMemoryInput {
+  title?: string;
+  content?: string;
+  type?: string;
+  metadata?: Record<string, unknown>;
+  isArchived?: boolean;
+  taskId?: string | null;
+}
+
+/**
+ * Update an existing memory
+ */
+async function handleUpdateMemory(
+  _event: IpcMainInvokeEvent,
+  id: string,
+  data: UpdateMemoryInput
+): Promise<MemoryWithMetadata> {
+  if (!id) {
+    throw IPCErrors.invalidArguments('Memory ID is required');
+  }
+
+  const prisma = databaseService.getClient();
+
+  // Build the update data, converting metadata to JSON string if provided
+  const updateData: {
+    title?: string;
+    content?: string;
+    type?: string;
+    metadata?: string;
+    isArchived?: boolean;
+    taskId?: string | null;
+  } = {};
+
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.content !== undefined) updateData.content = data.content;
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.metadata !== undefined) updateData.metadata = JSON.stringify(data.metadata);
+  if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
+  if (data.taskId !== undefined) updateData.taskId = data.taskId;
+
+  try {
+    const memory = await prisma.memory.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return {
+      ...memory,
+      metadata: JSON.parse(memory.metadata || '{}') as Record<string, unknown>,
+    };
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'P2025') {
+      throw new Error('Memory not found');
+    }
+    throw error;
+  }
 }
 
 /**
@@ -238,6 +344,12 @@ export function registerMemoryHandlers(): void {
     wrapWithLogging('memories:get', wrapHandler(handleGetMemory))
   );
 
+  // memories:update - Update an existing memory
+  ipcMain.handle(
+    'memories:update',
+    wrapWithLogging('memories:update', wrapHandler(handleUpdateMemory))
+  );
+
   // memories:delete - Delete a memory by ID
   ipcMain.handle(
     'memories:delete',
@@ -258,6 +370,7 @@ export function unregisterMemoryHandlers(): void {
   ipcMain.removeHandler('memories:list');
   ipcMain.removeHandler('memories:create');
   ipcMain.removeHandler('memories:get');
+  ipcMain.removeHandler('memories:update');
   ipcMain.removeHandler('memories:delete');
   ipcMain.removeHandler('memories:search');
 }
